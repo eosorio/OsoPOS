@@ -3,7 +3,7 @@ CREATE TABLE articulos (
   descripcion   varchar(50) NOT NULL,
   pu            real,
   descuento     real DEFAULT 0,
-  cant          int,
+  cant          real,
   min           int DEFAULT 0,
   max           int,
   id_prov       int4 DEFAULT 0,
@@ -16,36 +16,65 @@ CREATE TABLE articulos (
   pu2           real,
   pu3           real,
   pu4           real,
-  pu5           real
+  pu5           real,
+  tax_0			real DEFAULT 5,
+  tax_1			real DEFAULT 0,
+  tax_2			real DEFAULT 0,
+  tax_3			real DEFAULT 0,
+  tax_4			real DEFAULT 0,
+  tax_5			real DEFAULT 0
 );
 REVOKE ALL ON articulos FROM PUBLIC;
-GRANT SELECT,UPDATE ON articulos TO "caja1";
-GRANT SELECT,UPDATE ON articulos TO "caja2";
-GRANT SELECT,UPDATE ON articulos TO "caja3";
+GRANT SELECT ON articulos TO "cajero1";
+GRANT SELECT ON articulos TO "cajero2";
+GRANT SELECT ON articulos TO "cajero3";
 GRANT ALL ON articulos TO "scaja";
+
+CREATE TABLE check_in_arts (
+  code          varchar(20) NOT NULL,
+  qt            real NOT NULL,
+  day			date NOT NULL,
+  hour			time NOT NULL,
+  unit_cost 	real NOT NULL
+);
+REVOKE ALL ON check_in_arts FROM PUBLIC;
+GRANT INSERT,SELECT ON articulos TO "cajero1";
+GRANT INSERT,SELECT ON articulos TO "cajero2";
+GRANT INSERT,SELECT ON articulos TO "cajero3";
+GRANT ALL ON check_in_arts TO "scaja";
+
 
 CREATE TABLE ventas (
   numero            SERIAL PRIMARY KEY,
   monto             real,
-  tipo_pago         int2 NOT NULL DEFAULT 20,
-  tipo_factur       int2 NOT NULL DEFAULT 5,
-  corte_parcial     bool DEFAULT 'f',
+  tipo_pago         int2 DEFAULT 20 NOT NULL,
+  tipo_factur       int2 DEFAULT 5 NOT NULL,
+  corte             BIT(8) DEFAULT B'0',
   utilidad          real,
-  id_vendedor       int4 NOT NULL DEFAULT 0,
-  id_cajero         int4 NOT NULL DEFAULT 0,
+  id_vendedor       int4 DEFAULT 0 NOT NULL,
+  id_cajero         int4 DEFAULT 0 NOT NULL,
   fecha             date NOT NULL,
-  hora              time NOT NULL
+  hora              time NOT NULL,
+  iva				real NOT NULL,
+  tax_0				real DEFAULT 0 NOT NULL,
+  tax_1				real DEFAULT 0 NOT NULL,
+  tax_2				real DEFAULT 0 NOT NULL,
+  tax_3				real DEFAULT 0 NOT NULL,
+  tax_4				real DEFAULT 0 NOT NULL,
+  tax_5				real DEFAULT 0 NOT NULL,
 );
 
 REVOKE ALL ON ventas FROM PUBLIC;
-GRANT INSERT,SELECT ON ventas TO "caja1";
+GRANT INSERT,SELECT ON ventas TO "cajero1";
+GRANT INSERT,SELECT ON ventas TO "cajero2";
+GRANT INSERT,SELECT ON ventas TO "cajero3";
 GRANT INSERT,SELECT,UPDATE,DELETE ON ventas TO "scaja";
 
 CREATE TABLE ventas_detalle (
   "id_venta"        int4 NOT NULL,
   "codigo"          varchar(20) NOT NULL,
   "descrip"         varchar(40) NOT NULL,
-  "cantidad"        int2,
+  "cantidad"        real,
   "pu"              float NOT NULL DEFAULT 0,
   "iva_porc"        float not null default 15
 );
