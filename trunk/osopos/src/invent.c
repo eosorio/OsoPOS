@@ -27,6 +27,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/pos-curses.h"
 #define _pos
 #endif
+#include <panel.h>
 
 #define numdat          8
 
@@ -66,6 +67,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define maxitemlista    2048
 
 WINDOW *v_arts;
+PANEL  *panel_forma = 0;
 char   *nminvent;
 char   *nmdisp;
 char   *home_directory; 
@@ -80,7 +82,9 @@ void muestra_renglon(unsigned renglon, unsigned num_items);
 int quita_renglon(unsigned renglon, unsigned num_items);
 
 int form_virtualize(WINDOW *w);
+int forma_articulo(int pos_ren, int pos_col, unsigned *num_items, PGconn *base);
 FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta);
+
 
 
 int read_config() {
@@ -467,6 +471,17 @@ int form_virtualize(WINDOW *w)
         else
             return(mode = REQ_INS_MODE);
 
+    case KEY_F(1):
+      move_panel(panel_forma, 10,0);
+      hide_panel(panel_forma);
+      update_panels();
+      doupdate();
+      break;
+    case KEY_F(2):
+      show_panel(panel_forma);
+      update_panels();
+      doupdate();
+      break;
     default:
         return(c);
     }
@@ -724,8 +739,9 @@ int busca_articulo(FIELD *campo, unsigned num_items)
    return(item);
 }
 
-int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
+int forma_articulo(int pos_ren, int pos_col, unsigned *num_items, PGconn *base)
 {
+  WINDOW *v_forma;
   FORM  *forma;
   FIELD *campo[25];
   char  *etiqueta;
@@ -738,9 +754,10 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   unsigned num_deptos;
   unsigned num_provs;
   int   finished = 0, c, i, j;
-  int   tam_ren, tam_col, pos_ren, pos_col;
+  int   tam_ren, tam_col;
   PGresult *res;
   char  *comando;
+  /*igm*/ WINDOW *v_prueba;
 
   comando = "SELECT nombre from departamento ORDER BY id ASC";
   res = PQexec(base, comando);
@@ -790,8 +807,6 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   free(auxprov);
   prov[i] = NULL;
 
-  pos_ren = 0;
-  pos_col = 0;
   etiqueta = "Introduzca los articulos";
 
   /* describe la forma */
@@ -849,6 +864,11 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
 
   MuestraForma(forma, pos_ren, pos_col);
   v_forma = form_win(forma);
+  //  panel_forma = new_panel(v_forma);
+  /*igm*/ v_prueba = newwin(10, 20, 30, 40);
+  /*igm*/ wprintw(v_prueba, "Esta es una pruebita");
+  /*igm*/ wrefresh(v_prueba);
+  /*igm*/ panel_forma = new_panel(v_prueba);
   raw();
   noecho();
 
@@ -1007,6 +1027,7 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   BorraForma(forma);
 
   free_form(forma);
+  del_panel(panel_forma);
   for (c = 0; campo[c] != 0; c++)
       free_field(campo[c]);
   noraw();
@@ -1086,12 +1107,11 @@ int imprime_lista(PGconn *con, char *campo_orden)
 }
 
 
-
 int main() {
   int    i,
          num_items;
-  WINDOW *v_forma;
 /*         *v_mensaje; */
+  PANEL *panel_articulo;
 
   read_config();
 
@@ -1131,7 +1151,7 @@ int main() {
     exit(ERROR_SQL);
   }
   ajusta_ventana_forma();
-  forma_articulo(v_forma, &num_items, base_inv);
+  forma_articulo(0, 0, &num_items, base_inv);
 
   delwin(v_arts);
   clear();

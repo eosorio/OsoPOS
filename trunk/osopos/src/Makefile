@@ -5,7 +5,9 @@ CC = gcc -g -Wall -m486
 
 PGLIBS = -lpq -lcrypt
 
-CURSESLIBS = -lcurses
+CURSESLIBS = -lncurses
+
+PANELLIBS = -lpanel
 
 GTKLIBS = `gtk-config --cflags` `gtk-config --libs`
 
@@ -29,15 +31,15 @@ remision: remision.c
 	${C_OSOPOS} -include ${HEADER_REMISION} -ggdb
 
 factur: factur.c
-	${CC} -o ../bin/factur.o factur.c ${PGLIBS} ${CURSESLIBS} ${FORMSLIBS} \
+	${CC} -o ../bin/factur.o factur.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
 	-D_MOD_FACTUR -ggdb
 
 invent: invent.c
-	${CC} -o ../bin/invent.o invent.c ${PGLIBS} ${CURSESLIBS} ${FORMSLIBS} \
-	${C_OSOPOS} -ggdb
+	${CC} -o ../bin/invent.o invent.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
+	${PANELLIBS} ${C_OSOPOS} -ggdb
 
 corte: corte.c
-	${CC} -o ../bin/corte.o corte.c ${PGLIBS} ${CURSESLIBS} ${FORMSLIBS}
+	${CC} -o ../bin/corte.o corte.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS}
 
 impresor: impresor.c
 	${CC} -o ../bin/impresor.o impresor.c ${CURSESLIBS} ${PGLIBS}
