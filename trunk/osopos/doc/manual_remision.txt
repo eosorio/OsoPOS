@@ -1,0 +1,47 @@
+Introducción de articulos.
+
+Despues del mensaje inicial, le aparecerá la pantalla principal donde se le solicita que introduzca la clave del artículo, su descripción o una cantidad. Si el artículo fue registrado en el programa de inventarios, se podrá introducir una clave no mayor de 15 caracteres, con lo que se marcará el artículo para su venta. Si el artículo no está registrado, se puede introducir una breve descripción, la cual aparecerá en la impresión del comprobante de venta.
+
+Si se introduce un código, y el artículo no está registrado, la clave del artículo será tomada como la descripción; sin embargo, se puede cancelar la venta de ese artículo. Para más información, vea "Cancelación de articulos".
+
+
+Modificación de precios.
+
+El precio unitario del último artículo introducido se puede modificar introduciendo como clave "descuento". Una vez introducida esta clave, se debe introducir un número que se sumará (o restará si es negativo) al precio unitario actual. Por ejemplo, si el último artículo tiene un precio unitario de $12.50, pero se quiere cobrar $13.00, se tiene que introducir la clave "descuento" y cuando solicite precio unitario se coloca 0.50 para subir el precio en $0.50 ($12.50 + $0.50 = $13.00). Por el contrario, si desea rebajar el precio del artículo a $10.00 se debe introducir la clave "descuento" y luego como precio unitario -2.50; ahora el nuevo precio unitario será $12.50 + (-$2.50) = $12.00. La modificación de precios solo tiene efecto sobre el último artículo marcado, de manera que si se desea modificar el precio de un artículo anterior, se deberá cancelar, reintroducir y luego modificar el precio.
+
+
+Cambiar el número de articulos del mismo tipo
+
+Existe la opcion de cambiar la cantidad de artículos del último que se marcó para venta. Para ello, se tiene que teclear el signo de multiplicación '*' ó 'x' seguido de un número, sin espacios. Por ejemplo, si se desean cobrar diez botellas de agua, se introduce la clave de una botella, y luego (en la siguiente petición del programa) "*10<Intro>". Esta opción tambien nos permite cancelar rápidamente el último artículo introducido, al introducir "*0<Intro>". No se deberán introducir números negativos al modificar la cantidad de estos. Aunque la columna de precio unitario no reflejará cambios, si cambiará el número en la columna de cantidad, asi como el subtotal.
+
+
+Cancelación de artículos.
+
+Para cancelar el último artículo introducido se puede introducir como clave "*0" o bien introducir como clave "cancela" y luego indicar el códido del artículo que deseamos eliminar de la venta. Esto último funciona tambien para artículos que hayan sido introducidos previamente. Si todo fué correcto, el artículo ya no será mostrado en la lista y el subtotal será modificado.
+
+
+Finalizar la venta.
+
+Una vez que se hayan terminado de introducir los artículos a vender, se pulsa la tecla <Intro> cuando el programa esté solicitando una clave. Tambien el programá finalizará la venta automáticamente cuando se haya alcanzado el número máximo de articulos a cobrar.
+
+
+Cancelación de la venta.
+
+La venta se cancela automáticamente cuando el importe a cobrar es cero y se indica la finalización de la venta. Le programa indicará que la venta fué cancelada, y a continuación se dará la opción de comenzar de nuevo o salir.
+
+
+Efectuando el cobro.
+
+Al finalizar la introducción de artículos, el programa muestra el total a pagar, y pregunta el método de pago, así como el tipo de comprobante a imprimir. Estas opciones se indican apretando la tecla correspondiente a la letra que aparece resaltada en la pantalla (E para efectivo, H para cHeque, F para Factura, etc.). Si el método de pago es efectivo o cheque, el cajón de dinero se abrirá automáticamente y comenzará la impresión. pero si el método de pago es otro, sólo se elaborará el comprobante indicado.
+
+
+Al entregar el cambio.
+
+Despues de indicar el tipo de pago, se el programa indica el cambio a entregar. Hay que tener precaución en cerrar el cajón de dinero despues de retirar el dinero, ya que este es responsabilidad exclusiva del cajero. El programa no abrirá el cajón a menos que no se efectue una venta en efectivo o con cheque.
+
+
+Atendiendo al siguiente cliente.
+
+Al final, el programa da la opción de salir apretando la tecla 'T', o continuar al apretar cualquier otra tecla válida. Para ver cuales son las teclas válidas, vea el apéndice B "Uso del teclado". Recuerde cerrar el cajón de dinero.
+
+

@@ -1,0 +1,6 @@
+Sintoma
+El programa no responde (se queda inhibido)
+Causa
+La impresora está fuera de línea
+
+

@@ -1,0 +1,4 @@
+Por hacer:
+* Que se pueda exportar los registros en modo texto a discos con formato
+  dos o vfat para que puedan ser usados por otros bichos (los archivos
+  deberan ser de foermato fijo o csv).
