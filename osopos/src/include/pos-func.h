@@ -60,6 +60,8 @@ int sale_register(PGconn *base, PGconn *base_sup,
                   double utilidad,
                   int tipo_pago,
                   int tipo_factur,
+                  int serie,
+                  long *folio,
                   struct tm fecha,
                   int id_teller,
                   int id_seller,
@@ -375,6 +377,8 @@ int sale_register(PGconn *base, PGconn *base_sup,
                   double utilidad,
                   int tipo_pago,
                   int tipo_factur,
+                  int serie,
+                  long *folio,
                   struct tm fecha,
                   int id_teller,
                   int id_seller,
@@ -395,6 +399,9 @@ int sale_register(PGconn *base, PGconn *base_sup,
     return (ERROR_MEMORIA);
 
   corte = "00000000";
+
+  *folio = -1;
+
   sprintf(query, "INSERT INTO ventas (monto, tipo_pago, tipo_factur, utilidad, id_vendedor, id_cajero, fecha, hora, iva, tax_0, tax_1, tax_2, tax_3, tax_4, tax_5) VALUES (%.2f, %d, %d, %.2f, %d, %d, '%d-%d-%d', '%d:%d:%d', %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f)",
           monto, tipo_pago, tipo_factur, utilidad, id_seller, id_teller,
           fecha.tm_year, (fecha.tm_mon)+1, fecha.tm_mday,
@@ -402,7 +409,7 @@ int sale_register(PGconn *base, PGconn *base_sup,
           tax[0], tax[1], tax[2], tax[3], tax[4], tax[5]);
   res = PQexec(base_sup, query);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr, "Error al registrar venta\n %s\n", query);
+    fprintf(stderr, "Error al registrar venta\n");
     free(query);
     PQclear(res);
     return(ERROR_SQL);
@@ -420,6 +427,34 @@ int sale_register(PGconn *base, PGconn *base_sup,
   }
   num_venta = atoi(PQgetvalue(res, 0, 0));
 
+  switch (tipo_factur) {
+  case _NOTA_MOSTRADOR:
+    break;
+  case _FACTURA:
+    break;
+  case _TEMPORAL:
+    sprintf(query, "INSERT INTO folios_tickets_%d (venta) VALUES (%d) ",
+            serie, num_venta);
+    res = PQexec(base, query);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+      fprintf(stderr,"ERROR: no puedo registrar folio de ticket de la venta %d\n", num_venta);
+      free(query);
+      PQclear(res);
+      return(ERROR_SQL);
+    }
+    PQclear(res);
+    sprintf(query, "SELECT id FROM folios_tickets_1 WHERE venta=%d", num_venta);
+    res = PQexec(base, query);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+      fprintf(stderr,"ERROR: no encuentro registro de folio de ticket de la venta %d\n", num_venta);
+      free(query);
+      PQclear(res);
+      return(ERROR_SQL);
+    }
+    *folio = atoi(PQgetvalue(res, 0, 0));
+    break;
+  }
+
   for (i=0; i<num_arts; i++) {
     /* Le damos la vuelta al problema de los apostrofos */
     /* en realidad deberia de reemplazarlos por la secuencia de escape y no
@@ -427,11 +462,12 @@ int sale_register(PGconn *base, PGconn *base_sup,
     while ((ch_aux = index(art[i].desc, '\'')) != NULL)
       art[i].desc[ ch_aux - art[i].desc ] = ' ';
       
-    strncpy(query, "INSERT INTO ventas_detalle (\"id_venta\", \"codigo\", \"cantidad\", \"descrip\", \"pu\", \"iva_porc\", \"tax_0\", \"tax_1\", \"tax_2\", \"tax_3\", \"tax_4\", \"tax_5\")", 1024);
-    sprintf(query, "%s VALUES (%d, '%s', %f, '%s', %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f)",
+    strncpy(query, "INSERT INTO ventas_detalle (\"id_venta\", \"codigo\", \"cantidad\", \"descrip\", \"pu\", \"iva_porc\", \"tax_0\", \"tax_1\", \"tax_2\", \"tax_3\", \"tax_4\", \"tax_5\", \"util\")", 1024);
+    sprintf(query, "%s VALUES (%d, '%s', %f, '%s', %f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f)",
             query, num_venta,
             art[i].codigo, art[i].cant, art[i].desc, art[i].pu, art[i].iva_porc,
-            art[i].tax_0, art[i].tax_1, art[i].tax_2, art[i].tax_3, art[i].tax_4, art[i].tax_5);
+            art[i].tax_0, art[i].tax_1, art[i].tax_2, art[i].tax_3, art[i].tax_4,
+            art[i].tax_5, art[i].utilidad);
     res = PQexec(base_sup, query);
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
       fprintf(stderr, "Error al registrar detalle de ventas.\n%s\n", query);
@@ -461,6 +497,7 @@ int sale_register(PGconn *base, PGconn *base_sup,
       return(ERROR_SQL);
     }
   }
+
   free(query);
 
   return(num_venta);
@@ -596,11 +633,10 @@ PGresult *Agrega_en_Inventario(PGconn *base, char *tabla, struct articulos art)
 
   query = calloc(1,mxbuff);
   sprintf(query,
-          "INSERT INTO %s VALUES ('%s', '%s', %.2f, %.2f, %f, %f, %f, %u, %u, %.2f, '%s', %.2f, '%3s', '%s', %.2f, %.2f, %.2f, %.2f)", 
-          tabla, art.codigo, art.desc, art.pu, art.disc, art.exist,
-          art.exist_min, art.exist_max, art.id_prov, art.id_depto,
-          art.p_costo, art.prov_clave, art.iva_porc, art.divisa, art.codigo2,
-          art.pu2, art.pu3, art.pu4, art.pu5);
+          "INSERT INTO %s VALUES ('%s', '%s', %u, %u, %.2f, '%s', %.2f, '%3s', '%s')", 
+          tabla, art.codigo, art.desc, 
+          art.id_prov, art.id_depto,
+          art.p_costo, art.prov_clave, art.iva_porc, art.divisa, art.codigo2);
   resultado = PQexec(base, query);
   if (PQresultStatus(resultado) != PGRES_COMMAND_OK) {
     fprintf(stderr, "Error al registrar artículos.\n%s\n", query);
@@ -662,8 +698,8 @@ PGresult *salida_almacen(PGconn *base, unsigned almacen, struct articulos art, c
 
   comando_sql = calloc(1,mxbuff*2);
   sprintf(comando_sql,
-         "UPDATE almacen_%d SET cant=%f WHERE codigo='%s'",
-		  almacen, art.exist,  art.codigo);
+         "UPDATE almacen_1 SET cant=%f WHERE id_alm=%d AND codigo='%s'",
+		  art.exist, almacen, art.codigo);
   res = PQexec(base, comando_sql);
   if (PQresultStatus(res) != PGRES_COMMAND_OK)
     fprintf(stderr, "Error: %s\n", PQerrorMessage(base));
@@ -727,7 +763,7 @@ PGresult *search_product(PGconn *base,
   PQclear(res);
 
   query = calloc(1,mxbuff*2);
-  sprintf(query, "DECLARE cursor_arts CURSOR FOR SELECT ar.codigo, ar.descripcion, al.pu, al.pu2, al.pu3, al.pu4, al.pu5, ar.descuento, al.cant, al.c_min, al.c_max, ar.id_prov1, ar.id_depto, ar.p_costo, ar.prov_clave, ar.iva_porc, ar.divisa, ar.codigo2 ");
+  sprintf(query, "DECLARE cursor_arts CURSOR FOR SELECT ar.codigo, ar.descripcion, al.pu, al.pu2, al.pu3, al.pu4, al.pu5, al.cant, al.c_min, al.c_max, ar.id_prov1, ar.id_depto, ar.p_costo, ar.prov_clave, ar.iva_porc, ar.divisa, ar.codigo2 ");
   sprintf(query, "%s FROM %s al, articulos ar ",
           query, tabla);
   if (exacto)
@@ -764,17 +800,16 @@ PGresult *search_product(PGconn *base,
     art->pu3 = atof(PQgetvalue(res,0, 4));
     art->pu4 = atof(PQgetvalue(res,0, 5));
     art->pu5 = atof(PQgetvalue(res,0, 6));
-    art->disc = atof(PQgetvalue(res,0,7));
-    art->exist = atof(PQgetvalue(res,0,8));
-    art->exist_min = atof(PQgetvalue(res,0,9));
-    art->exist_max = atof(PQgetvalue(res,0,10));
-    art->id_prov = atoi(PQgetvalue(res,0,11));
-    art->id_depto = atoi(PQgetvalue(res,0,12));
-    art->p_costo = atof(PQgetvalue(res,0,13));
-    strncpy(art->prov_clave, PQgetvalue(res, 0, 14), maxcod);
-    art->iva_porc = atof(PQgetvalue(res, 0, 15));
-    strncpy(art->divisa, PQgetvalue(res, 0, 16), 3);
-    strncpy(art->codigo2, PQgetvalue(res, 0, 17), maxcod);
+    art->exist = atof(PQgetvalue(res,0,7));
+    art->exist_min = atof(PQgetvalue(res,0,8));
+    art->exist_max = atof(PQgetvalue(res,0, 9));
+    art->id_prov = atoi(PQgetvalue(res,0,10));
+    art->id_depto = atoi(PQgetvalue(res,0,11));
+    art->p_costo = atof(PQgetvalue(res,0,12));
+    strncpy(art->prov_clave, PQgetvalue(res, 0, 13), maxcod);
+    art->iva_porc = atof(PQgetvalue(res, 0, 14));
+    strncpy(art->divisa, PQgetvalue(res, 0, 15), 3);
+    strncpy(art->codigo2, PQgetvalue(res, 0, 16), maxcod);
   }
   PQclear(res);
 
@@ -967,7 +1002,7 @@ int checa_descuento(PGconn *base, int num_venta, int almacen) {
   PGresult *res;
   char query[255];
 
-  sprintf(query, "SELECT d.id_venta AS id, d.codigo, d.pu AS venta, a.pu AS precio FROM ventas_detalle d, almacen_%d a WHERE d.id_venta=%d AND d.codigo=a.codigo AND d.pu!=a.pu", almacen, num_venta);
+  sprintf(query, "SELECT d.id_venta AS id, d.codigo, d.pu AS venta, a.pu AS precio FROM ventas_detalle d, almacen_1 a WHERE d.id_venta=%d AND d.codigo=a.codigo AND d.pu!=a.pu AND id_alm=%d", num_venta, almacen);
 
   res = PQexec(base, query);
   if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
