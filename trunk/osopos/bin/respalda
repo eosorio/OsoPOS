@@ -1,0 +1,27 @@
+#!/bin/bash
+
+clear
+echo "Revisando el diskette..."
+echo
+/sbin/fsck.ext2 /dev/fd0
+rc=$?
+echo
+
+if [ rc="0" ]; then
+  mount /mnt/floppy
+  if [ -d /mnt/floppy/lost+found ]; then
+    echo "Creando la base de datos de OsoPOS..."
+    pg_dump osopos -f /mnt/floppy/respaldo.osopos
+    umount /mnt/floppy
+    echo "Echo"
+  else
+    echo "*** ERROR: No se insertó un disco o no tiene formato ext2"
+    echo "           no se ha hecho respaldo"
+  fi
+else
+  echo "*** ERROR: El disco puede estar dañado"
+  echo "    no se ha generado respaldo"
+fi
+
+echo
+echo

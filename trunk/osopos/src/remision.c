@@ -1,8 +1,8 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.0.7-1 1999, 2000 E. Israel Osorio H., licencia GPL.
-   linucs@punto-deventa.com
+   Programa Remision 1.9-1 1999, 2000 E. Israel Osorio H., licencia GPL.
+   desarrollo@punto-deventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
 
@@ -26,10 +26,9 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <stdio.h>
 #include "include/pos-curses.h"
 #define _pos_curses
-#include <time.h>
 
-#define vers "1.0.8-1"
-#define release "Ricardo Chapa"
+#define vers "1.9"
+#define release "Electro Hogar"
 
 #ifndef maxdes
 #define maxdes 39
@@ -66,14 +65,14 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define _TEMPORAL        5
 
 int forma_de_pago();
-PGresult *registra_venta(PGconn *base,
-                         char   *tabla,
-                         int    num_venta,
-                         double total,
-                         double utilidad,
-                         int    tipo_pago,
-                         int    tipo_fact,
-                         bool   corte_parcial);
+/*  PGresult *registra_venta(PGconn *base, */
+/*                           char   *tabla, */
+/*                           int    num_venta, */
+/*                           double total, */
+/*                           double utilidad, */
+/*                           int    tipo_pago, */
+/*                           int    tipo_fact, */
+/*                           bool   corte_parcial); */
 
 void Termina(PGconn *con, int error);
 int LeeConfig(char*, char*);
@@ -99,6 +98,7 @@ short unsigned maxitemr;
 
   /* Variables de configuración */
 char *nm_disp_ticket,		/* Nombre de impresora de ticket */
+  *lp_disp_ticket,      /* Definición de miniprinter en /etc/printcap */
   *nmfpie,		/* Pie de página de ticket */
   *nmfenc,		/* Archivo de encabezado de ticket */
   *nmtickets,	/* Registro de tickets impresos */
@@ -121,8 +121,11 @@ int LeeConfig(char *nmdatos,
   static char buff[mxbuff],buf[mxbuff];
   static char *b;
 
-  nm_disp_ticket = calloc(1, strlen("/dev/lpx")+1);
+  nm_disp_ticket = calloc(1, strlen("/dev/lpx")+1); /* Will not be supported anymopre */
   strcpy(nm_disp_ticket,  "/dev/lp0");
+
+  lp_disp_ticket = calloc(1, strlen("ticket")+1);
+  strcpy(lp_disp_ticket, "ticket");
 
   tipo_disp_ticket = calloc(1, strlen("STAR")+1);
   strcpy(tipo_disp_ticket, "STAR");
@@ -184,6 +187,13 @@ int LeeConfig(char *nmdatos,
         nm_disp_ticket = NULL;
         nm_disp_ticket = calloc(1, strlen(buf)+1);
         strcpy(nm_disp_ticket,buf);
+      }
+      else if (!strcmp(b, "lp_ticket")) {
+        strcpy(buf, strtok(NULL,"="));
+        free(lp_disp_ticket);
+        lp_disp_ticket = NULL;
+        lp_disp_ticket = calloc(1, strlen(buf)+1);
+        strcpy(lp_disp_ticket, buf);
       }
       else if (!strcmp(b,"registro.ticket")) {
         strcpy(buf, strtok(NULL,"="));
@@ -524,7 +534,7 @@ double capt_remision(char   *nm_reg_diario,
       if (busca_precio(buff, &articulo[i]))
 		strncpy(articulo[i].codigo, buff, maxcod);
       else
-		strncpy(articulo[i].desc, buff, maxcod);
+		strncpy(articulo[i].desc, buff, maxdes);
     }
 
     /* El artículo no tiene código, puede ser un art. no registrado */
@@ -681,33 +691,33 @@ int forma_de_pago()
 
 /***************************************************************************/
 
-PGresult *registra_venta(PGconn *base,
-                         char   *tabla,
-                         int    num_venta,
-                         double total,
-                         double utilidad,
-                         int    tipo_pago,
-                         int    tipo_fact,
-                         bool   corte_parcial)
-{
-  char     *comando_sql;
-  PGresult *resultado;
-  char     exp_boleana = 'F';
+/*  PGresult *registra_venta(PGconn *base, */
+/*                           char   *tabla, */
+/*                           int    num_venta, */
+/*                           double total, */
+/*                           double utilidad, */
+/*                           int    tipo_pago, */
+/*                           int    tipo_fact, */
+/*                           bool   corte_parcial) */
+/*  { */
+/*    char     *comando_sql; */
+/*    PGresult *resultado; */
+/*    char     exp_boleana = 'F'; */
 
-  if (corte_parcial)
-    exp_boleana = 'T';
-  comando_sql = calloc(1,mxbuff);
-  sprintf(comando_sql, "INSERT INTO %s VALUES(%d, %.2f, %d, %d, '%c', %.2f)",
-                        tabla, num_venta, total,
-                        tipo_pago, tipo_fact, exp_boleana, utilidad);
-  resultado = PQexec(base, comando_sql);
-  if (PQresultStatus(resultado) != PGRES_COMMAND_OK) {
-    fprintf(stderr,"Comando INSERT INTO falló\n");
-    fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
-  }
-  free(comando_sql);
-  return(resultado);
-}
+/*    if (corte_parcial) */
+/*      exp_boleana = 'T'; */
+/*    comando_sql = calloc(1,mxbuff); */
+/*    sprintf(comando_sql, "INSERT INTO %s VALUES(%d, %.2f, %d, %d, '%c', %.2f)", */
+/*                          tabla, num_venta, total, */
+/*                          tipo_pago, tipo_fact, exp_boleana, utilidad); */
+/*    resultado = PQexec(base, comando_sql); */
+/*    if (PQresultStatus(resultado) != PGRES_COMMAND_OK) { */
+/*      fprintf(stderr,"Comando INSERT INTO falló\n"); */
+/*      fprintf(stderr,"Error: %s\n",PQerrorMessage(base)); */
+/*    } */
+/*    free(comando_sql); */
+/*    return(resultado); */
+/*  } */
 
 
 void Cambio() {
@@ -728,7 +738,7 @@ void imp_ticket_arts() {
   FILE *impr;
   static int i;
 
-  impr = fopen(nm_disp_ticket,"a");
+  impr = fopen(nm_disp_ticket,"w");
   if (impr == NULL)
 	ErrorArchivo(nm_disp_ticket);
 
@@ -750,7 +760,7 @@ void ImpTicketPie(struct tm fecha, unsigned numventa) {
   FILE *impr,*fpie;
   static char *s;
 
-  impr = fopen(nm_disp_ticket,"a");
+  impr = fopen(nm_disp_ticket,"w");
   if (impr == NULL)
         ErrorArchivo(nm_disp_ticket);
 
@@ -787,7 +797,7 @@ void ImpTicketEncabezado() {
   FILE *impr,*fenc;
   char *s;
 
-  impr = fopen(nm_disp_ticket,"a");
+  impr = fopen(nm_disp_ticket,"w");
   if (impr == NULL)
         ErrorArchivo(nm_disp_ticket);
 
@@ -820,7 +830,7 @@ void ImpTicketEncabezado() {
 int AbreCajon(char *tipo_miniimp) {
   FILE *impr;
 
-  impr = fopen(nm_disp_ticket,"a");
+  impr = fopen(nm_disp_ticket,"w");
   if (!impr) {
     fprintf(stderr,
       "OsoPOS(Remision): No se puede activar el cajón de dinero\n\r");
@@ -830,7 +840,7 @@ int AbreCajon(char *tipo_miniimp) {
   if (!strcpy(tipo_miniimp, "STAR"))
     fprintf(impr, "%c", abre_cajon_star);
   else
-    fprintf(impr,"%c%c%c", ESC,'p', 4);
+    fprintf(impr,"%c%c%c%c%c", ESC,'p', 0, 255, 255);
   fclose(impr);
   return(1);
 }
@@ -939,30 +949,48 @@ void mensaje(char *texto)
 	clrtoeol();
 }
 
-unsigned obten_num_venta(char *nm_archivo)
-{
-  FILE *archivo;
-  char buff[50];
+/*  unsigned obten_num_venta(char *nm_archivo) */
+/*  { */
+/*    FILE *archivo; */
+/*    char buff[50]; */
 
-  archivo = fopen(nm_archivo, "r");
-  if (archivo == NULL) {
-    ErrorArchivo(nm_archivo);
+/*    archivo = fopen(nm_archivo, "r"); */
+/*    if (archivo == NULL) { */
+/*      ErrorArchivo(nm_archivo); */
+/*      return(0); */
+/*    } */
+/*    fgets(buff,(sizeof(buff)), archivo); */
+/*    fclose(archivo); */
+/*    return(atoi(buff)); */
+/*  } */
+
+unsigned obten_num_venta(PGconn *base)
+{
+  char query[1024];
+  PGresult *res;
+
+  sprintf(query, "SELECT max(numero) FROM ventas");
+  res = PQexec(base, query);
+  if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
+    fprintf(stderr, "ERROR: no puedo obtener el número de la venta");
+    PQclear(res);
     return(0);
   }
-  fgets(buff,(sizeof(buff)), archivo);
-  fclose(archivo);
-  return(atoi(buff));
+  query[0] = atoi(PQgetvalue(res, 0, 0));
+  PQclear(res);
+  return(query[0]);
 }
-
 
 int main() {
   static char buffer, buf[50];
-  time_t tiempo;	
   static char encabezado1[mxbuff],
       encabezado2[mxbuff] = "E. Israel Osorio H., 1999,2000 linucs@punto-deventa.com";
+  FILE *impr_cmd;
+  time_t tiempo;	
   static int dgar;
   PGconn *con;
   unsigned num_venta = 0;
+  unsigned formadepago;
   double utilidad;
   struct tm *fecha;	/* Hora y fecha local	*/
 
@@ -995,7 +1023,8 @@ int main() {
     aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
             ERROR_SQL);
   }
-  num_venta = obten_num_venta(nm_num_venta);
+  //  num_venta = obten_num_venta(nm_num_venta);
+  num_venta = obten_num_venta(con);
 
   numbarras = lee_articulos(con);
   if (!numbarras) {
@@ -1010,6 +1039,9 @@ int main() {
 
   sprintf(encabezado1, "Sistema OsoPOS - Programa Remision %s R.%s", vers, release);
   do {
+    tiempo = time(NULL);
+    fecha = localtime(&tiempo);
+    fecha->tm_year += 1900;
     clear();
     mvprintw(0,0,"%u/%u/%u",
                fecha->tm_mday, (fecha->tm_mon)+1, fecha->tm_year);
@@ -1030,50 +1062,79 @@ int main() {
       mvprintw(getmaxy(stdscr)-2,0,"¿Imprimir Remision, Factura o Ticket (R,F,T)? T\b");
       attroff(A_BOLD);
       buffer = toupper(getch());
-      RegistraRem(++num_venta);
+      RegistraRem(num_venta+1); /* Genera un archivo de intercambio de datos. eliminarlo */
+      formadepago = forma_de_pago();
 
       switch (buffer) {
         case 'R':
           attron(A_BOLD);
-	      mvprintw(getmaxy(stdscr)-2,0,"¿Días de garantía? : ");
+          mvprintw(getmaxy(stdscr)-2,0,"¿Días de garantía? : ");
           attroff(A_BOLD);
-	      clrtoeol();
+          clrtoeol();
      	  scanw("%d",&dgar);
- 	      sprintf(buf,"%s %d &",nmimprrem,dgar);
-          system(buf);
-          buffer = forma_de_pago();
-          if (buffer >=20)
+          num_venta = registra_venta(con, "ventas", a_pagar, utilidad, formadepago,
+                         _NOTA_MOSTRADOR, FALSE, *fecha, 0, 0, articulo, numarts);
+          sprintf(buf,"%s %d %d",nmimprrem, num_venta, dgar);
+          impr_cmd = popen(buf, "w");
+          if (pclose(impr_cmd) != 0)
+            fprintf(stderr, "Error al ejecutar %s\n", buf);
+          //formadepago = forma_de_pago();
+          if (formadepago >= 20) {
             AbreCajon(tipo_disp_ticket);
-        	registra_venta(con, "ventas", num_venta, a_pagar, utilidad,
-        	               buffer, _NOTA_MOSTRADOR, FALSE);
-	        mensaje("Aprieta una tecla para continuar (t para terminar)...");
-            buffer = toupper(getch());
-        break;
-        case 'F':
-	      buffer = forma_de_pago();
-	      if (buffer >=20)
-            AbreCajon(tipo_disp_ticket);
-          mensaje("Aprieta una tecla para capturar factura...");
-		  getch();
-		  system("~/bin/facturar -r");
-		  clear();
-          registra_venta(con, "ventas", num_venta, a_pagar, utilidad,
-                         buffer, _FACTURA, FALSE);
+            sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+            impr_cmd = popen(buf, "w");
+            pclose(impr_cmd);
+          }
           mensaje("Aprieta una tecla para continuar (t para terminar)...");
           buffer = toupper(getch());
         break;
-        case 'T':
-        default:
-          buffer = forma_de_pago();
-          imp_ticket_arts();
-	      if (buffer >=20)
-            AbreCajon(tipo_disp_ticket);
-		  ImpTicketPie(*fecha, num_venta);
-          registra_venta(con, "ventas", num_venta, a_pagar, utilidad,
-                         buffer, _TEMPORAL, FALSE);
-	      mensaje("Corta el papel y aprieta una tecla para continuar (t para terminar)...");
-          buffer = toupper(getch());
-		  ImpTicketEncabezado();
+      case 'F':
+        if (formadepago >= 20) {
+          AbreCajon(tipo_disp_ticket);
+          sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+          impr_cmd = popen(buf, "w");
+          pclose(impr_cmd);
+        }
+        num_venta = registra_venta(con, "ventas", a_pagar, utilidad, formadepago,
+                       _FACTURA, FALSE, *fecha, 0, 0, articulo, numarts);
+        sprintf(buf, "Venta %d. Aprieta una tecla para capturar, c para cancelar...", num_venta);
+        mensaje(buf);
+        buffer = toupper(getch());
+        if (buffer != 'C') {
+          sprintf(buf, "netscape http://localhost/osopos-web/factur_web.php?id_venta=%d &",
+                  num_venta);
+          //sprintf(buf, "~/bin/facturar -r");
+          system(buf); /* Colocar aqui una varibale de configuracion */
+        }
+        clear();
+        mensaje("Aprieta una tecla para continuar (t para terminar)...");
+        buffer = toupper(getch());
+        break;
+      case 'T':
+      default:
+        //formadepago = forma_de_pago();
+        imp_ticket_arts();
+        sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+        impr_cmd = popen(buf, "w");
+        pclose(impr_cmd);
+        if (formadepago >= 20) {
+          AbreCajon(tipo_disp_ticket);
+          sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+          impr_cmd = popen(buf, "w");
+          pclose(impr_cmd);
+        }
+        ImpTicketPie(*fecha, num_venta);
+        sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+        impr_cmd = popen(buf, "w");
+        pclose(impr_cmd);
+        registra_venta(con, "ventas", a_pagar, utilidad,
+                       formadepago, _TEMPORAL, FALSE, *fecha, 0, 0, articulo, numarts);
+        mensaje("Corta el papel y aprieta una tecla para continuar (t para terminar)...");
+        buffer = toupper(getch());
+        ImpTicketEncabezado();
+        sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+        impr_cmd = popen(buf, "w");
+        pclose(impr_cmd);
         break;
       }
       if (actualiza_existencia(con)) {

@@ -247,19 +247,19 @@ void marca_revisados(PGconn *base)
 
   mensaje = calloc(1,255);
 
-  PQexec(base, "UPDATE ventas SET corte_parcial='T'");
-  strcpy(mensaje, PQerrorMessage(base));
+  res = PQexec(base, "UPDATE ventas SET corte_parcial='T'");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+    strcpy(mensaje, PQerrorMessage(base));
     clear();
     move(LINES/2, 0);
     if (strlen(mensaje)) {
       printw("No se pudieron actualizar los registros del día.\n");
       printw("Mensaje de error: %s\n", mensaje);
-      PQclear(res);
     }
     else {
-      printw("Se produjo un error inesperado al actualizar los regsitros del día...");
+      printw("Se produjo un error inesperado al actualizar los registros del día...");
     }
+    PQclear(res);
     mvprintw(LINES-1, 0, "Presione una tecla para continuar...");
     getch();
     clear();
@@ -284,7 +284,11 @@ int genera_corte(int parcial, PGconn *con, FILE *disp)
             util       = 0.0;
   tiempo = time(NULL);
   fecha = localtime(&tiempo);
-  fprintf(disp,"Corte realizado el dia %d/%d/%d\n a las %d:%2d:%2d hrs.\n\n",
+  fprintf(disp, "Corte ");
+  if (parcial)
+    fprintf(disp, "parcial ");
+
+  fprintf(disp,"realizado el dia %d/%d/%d\n a las %d:%2d:%2d hrs.\n\n",
         fecha->tm_mday, (fecha->tm_mon)+1, fecha->tm_year+1900, fecha->tm_hour,
         fecha->tm_min, fecha->tm_sec);
 
@@ -322,14 +326,14 @@ void procesa(char opcion, PGconn *con, FILE *disp)
       break;
     case '2': genera_corte(TRUE, con, disp);
       break;
-    case '3': system("less -rf /home/OsoPOS/log/tmp/impresion.ticket");
+    case '3': system("less -rf /tmp/impresion.ticket");
       break;
     case '6': limpia_registros(con);
       break;
     case '4': printw("\n\nFunción no implementada, use el programa \"imprime\"\n");
               sleep(3);
       break;
-    case '5': system("pico /home/OsoPOS/log/tmp/impresion.ticket");
+    case '5': system("pico /tmp/impresion.ticket");
       break;
     default:  beep();
   }
@@ -360,7 +364,7 @@ int main()
     exit(-1);
   }
 
-  disp = fopen("/home/OsoPOS/log/tmp/impresion.ticket", "a");
+  disp = fopen("/tmp/impresion.ticket", "w");
   if (disp==NULL) {
     ErrorArchivo("impresion.ticket");
     exit(-1);
