@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.10-1 1999, 2000 E. Israel Osorio H., licencia GPL.
+   Programa Remision 1.11-1 1999, 2000 E. Israel Osorio H., licencia GPL.
    desarrollo@punto-deventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -27,7 +27,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/pos-curses.h"
 #define _pos_curses
 
-#define vers "1.10"
+#define vers "1.11"
 #define release "Electro Hogar"
 
 #ifndef maxdes
@@ -76,7 +76,7 @@ int forma_de_pago();
 
 void Termina(PGconn *con, int error);
 int LeeConfig(char*, char*);
-double capt_remision(char *nm_reg_diario, /*char *nm_reg_temp,*/ int *numart, double *util);
+double capt_remision(/*char *nm_reg_diario, char *nm_reg_temp,*/ int *numart, double *util);
 void imp_ticket_arts();
 void ImpTicketPie(struct tm fecha, unsigned numvents);
 /* Función que reemplaza a ActualizaEx */
@@ -93,47 +93,46 @@ double a_pagar;
 int numbarras=0;
 /* struct barras barra[mxmembarra];  */
 struct articulos articulo[maxart], barra[mxmembarra];
-int numarts=0;		/* Número de items capturados	*/
+int numarts=0;          /* Número de items capturados   */
 short unsigned maxitemr;
 
   /* Variables de configuración */
-char *nm_disp_ticket,		/* Nombre de impresora de ticket */
+char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *lp_disp_ticket,      /* Definición de miniprinter en /etc/printcap */
-  *nmfpie,		/* Pie de página de ticket */
-  *nmfenc,		/* Archivo de encabezado de ticket */
-  *nmtickets,	/* Registro de tickets impresos */
+  *nmfpie,              /* Pie de página de ticket */
+  *nmfenc,              /* Archivo de encabezado de ticket */
+  *nmtickets,   /* Registro de tickets impresos */
   *tipo_disp_ticket, /* Tipo de miniprinter */
-  *nm_num_venta,	/* Nombre del archivo con el número de venta */
-  *nmimprrem,		/* Ubicación de imprrem */
+  *nmimprrem,           /* Ubicación de imprrem */
+  *nm_factur,    /* Nombre del progreama de facturación */
   *nm_avisos,    /* Nombre del archivo de avisos */
   *nm_sendmail,  /* Ruta completa de sendmail */
   *dir_avisos,   /* email de notificación */
   *cc_avisos,    /* con copia para */
   *asunto_avisos; /* Asunto del correo de avisos */
+double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
 
 
 
 /*int LeeConfig(char *nmdatos,
   char *nmdiario)*/
-int read_config(char *nmdiario)
+int read_config()
 {
   static char nmconfig[] = "remision.config";
   FILE *config;
   static char buff[mxbuff],buf[mxbuff];
   static char *b;
 
-  nm_disp_ticket = calloc(1, strlen("/dev/lpx")+1); /* Will not be supported anymopre */
-  strcpy(nm_disp_ticket,  "/dev/lp0");
+ /* Raw writing to port will not be supported anymore */
+  //nm_disp_ticket = calloc(1, strlen("/dev/lpx")+1);
+  nm_disp_ticket = calloc(1, strlen("/tmp/ticket")+1);
+  strcpy(nm_disp_ticket,  "/tmp/ticket");
 
   lp_disp_ticket = calloc(1, strlen("ticket")+1);
   strcpy(lp_disp_ticket, "ticket");
 
   tipo_disp_ticket = calloc(1, strlen("STAR")+1);
   strcpy(tipo_disp_ticket, "STAR");
-
-  //  strcpy(nmdatos,  "/home/OsoPOS/caja/venta.ultima");
-
-  strcpy(nmdiario, "/home/OsoPOS/scaja/log/ventas.hoy");
 
   nmfpie = calloc(1, strlen("/home/OsoPOS/caja/pie_pagina.txt")+1);
   strcpy(nmfpie,   "/home/OsoPOS/caja/pie_pagina.txt");
@@ -146,9 +145,6 @@ int read_config(char *nmdiario)
   
   nmimprrem = calloc(1, strlen("~/bin/imprem")+1);
   strcpy(nmimprrem,"~/bin/imprem");
-
-  nm_num_venta = calloc(1, strlen("/home/OsoPOS/scaja/log/.numventa")+1);
-  strcpy(nm_num_venta, "/home/OsoPOS/scaja/log/.numventa");
 
   nm_avisos = calloc(1, strlen("/home/OsoPOS/log/avisos.txt")+1);
   strcpy(nm_avisos, "/home/OsoPOS/log/avisos.txt");
@@ -164,7 +160,12 @@ int read_config(char *nmdiario)
   nm_sendmail = calloc(1, strlen("/usr/sbin/sendmail -t")+1);
   strcpy(nm_avisos, "/usr/sbin/sendmail -t");
 
+  nm_factur = calloc(1, strlen("kfmbrowser http://localhost/osopos-web/factur_web.php"));
+  strcpy(nm_factur, "kfmbrowser http://localhost/osopos-web/factur_web.php");
+
   maxitemr = 6;
+
+  TAX_PERC_DEF = 15;
 
   config = fopen(nmconfig,"r");
   if (config) {         /* Si existe archivo de configuración */
@@ -173,8 +174,8 @@ int read_config(char *nmdiario)
     while (!feof(config)) {
       buff [ strlen(buff) - 1 ] = 0;
       if (!strlen(buff) || buff[0] == '#') {
-	fgets(buff,sizeof(buff),config);
-	continue;
+        fgets(buff,sizeof(buff),config);
+        continue;
       }
       strcpy(buf, strtok(buff,"="));
         /* La función strtok modifica el contenido de la cadena buff    */
@@ -201,23 +202,12 @@ int read_config(char *nmdiario)
         realloc(nmtickets, strlen(buf)+1);
         strcpy(nmtickets,buf);
       }
-       /* Archivo de última venta */
-      /*      else if (!strcmp(b,"datos")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(nmdatos, strlen(buf)+1);
-        strcpy(nmdatos,buf);
-        }*/
-      else if (!strcmp(b,"num_venta")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(nm_num_venta, strlen(buf)+1);
-        strcpy(nm_num_venta,buf);
-      }
-	/* Registro del diario */
-      else if (!strcmp(b,"registro")) {
+        /* Registro del diario */
+      /*      else if (!strcmp(b,"registro")) {
         strcpy(buf, strtok(NULL,"="));
         realloc(nmdiario,strlen(buf)+1);
         strcpy(nmdiario,buf);
-      }
+        }*/
       else if (!strcmp(b,"ticket.pie")) {
         strcpy(buf, strtok(NULL,"="));
         realloc(nmfpie, strlen(buf)+1);
@@ -233,14 +223,28 @@ int read_config(char *nmdiario)
         realloc(tipo_disp_ticket, strlen(buf)+1);
         strcpy(tipo_disp_ticket,buf);
       }
+      else if (!strcmp(b,"programa.factur")) {
+        strcpy(buf, strtok(NULL,"="));
+        free(nm_factur);
+        nm_factur = NULL;
+        nm_factur = calloc(1, strlen(buf)+1);
+        if (strlen(buf)>mxbuff)
+          strncpy(nm_factur, buf, mxbuff);
+        else
+          strncpy(nm_factur, buf, strlen(buf));
+      }
       else if (!strcmp(b,"programa.imprem")) {
         strcpy(buf, strtok(NULL,"="));
         realloc(nmimprrem, strlen(buf)+1);
         strcpy(nmimprrem,buf);
-      }
-      else if (!strcmp(b,"renglones.articulos")) {
+      } 
+     else if (!strcmp(b,"renglones.articulos")) {
         strcpy(buf, strtok(NULL,"="));
         maxitemr = atoi(buf);
+      }
+      else if (!strcmp(b,"porcentaje_iva")) {
+        strcpy(buf, strtok(NULL,"="));
+        TAX_PERC_DEF = atoi(buf);
       }
       else if (!strcmp(b,"avisos")) {
         strcpy(buf, strtok(NULL,"="));
@@ -267,7 +271,8 @@ int read_config(char *nmdiario)
         realloc(nm_sendmail, strlen(buf)+1);
         strcpy(nm_sendmail,buf);
       }
-      fgets(buff,sizeof(buff),config);
+      if (!feof(config))
+        fgets(buff,mxbuff,config);
     }
     fclose(config);
     return(0);
@@ -321,7 +326,7 @@ int lee_articulos(PGconn *base_inventario)
     barra[i].exist = atoi(PQgetvalue(res,i,4));
     barra[i].exist_min = atoi(PQgetvalue(res,i,5));
     barra[i].p_costo = atof(PQgetvalue(res,i,9));
-	barra[i].iva_porc = atof(PQgetvalue(res,i,11));
+    barra[i].iva_porc = atof(PQgetvalue(res,i,11));
   }
 
   if (PQntuples(res) >= mxmembarra)  {
@@ -374,7 +379,7 @@ int salir=0; /* falso si hay que salirse */
       return(i);
     }
   }
-  return(0);
+  return(-5);
 }    
 
 /***************************************************************************/
@@ -428,7 +433,7 @@ void MuestraArtLista(WINDOW *vent, int i, short cr) {
   mvwprintw(vent, vent->_cury, 22, "%-39s", articulo[i].desc);
   mvwprintw(vent, vent->_cury, 62, "$%8.2f", articulo[i].pu);
   if (!articulo[i].iva_porc)
-	wprintw(vent, "E");
+        wprintw(vent, "E");
   if (cr)
     wprintw(vent, "\n");
   wrefresh(vent);
@@ -444,13 +449,13 @@ void muestra_subtotal(double subtotal) {
 
 /***************************************************************************/
 
-double capt_remision(char   *nm_reg_diario,
+double capt_remision(//char   *nm_reg_diario,
                      //char   *nm_reg_temp,
                      int    *numart,
                      double *util) {
   double  subtotal = 0.0;
   double  iva_articulo;
-  FILE    *registro;
+  //  FILE    *registro;
   //FILE    *regtemp;
   int     i=0,
           j,k;
@@ -459,9 +464,9 @@ double capt_remision(char   *nm_reg_diario,
   *util = 0;
 
   iva = 0.0;
-  registro = fopen(nm_reg_diario,"a");
+  /*  registro = fopen(nm_reg_diario,"a");
   if (registro == NULL)
-    ErrorArchivo(nm_reg_diario);
+  ErrorArchivo(nm_reg_diario); */
 
   /*  regtemp = fopen(nm_reg_temp,"w");
   if (regtemp == NULL)
@@ -471,11 +476,11 @@ double capt_remision(char   *nm_reg_diario,
   scrollok(v_arts, TRUE);
   buff = calloc(1,mxbuff);
   mvprintw(3,0,
-	"Cant.       Clave                Descripción                 P. Unitario");
+           "Cant.       Clave                Descripción                 P. Unitario");
   articulo[0].cant = 1;
 
   do {
-	iva_articulo = 0.0;
+    iva_articulo = 0.0;
     articulo[i].pu = 0;
     articulo[i].p_costo = 0;
     mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
@@ -483,7 +488,7 @@ double capt_remision(char   *nm_reg_diario,
     move(getmaxy(stdscr)-2,0);
     deleteln();
 
-	/* Sección de multiplicador */
+    /* Sección de multiplicador */
     if ( ((toupper(buff[0])=='X') || (buff[0]=='*')) && i) {
       for (j=0; !isdigit(buff[j]); j++);
       for (k=0; isdigit(buff[j]) && j<strlen(buff); j++,k++)
@@ -497,13 +502,13 @@ double capt_remision(char   *nm_reg_diario,
         wclrtoeol(v_arts);
         wrefresh(v_arts);
         subtotal -= (articulo[--i].pu * articulo[i].cant);
-		iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
-		iva  -= (iva_articulo * articulo[i].cant);
+        iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+        iva  -= (iva_articulo * articulo[i].cant);
       }
       else {
-		iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
+        iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
         subtotal += ((articulo[i].cant-articulo[i-1].cant) * articulo[i-1].pu);
-		iva  += (iva_articulo * (articulo[i].cant-articulo[i-1].cant));
+        iva  += (iva_articulo * (articulo[i].cant-articulo[i-1].cant));
         articulo[i-1].cant = articulo[i].cant;
       }
       if (i) {
@@ -520,23 +525,25 @@ double capt_remision(char   *nm_reg_diario,
     if (strlen(buff) > 1) {
     /* Si la clave es mayor de 1 caracteres, busca un código o repetición */
 
-	/* Repetición de artículo */
-	/* ¿ No debería de ser && en lugar de || ? */
+        /* Repetición de artículo */
+        /* ¿ No debería de ser && en lugar de || ? */
       if (i && (!strcmp(buff,articulo[i-1].desc) || !strcmp(buff,articulo[i-1].codigo)) ) {
         (articulo[i-1].cant)++;
         subtotal += articulo[i-1].pu;
-		iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
-		iva += iva_articulo;
+        iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
+        iva += iva_articulo;
         wmove(v_arts, v_arts->_cury-1, v_arts->_curx);
         MuestraArtLista(v_arts, i-1, TRUE);
         muestra_subtotal(subtotal);
         continue;
       }
 
-      if (busca_precio(buff, &articulo[i]))
-		strncpy(articulo[i].codigo, buff, maxcod);
-      else
-		strncpy(articulo[i].desc, buff, maxdes);
+      if (busca_precio(buff, &articulo[i]) >= 0)
+        strncpy(articulo[i].codigo, buff, maxcod);
+      else {
+        strncpy(articulo[i].desc, buff, maxdes);
+        articulo[i].iva_porc = TAX_PERC_DEF;
+      }
     }
 
     /* El artículo no tiene código, puede ser un art. no registrado */
@@ -548,7 +555,7 @@ double capt_remision(char   *nm_reg_diario,
       }
       if (strstr(articulo[i].desc,"ancela") && i) {
         cancela_articulo(v_arts, &i, &subtotal, &iva);
-		muestra_subtotal(subtotal);
+        muestra_subtotal(subtotal);
         continue;
       }
       strcpy(articulo[i].codigo,"Sin codigo");
@@ -556,36 +563,36 @@ double capt_remision(char   *nm_reg_diario,
       clrtoeol();
       scanw("%lf",&articulo[i].pu);
       deleteln();
-      mvprintw(getmaxy(stdscr)-3,0,"Introduce piorcentaje de I.V.A.: ");
-      clrtoeol();
-      scanw("%lf",&articulo[i].iva_porc);
-      deleteln();
       if ( strstr(articulo[i].desc,"escuento") && i) {
         articulo[i-1].pu += articulo[i].pu;
         articulo[i].codigo[0] = 0;
         articulo[i].desc[0] = 0;
 
-		iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+        iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
         subtotal += (articulo[i-1].cant * articulo[i].pu);
-		iva += (iva_articulo * articulo[i-1].cant);
+        iva += (iva_articulo * articulo[i-1].cant);
         wmove(v_arts, v_arts->_cury-1, 0);
-		MuestraArtLista(v_arts, i-1, TRUE);
-		muestra_subtotal(subtotal);
+        MuestraArtLista(v_arts, i-1, TRUE);
+        muestra_subtotal(subtotal);
         continue;
       }
       /* Artículo no registrado */
+      mvprintw(getmaxy(stdscr)-3,0,"Introduce porcentaje de I.V.A.: ");
+      clrtoeol();
+      scanw("%lf",&articulo[i].iva_porc);
+      deleteln();
       MuestraArtLista(v_arts, i, TRUE);
-	  iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+      iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
       subtotal += (articulo[i].pu * articulo[i].cant);
-	  iva += (iva_articulo * articulo[i].cant);
+      iva += (iva_articulo * articulo[i].cant);
       muestra_subtotal(subtotal);
       articulo[++i].cant = 1;
     }
     else {  /* Articulo registrado */
       MuestraArtLista(v_arts, i, TRUE);
-	  iva_articulo =  articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+      iva_articulo =  articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
       subtotal += (articulo[i].pu * articulo[i].cant);
-	  iva += (iva_articulo * articulo[i].cant);
+      iva += (iva_articulo * articulo[i].cant);
       muestra_subtotal(subtotal);
       articulo[++i].cant = 1;
     }
@@ -598,12 +605,12 @@ double capt_remision(char   *nm_reg_diario,
   *numart = i;
   for (j=0; j<(*numart); j++) {
     *util += ((articulo[j].pu - articulo[j].p_costo) * articulo[j].cant);
-	iva_articulo = articulo[j].pu - articulo[j].pu / (articulo[j].iva_porc/100 + 1);
+        iva_articulo = articulo[j].pu - articulo[j].pu / (articulo[j].iva_porc/100 + 1);
 
-    fprintf(registro,"%s\n",articulo[j].codigo);
+        /*    fprintf(registro,"%s\n",articulo[j].codigo);
     fprintf(registro,"%d\n",articulo[j].cant);
     fprintf(registro,"%.2f\n",articulo[j].pu*articulo[j].cant);
-    fprintf(registro,"%.2f\n",iva_articulo*articulo[j].cant);
+    fprintf(registro,"%.2f\n",iva_articulo*articulo[j].cant); */
     /* * * * * * * * * * * * * CAMBIAR POR BASE DE DATOS * * * * * * * */
     /*    fprintf(regtemp, "%s\n", articulo[i].codigo);
     fprintf(regtemp, "%s\n", articulo[j].desc);
@@ -620,9 +627,9 @@ double capt_remision(char   *nm_reg_diario,
     attroff(A_BOLD);
     attrset(COLOR_PAIR(blanco_sobre_negro));
     clrtoeol();
-    fprintf(registro,"\n");
+    //    fprintf(registro,"\n");
   }
-  fclose(registro);
+  //  fclose(registro);
 
   free(buff);
   return(subtotal);
@@ -742,17 +749,20 @@ void imp_ticket_arts() {
 
   impr = fopen(nm_disp_ticket,"w");
   if (impr == NULL)
-	ErrorArchivo(nm_disp_ticket);
+    ErrorArchivo(nm_disp_ticket);
 
   for (i=0; i<numarts; i++) {
     fprintf(impr," -> %s\n",articulo[i].desc);
     fprintf(impr," %5d x %10.2f = %10.2f",
        articulo[i].cant,articulo[i].pu,articulo[i].pu*articulo[i].cant);
-	if (!articulo[i].iva_porc)
-	  fputs(" E", impr);
-	fputs("\n", impr);
+        if (!articulo[i].iva_porc)
+          fputs(" E", impr);
+        fputs("\n", impr);
   }
-  fprintf(impr, "\n     Total: %10.2f\n", a_pagar);
+  if (strstr(tipo_disp_ticket, "EPSON"))
+    fprintf(impr, "\n     %cr%cTotal: %10.2f%cr%c\n", ESC, 1, a_pagar, ESC, 0);
+  else
+    fprintf(impr, "\n     Total: %10.2f\n", a_pagar);
   fprintf(impr, "     I.V.A.: %10.2f\n", iva);
   fprintf(impr, "E = Exento\n\n");
   fclose(impr);
@@ -764,7 +774,7 @@ void ImpTicketPie(struct tm fecha, unsigned numventa) {
 
   impr = fopen(nm_disp_ticket,"w");
   if (impr == NULL)
-        ErrorArchivo(nm_disp_ticket);
+    ErrorArchivo(nm_disp_ticket);
 
   s = calloc(1,mxbuff);
   /* Fecha y hora local */
@@ -784,7 +794,7 @@ void ImpTicketPie(struct tm fecha, unsigned numventa) {
     do { 
       fgets(s, sizeof(s), fpie);
       if (!feof(fpie))
-	fprintf(impr, "%s", s);
+        fprintf(impr, "%s", s);
     }
     while (!feof(fpie));
     fclose(fpie);
@@ -795,13 +805,15 @@ void ImpTicketPie(struct tm fecha, unsigned numventa) {
   fclose(impr);
 }
 
-void ImpTicketEncabezado() {
+//void ImpTicketEncabezado() {
+void print_ticket_header(char *nm_disp_ticket, char *nm_ticket_header) {
   FILE *impr,*fenc;
   char *s;
+  int i;
 
-  impr = fopen(nm_disp_ticket,"w");
+  impr = fopen(nm_ticket_header,"w");
   if (impr == NULL)
-        ErrorArchivo(nm_disp_ticket);
+    ErrorArchivo(nm_ticket_header);
 
   s = calloc(1, mxbuff);
   fenc = fopen(nmfenc,"r");
@@ -816,8 +828,19 @@ void ImpTicketEncabezado() {
   else {
     do {
       fgets(s, sizeof(s), fenc);
-      if (!feof(fenc))
-        fprintf(impr, "%s", s);
+      if (!feof(fenc)) {
+        if (!i) /* First line is printed double-height double-width */
+          if (strstr(tipo_disp_ticket, "EPSON"))
+            fprintf(impr, "%c!%c%ca%c%s%ca%c%c!%c", ESC, 48, ESC, 1, s, ESC, 0, ESC, 0);
+          else
+            fprintf(impr, "%cP%s", ESC, s);
+        else
+          if (strstr(tipo_disp_ticket, "EPSON"))
+            fprintf(impr, "%ca%c%s%ca%c", ESC, 1, s, ESC, 0);
+          else
+            fprintf(impr, "%cM%s", ESC, s);
+      }
+      i++;
     }
     while (!feof(fenc));
     fclose(fenc);
@@ -847,30 +870,25 @@ int AbreCajon(char *tipo_miniimp) {
   return(1);
 }
 
-void RegistraRem(unsigned num_venta) {
-  FILE *log, *ar_num_venta;
+/*void registra_rem() {
+  FILE *log;
   static int i;
 
-  ar_num_venta = fopen(nm_num_venta, "w");
-  if (ar_num_venta == NULL)
-    ErrorArchivo(nm_num_venta);
-  fprintf(ar_num_venta, "%u", num_venta);
-  fclose(ar_num_venta);
 
   log = fopen(nmtickets,"a");
   if (log == NULL)
-        ErrorArchivo(nmtickets);
+    ErrorArchivo(nmtickets);
 
   for (i=0; i<numarts; i++) {
     fprintf(log," -> %s\n",articulo[i].desc);
     fprintf(log, "%20s %3d x %8.2f = %8.2f\n",
-	articulo[i].codigo,articulo[i].cant,articulo[i].pu,
-	articulo[i].pu*articulo[i].cant);
+            articulo[i].codigo,articulo[i].cant,articulo[i].pu,
+            articulo[i].pu*articulo[i].cant);
   }
   fprintf(log,"                  TOTAL: %8.2f\n",a_pagar);
   fclose(log);
 }
-
+*/
 
 void aviso_existencia(struct articulos art)
 {
@@ -889,8 +907,8 @@ void aviso_existencia(struct articulos art)
     getch();
   }
   else {
-	fprintf(arch, "%s", aviso);
-	fclose(arch);
+        fprintf(arch, "%s", aviso);
+        fclose(arch);
   }
 
   arch = popen(nm_sendmail, "w");
@@ -899,13 +917,13 @@ void aviso_existencia(struct articulos art)
     getch();
   }
   else {
-	fprintf(arch, "To: %s\n", dir_avisos);
-	fprintf(arch, "From: %s\n", "scaja");
-	fprintf(arch, "Subject: %s\n", asunto_avisos);
-	if (strlen(cc_avisos))
-	  fprintf(arch, "Cc: %s\n", cc_avisos);
-	fprintf(arch, "\n\n%s\n", aviso);
-	fclose(arch);
+        fprintf(arch, "To: %s\n", dir_avisos);
+        fprintf(arch, "From: %s\n", "scaja");
+        fprintf(arch, "Subject: %s\n", asunto_avisos);
+        if (strlen(cc_avisos))
+          fprintf(arch, "Cc: %s\n", cc_avisos);
+        fprintf(arch, "\n\n%s\n", aviso);
+        fclose(arch);
   }
 }
 
@@ -921,7 +939,7 @@ PGresult *res;
     if (articulo[i].exist < 0) /* No existe en la base de existencias */
       continue;
     if (articulo[i].exist > articulo[i].exist_min  &&
-		articulo[i].exist-articulo[i].cant <= articulo[i].exist_min) {
+                articulo[i].exist-articulo[i].cant <= articulo[i].exist_min) {
       aviso_existencia(articulo[i]);
       resurtir++;
     }
@@ -945,10 +963,10 @@ void Termina(PGconn *con, int error)
 
 void mensaje(char *texto)
 {
-	attrset(COLOR_PAIR(azul_sobre_blanco));
+        attrset(COLOR_PAIR(azul_sobre_blanco));
         mvprintw(getmaxy(stdscr)-1,0, texto);
-	attrset(COLOR_PAIR(blanco_sobre_negro));
-	clrtoeol();
+        attrset(COLOR_PAIR(blanco_sobre_negro));
+        clrtoeol();
 }
 
 /*  unsigned obten_num_venta(char *nm_archivo) */
@@ -984,19 +1002,19 @@ unsigned obten_num_venta(PGconn *base)
 }
 
 int main() {
-  static char buffer, buf[50];
+  static char buffer, buf[255];
   static char encabezado1[mxbuff],
       encabezado2[mxbuff] = "E. Israel Osorio H., 1999,2000 linucs@punto-deventa.com";
   FILE *impr_cmd;
-  time_t tiempo;	
+  time_t tiempo;        
   static int dgar;
   PGconn *con;
   unsigned num_venta = 0;
   unsigned formadepago;
   double utilidad;
-  struct tm *fecha;	/* Hora y fecha local	*/
+  struct tm *fecha;     /* Hora y fecha local   */
 
-  //  char *nmdatos,   	/* Nombre del archivo de datos de la venta */
+  //  char *nmdatos,    /* Nombre del archivo de datos de la venta */
   char   *nmdiario;   /* Nombre del registro del diario */
 
   //  nmdatos  = calloc(1, 31);
@@ -1007,8 +1025,7 @@ int main() {
   fecha->tm_year += 1900;
 
   initscr();
-  //  LeeConfig(nmdatos, nmdiario);
-  read_config(nmdiario);
+  read_config();
   if (!has_colors()) {
     aborta("Este equipo no puede producir colores, pulse una tecla para abortar...",
             10);
@@ -1021,7 +1038,7 @@ int main() {
   init_pair(azul_sobre_blanco, COLOR_BLUE, COLOR_WHITE);
   init_pair(cyan_sobre_negro, COLOR_CYAN, COLOR_BLACK);
 
-  con = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "scaja", "");
+  con = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "israel", ""); /*igm*/
   if (con == NULL) {
     aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
             ERROR_SQL);
@@ -1050,23 +1067,19 @@ int main() {
                fecha->tm_mday, (fecha->tm_mon)+1, fecha->tm_year);
     attrset(COLOR_PAIR(cyan_sobre_negro));
     mvprintw(0,(getmaxx(stdscr)-strlen(encabezado1))/2,
-	     "%s",encabezado1);
+             "%s",encabezado1);
     mvprintw(1,(getmaxx(stdscr)-strlen(encabezado2))/2,
-	     "%s",encabezado2);
+             "%s",encabezado2);
     attrset(COLOR_PAIR(blanco_sobre_negro));
     //    a_pagar = capt_remision(nmdiario, nmdatos, &numarts, &utilidad);
-    a_pagar = capt_remision(nmdiario, &numarts, &utilidad);
+    a_pagar = capt_remision(&numarts, &utilidad);
 
-    /* esto pretende "despertar" a la impresora para agilizar el proceso, pero en
-       realidad no se ha probado aún   */
-    fclose(fopen(nm_disp_ticket, "a"));
 
     if (numarts && a_pagar) {
       attron(A_BOLD);
       mvprintw(getmaxy(stdscr)-2,0,"¿Imprimir Remision, Factura o Ticket (R,F,T)? T\b");
       attroff(A_BOLD);
       buffer = toupper(getch());
-      //      RegistraRem(num_venta+1); /* Genera un archivo de intercambio de datos. eliminarlo */
       formadepago = forma_de_pago();
 
       switch (buffer) {
@@ -1075,7 +1088,7 @@ int main() {
           mvprintw(getmaxy(stdscr)-1,0,"¿Días de garantía? : ");
           attroff(A_BOLD);
           clrtoeol();
-     	  scanw("%d",&dgar);
+          scanw("%d",&dgar);
           num_venta = registra_venta(con, "ventas", a_pagar, utilidad, formadepago,
                          _NOTA_MOSTRADOR, FALSE, *fecha, 0, 0, articulo, numarts);
           sprintf(buf,"%s %d %d",nmimprrem, num_venta, dgar);
@@ -1104,8 +1117,8 @@ int main() {
         mensaje(buf);
         buffer = toupper(getch());
         if (buffer != 'C') {
-          sprintf(buf, "netscape http://localhost/osopos-web/factur_web.php?id_venta=%d &",
-                  num_venta);
+          if (strstr(nm_factur, "http") != NULL)
+            sprintf(buf, "%s?id_venta=%d &", nm_factur, num_venta);
           //sprintf(buf, "~/bin/facturar -r");
           system(buf); /* Colocar aqui una varibale de configuracion */
         }
@@ -1117,25 +1130,25 @@ int main() {
       default:
         //formadepago = forma_de_pago();
         imp_ticket_arts();
-        sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+        sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
         pclose(impr_cmd);
         if (formadepago >= 20) {
           AbreCajon(tipo_disp_ticket);
-          sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+          sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
           impr_cmd = popen(buf, "w");
           pclose(impr_cmd);
         }
+        num_venta = registra_venta(con, "ventas", a_pagar, utilidad,
+                       formadepago, _TEMPORAL, FALSE, *fecha, 0, 0, articulo, numarts);
         ImpTicketPie(*fecha, num_venta);
-        sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+        sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
         pclose(impr_cmd);
-        registra_venta(con, "ventas", a_pagar, utilidad,
-                       formadepago, _TEMPORAL, FALSE, *fecha, 0, 0, articulo, numarts);
         mensaje("Corta el papel y aprieta una tecla para continuar (t para terminar)...");
         buffer = toupper(getch());
-        ImpTicketEncabezado();
-        sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+        print_ticket_header(nm_disp_ticket, nmfenc);
+        sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
         pclose(impr_cmd);
         break;
@@ -1157,13 +1170,12 @@ int main() {
 
   free(nm_disp_ticket);
   //  free(nmdatos);
-  free(nmdiario);
+  //  free(nmdiario);
   free(nm_avisos);
   free(nmfpie);
   free(nmfenc);
   free(nmtickets);
   free(nmimprrem);
-  free(nm_num_venta);
 
   PQfinish(con);
   endwin();
