@@ -1,8 +1,8 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
- Facturación 1.9-1. Módulo de facturación de OsoPOS.
+ Facturación 1.14. Módulo de facturación de OsoPOS.
 
-        Copyright (C) 1999,2000 Eduardo Israel Osorio Hernández
+        Copyright (C) 1999-2001 Eduardo Israel Osorio Hernández
 
         Este programa es un software libre; puede usted redistribuirlo y/o
 modificarlo de acuerdo con los términos de la Licencia Pública General GNU
@@ -26,15 +26,15 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/pos-curses.h"
 #define _pos_curses
 #include <time.h>
+#include <values.h>
 
-/*#include <stdlib.h>*/
 
-#include "include/linucs.h"
-/*#include "include/electroh.h"  */
+//#include "include/linucs.h"
+#include "include/electroh.h"
 
 #include <form.h>
 
-#define vers "1.9-1"
+#define vers "1.14"
 /*
 #ifdef maxspc
 #undef maxspc
@@ -42,6 +42,15 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 */
 
 #define mxchcant 50
+
+#define CAMPO_NOMBRE   2
+#define CAMPO_CALLE    4
+#define CAMPO_FOLIO   22
+#define CAMPO_NUMVEN  24
+#define CAMPO_DIA     26
+#define CAMPO_MES     28
+#define CAMPO_ANIO    30
+
 
 #ifndef CTRL
 #define CTRL(x)         ((x) & 0x1f)
@@ -61,7 +70,6 @@ int   EsEspaniol(char c);
 void  captura_cliente();
 int   captura_articulos();
 int   CaptObserv();
-int   CalculaIVA();
 void  imprime_factura();
 void  muestra_ayuda_cliente(int ren, int col);
 void  muestra_cliente(int renglon, int columna, struct datoscliente cliente);
@@ -88,8 +96,8 @@ void muestra_ayuda_cliente(int ren, int col) {
    "Las teclas de flecha mueven el cursor a traves del campo\n");
   addstr("<Ctrl-Q>  Terminar de introducir datos    ");
   addstr("<Ctrl-B>  Busca cliente por su RFC\n");
-  addstr("<Inicio>  Primer campo (nombre)           ");
-  addstr("<Fin>     Ultimo campo (RFC)\n");
+  addstr("<Inicio>  Primer campo (rfc)           ");
+  addstr("<Fin>     Ultimo campo (fecha)\n");
   addstr("<Intro>   Siguiente campo        \n");
   addstr("<Ctrl-X>  Borra el campo                  ");
   addstr("<Insert>  Sobreescribir/insertar\n");
@@ -192,14 +200,14 @@ void muestra_ayuda_cliente(int ren, int col) {
     }
 }
 
-void captura_cliente(PGconn *con) {
+void captura_cliente(PGconn *con, unsigned* num_venta, unsigned *folio_fact) {
    WINDOW *ven;
    FORM *forma;
    FIELD *campo[31];
    char etiqueta[mxbuff];
    int  finished = 0, c, i;
    int tam_ren, tam_col, pos_ren, pos_col;
-   char scp[6];
+   char scp[16];
 
   pos_ren = 1;
   pos_col = 0;
@@ -208,36 +216,40 @@ void captura_cliente(PGconn *con) {
   /* describe la forma */
   campo[0] = CreaEtiqueta(2, 30, etiqueta);
   campo[20] = CreaEtiqueta(4, 0, "Nombre o razon social:");
-  campo[2] = CreaCampo(5, 0, 1, maxspc-1);
+  campo[CAMPO_NOMBRE] = CreaCampo(5, 0, 1, maxspc-1);
   campo[3] = CreaEtiqueta(6, 0, "Calle:");
-  campo[4] = CreaCampo(7, 0, 1, maxspcalle-1);
-  campo[5] = CreaEtiqueta(6, maxspcalle+1, "Num. Ext");
-  campo[6] = CreaCampo(7, maxspcalle+1, 1, maxspext-1);
-  campo[7] = CreaEtiqueta(6, maxspcalle+maxspext+2, "Int");
-  campo[8] = CreaCampo(7, maxspcalle+maxspext+2, 1, maxspint-1);
+  campo[CAMPO_CALLE] = CreaCampo(7, 0, 1, maxspcalle-1);
+  campo[5] = CreaEtiqueta(6, maxspcalle, "Num. Ext.:");
+  campo[6] = CreaCampo(7, maxspcalle, 1, maxspext-1);
+  campo[7] = CreaEtiqueta(6, maxspcalle+maxspext+1, "Int");
+  campo[8] = CreaCampo(7, maxspcalle+maxspext+1, 1, maxspint-1);
   campo[9] = CreaEtiqueta(8, 0, "Colonia:");
   campo[10] = CreaCampo(9, 0, 1, maxspcol-1);
-  campo[11] = CreaEtiqueta(8, maxspcol+1, "Ciudad:");
-  campo[12] = CreaCampo(9, maxspcol+1, 1, maxspcd-1);
-  campo[13] = CreaEtiqueta(8, maxspcol+maxspcd+2, "Edo");
-  campo[14] = CreaCampo(9, maxspcol+maxspcd+2, 1, maxspedo-1);
-  campo[15] = CreaEtiqueta(8, maxspcol+maxspcd+maxspedo+3, "C.P.");
-  campo[16] = CreaCampo(9, maxspcol+maxspcd+maxspedo+3, 1, 5);
-  campo[17] = CreaEtiqueta(10, 0, "C.U.R.P.");
-  campo[18] = CreaCampo(11, 0, 1, maxcurp-1);
-  campo[19] = CreaEtiqueta(10, maxcurp+1, "R.F.C.:");
-  campo[1] = CreaCampo(11, maxcurp+1, 1, maxrfc-1);
+  campo[11] = CreaEtiqueta(10, 0, "Ciudad:");
+  campo[12] = CreaCampo(11, 0, 1, maxspcd-1);
+  campo[13] = CreaEtiqueta(10, maxspcd+1, "Estado:");
+  campo[14] = CreaCampo(11, maxspcd+1, 1, maxspedo-1);
+  campo[15] = CreaEtiqueta(10, maxspcd+maxspedo+2, "C.P.:");
+  campo[16] = CreaCampo(11, maxspcd+maxspedo+2, 1, 5);
+  campo[17] = CreaEtiqueta(12, 0, "C.U.R.P.");
+  campo[18] = CreaCampo(13, 0, 1, maxcurp-1);
+  campo[19] = CreaEtiqueta(12, maxcurp+1, "R.F.C.:");
+  campo[1] = CreaCampo(13, maxcurp+1, 1, maxrfc-1);
   campo[21] = CreaEtiqueta(0, 0, "Folio:");
-  campo[22] = CreaCampo(0, 6, 1, 5);
+  campo[CAMPO_FOLIO] = CreaCampo(0, 6, 1, 5);
   campo[23] = CreaEtiqueta(0, 24, "# venta:");
-  campo[24] = CreaCampo(0, 33, 1, 8);
+  campo[CAMPO_NUMVEN] = CreaCampo(0, 33, 1, 8);
   campo[25] = CreaEtiqueta(0, 55, "Fecha:");
-  campo[26] = CreaCampo(0, 62, 1, 2);
+  campo[CAMPO_DIA] = CreaCampo(0, 62, 1, 2);
   campo[27] = CreaEtiqueta(0, 64, "/");
-  campo[28] = CreaCampo(0, 65, 1, 2);
+  campo[CAMPO_MES] = CreaCampo(0, 65, 1, 2);
   campo[29] = CreaEtiqueta(0, 67, "/");
-  campo[30] = CreaCampo(0, 68, 1, 2);
+  campo[CAMPO_ANIO] = CreaCampo(0, 68, 1, 2);
   campo[31] = (FIELD *)0;
+
+  set_field_type(campo[CAMPO_DIA], TYPE_NUMERIC, 0, 1, 31);
+  set_field_type(campo[CAMPO_MES], TYPE_NUMERIC, 0, 1, 12);
+
 
   forma = new_form(campo);
 
@@ -245,23 +257,28 @@ void captura_cliente(PGconn *con) {
   scale_form(forma, &tam_ren, &tam_col);
   campo[0]->fcol = (unsigned) ((tam_col - strlen(etiqueta)) / 2);
   campo[23]->fcol = (unsigned) ((tam_col - 17) / 2);
-  campo[24]->fcol = (unsigned) (campo[23]->fcol + 9);
+  campo[CAMPO_NUMVEN]->fcol = (unsigned) (campo[23]->fcol + 9);
   campo[25]->fcol = (unsigned) (tam_col - 15); /* Fecha */
-  campo[26]->fcol = (unsigned) (campo[25]->fcol + 7); /* Dia */
-  campo[27]->fcol = (unsigned) (campo[26]->fcol + 2); 
-  campo[28]->fcol = (unsigned) (campo[27]->fcol + 1); /* Mes */
-  campo[29]->fcol = (unsigned) (campo[28]->fcol + 2);
-  campo[30]->fcol = (unsigned) (campo[29]->fcol + 1); /* Año */
+  campo[CAMPO_DIA]->fcol = (unsigned) (campo[25]->fcol + 7); /* Dia */
+  campo[27]->fcol = (unsigned) (campo[CAMPO_DIA]->fcol + 2); 
+  campo[CAMPO_MES]->fcol = (unsigned) (campo[27]->fcol + 1); /* Mes */
+  campo[29]->fcol = (unsigned) (campo[CAMPO_MES]->fcol + 2);
+  campo[CAMPO_ANIO]->fcol = (unsigned) (campo[29]->fcol + 1); /* Año */
 
   sprintf(scp, "%2d", fecha.dia);
   if (scp[0] == ' ') scp[0] = '0';
-  set_field_buffer(campo[26], 0, scp);
+  set_field_buffer(campo[CAMPO_DIA], 0, scp);
   sprintf(scp, "%2d",fecha.mes);
   if (scp[0] == ' ') scp[0] = '0';
-  set_field_buffer(campo[28], 0, scp);
+  set_field_buffer(campo[CAMPO_MES], 0, scp);
   sprintf(scp, "%2d",fecha.anio-2000);
   if (scp[0] == ' ') scp[0] = '0';
-  set_field_buffer(campo[30], 0, scp);
+  set_field_buffer(campo[CAMPO_ANIO], 0, scp);
+
+  sprintf(scp, "%u", *num_venta);
+  set_field_buffer(campo[CAMPO_NUMVEN], 0, scp);
+  sprintf(scp, "%u", *folio_fact);
+  set_field_buffer(campo[CAMPO_FOLIO], 0, scp);
 
   muestra_ayuda_cliente(tam_ren+pos_ren+3,0);
   refresh();
@@ -283,7 +300,7 @@ void captura_cliente(PGconn *con) {
       if (c == CTRL('B')) {
         strcpy(cliente.rfc,campo[1]->buf);
         if (!BuscaCliente(cliente.rfc, &cliente, con)) {
-          set_field_buffer(campo[2], 0, cliente.nombre);
+          set_field_buffer(campo[CAMPO_NOMBRE], 0, cliente.nombre);
           set_field_buffer(campo[4], 0, cliente.dom_calle);
           set_field_buffer(campo[6], 0, cliente.dom_numero);
           set_field_buffer(campo[8], 0, cliente.dom_inter);
@@ -296,7 +313,7 @@ void captura_cliente(PGconn *con) {
           set_field_buffer(campo[18], 0, cliente.curp);
         }
         else
-          set_field_buffer(campo[2], 0, "Nuevo registro");
+          set_field_buffer(campo[CAMPO_NOMBRE], 0, "Nuevo registro");
       }
       else if (!EsEspaniol(c))
         finished = my_form_driver(forma, c);
@@ -316,25 +333,30 @@ void captura_cliente(PGconn *con) {
     if (campo[i]->buf[ strlen(campo[i]->buf)-1 ] == ' ')
       campo[i]->buf[ strlen(campo[i]->buf)-1 ] = 0;
 
-  strncpy(cliente.nombre, campo[2]->buf, maxspc);
-  limpiacad(cliente.nombre, TRUE),
-  strncpy(cliente.dom_calle,campo[4]->buf, maxspcalle);
-  limpiacad(cliente.dom_calle, TRUE),
+  strncpy(cliente.nombre, campo[CAMPO_NOMBRE]->buf, maxspc);
+  limpiacad(cliente.nombre, TRUE);
+  strncpy(cliente.dom_calle,campo[CAMPO_CALLE]->buf, maxspcalle);
+  limpiacad(cliente.dom_calle, TRUE);
   strncpy(cliente.dom_numero,campo[6]->buf, maxspext);
-  limpiacad(cliente.dom_numero, TRUE),
+  limpiacad(cliente.dom_numero, TRUE);
   strncpy(cliente.dom_inter,campo[8]->buf, maxspint);
-  limpiacad(cliente.dom_inter, TRUE),
+  limpiacad(cliente.dom_inter, TRUE);
   strncpy(cliente.dom_col,campo[10]->buf, maxspcol);
-  limpiacad(cliente.dom_col, TRUE),
+  limpiacad(cliente.dom_col, TRUE);
   strncpy(cliente.dom_ciudad,campo[12]->buf, maxspcd);
-  limpiacad(cliente.dom_ciudad, TRUE),
+  limpiacad(cliente.dom_ciudad, TRUE);
   strncpy(cliente.dom_edo,campo[14]->buf, maxspedo);
-  limpiacad(cliente.dom_edo, TRUE),
+  limpiacad(cliente.dom_edo, TRUE);
   cliente.cp = atoi(campo[16]->buf);
   strncpy(cliente.curp,campo[18]->buf, maxcurp);
-  limpiacad(cliente.curp, TRUE),
+  limpiacad(cliente.curp, TRUE);
   strncpy(cliente.rfc,campo[1]->buf, maxrfc);
-  limpiacad(cliente.rfc, TRUE),
+  limpiacad(cliente.rfc, TRUE);
+  *folio_fact = atoi(campo[CAMPO_FOLIO]->buf);
+  *num_venta = atoi(campo[CAMPO_NUMVEN]->buf);
+  fecha.dia = atoi(campo[CAMPO_DIA]->buf);
+  fecha.mes = atoi(campo[CAMPO_MES]->buf);
+  fecha.anio = atoi(campo[CAMPO_ANIO]->buf)+2000;
 
   free_form(forma);
   for (c = 0; campo[c] != 0; c++)
@@ -377,11 +399,12 @@ void muestra_ayuda(int ren, int col) {
 int captura_articulos() {
   WINDOW *ventana;
   FORM   *forma;
-  FIELD  *campo[8];
+  FIELD  *campo[11];
   char   *etiqueta;
   int    finished = 0, c;
   int    tam_ren, tam_col, pos_ren, pos_col;
   int    i = 0;
+  char buff[30];
 
   pos_ren = 5;
   pos_col = 0;
@@ -395,13 +418,24 @@ int captura_articulos() {
   campo[3] = CreaCampo(2, maxexistlong+1, 1, maxdes);
   campo[4] = CreaEtiqueta(1, maxexistlong+maxdes+2, "P.U.:");
   campo[5] = CreaCampo(2, maxexistlong+maxdes+2, 1, maxpreciolong);
-  campo[6] = CreaEtiqueta(0, 6, etiqueta);
-  campo[7] = (FIELD *)0;
+  campo[6] = CreaEtiqueta(1, maxexistlong+maxdes+maxpreciolong+3,
+                          "IVA");
+  campo[7] = CreaCampo(2,maxexistlong+maxdes+maxpreciolong+3, 1, 3);
+  campo[8] = CreaEtiqueta(0, 6, etiqueta);
+  campo[9] = CreaEtiqueta(1, maxexistlong+maxdes+maxpreciolong+7,
+                          "%");
+  campo[10] = (FIELD *)0;
+
+  set_field_type(campo[1], TYPE_NUMERIC, 0, 0, MAXDOUBLE);
+  set_field_type(campo[5], TYPE_NUMERIC, 2, 0, MAXDOUBLE);
+  set_field_type(campo[7], TYPE_NUMERIC, 0, 0, MAXDOUBLE);
 
   forma = new_form(campo);
 
   scale_form(forma, &tam_ren, &tam_col);
-  campo[6]->fcol = (unsigned) ((tam_col - strlen(etiqueta)) / 2);
+  campo[8]->fcol = (unsigned) ((tam_col - strlen(etiqueta)) / 2);
+  sprintf(buff, "%f", iva_porcentaje);
+  set_field_buffer(campo[7], 0, buff);
 
   muestra_ayuda(getmaxy(stdscr)-1,0);
   refresh();
@@ -426,12 +460,21 @@ int captura_articulos() {
         strncpy(art[i].desc, campo[3]->buf, maxdes-1);
         limpiacad(art[i].desc, TRUE);
         art[i].pu = atof(campo[5]->buf);
+        art[i].iva_porc = atof(campo[7]->buf);
         mvprintw(pos_ren+tam_ren+i+2, 1, "%-d", art[i].cant);
         mvprintw(pos_ren+tam_ren+i+2, maxexistlong+2, "%s", art[i].desc);
-        if (maxdes > 70)
-          mvprintw(pos_ren+tam_ren+i+2, maxexistlong+70+2, " %8.2f\n", art[i].pu);
-        else
-          mvprintw(pos_ren+tam_ren+i+2, maxexistlong+maxdes+2, "%8.2f\n", art[i].pu);
+        if (maxdes > 65) {
+          mvprintw(pos_ren+tam_ren+i+2, maxexistlong+65+2, " %8.2f",
+                   art[i].pu);
+          mvprintw(pos_ren+tam_ren+i+2, maxexistlong+73+3, " %3.2f",
+                   art[i].iva_porc);
+        }
+        else {
+          mvprintw(pos_ren+tam_ren+i+2, maxexistlong+maxdes+2, "%8.2f",
+                   art[i].pu);
+          mvprintw(pos_ren+tam_ren+i+2, maxexistlong+maxdes+8+2, " %3.2f",
+                   art[i].iva_porc);
+        }
         refresh();
         i++;
       }
@@ -483,7 +526,7 @@ int CaptObserv(char *obs[maxobs], char *garantia) {
 }
 
 
-void Muestra_Factura(char *fecha,
+void Muestra_Factura(struct fech fecha,
                      int numart,
                      int numobs, 
                      char *obs[maxobs],
@@ -494,35 +537,33 @@ void Muestra_Factura(char *fecha,
 
   attrset(COLOR_PAIR(normal));
   mvprintw(0, (getmaxx(stdscr)-27)/2, "Vista preliminar de factura");
-  mvprintw(0, getmaxx(stdscr)-10, "%s", fecha);
+  mvprintw(0, getmaxx(stdscr)-10, "%2d/%2d/%2d",
+                                  fecha.dia, fecha.mes, fecha.anio);
   muestra_cliente(1,0, cliente);
-  /*  mvprintw(1, 0, "%s",cliente.nombre);
-  mvprintw(2, 0, "%s",cliente.domicilio);
-  mvprintw(3, 0, "%s",cliente.ciudad);
-  mvprintw(3, sizeof(cliente.ciudad)+1,"%s",cliente.rfc); */
 
   for (i=0; i<numart; i++) {
-    mvprintw(i+5, 1, "%-d", art[i].cant);
-    mvprintw(i+5, maxexistlong+2, "%s", art[i].desc);
+    mvprintw(i+6, 1, "%-d", art[i].cant);
+    mvprintw(i+6, maxexistlong+2, "%s", art[i].desc);
     if (maxdes > 70)
-      mvprintw(i+5, maxexistlong+70+2, " %8.2f", art[i].pu);
+      mvprintw(i+6, maxexistlong+70+2, " %8.2f", art[i].pu);
     else
-      mvprintw(i+5, maxexistlong+maxdes+2, "%8.2f", art[i].pu);
+      mvprintw(i+6, maxexistlong+maxdes+2, "%8.2f", art[i].pu);
   }
 
   for (i=0; i<numobs; ++i)
-    mvprintw(i+6+numarticulos, 0, "%s", obs[i]);
+    mvprintw(i+7+numarticulos, 0, "%s", obs[i]);
 
-  mvprintw(i+7+numarticulos+numobs, 0, "%s de garantía", garantia);
+  if (strlen(garantia))
+    mvprintw(i+8+numarticulos+numobs, 0, "%s de garantía", garantia);
 
-  mvprintw(i+ 9+numarticulos+numobs, 0, "%s--", str_cant(total,&centavos));
-  mvprintw(i+10+numarticulos+numobs, 0, "pesos %2d/100 M.N.", centavos);
+  mvprintw(i+10+numarticulos+numobs, 0, "%s--", str_cant(total,&centavos));
+  mvprintw(i+11+numarticulos+numobs, 0, "pesos %2d/100 M.N.", centavos);
   if (centavos<10)
-    mvprintw(i+10+numarticulos+numobs, 6, "0");
+    mvprintw(i+11+numarticulos+numobs, 6, "0");
 
-  mvprintw(i+11+numarticulos, getmaxx(stdscr)-12, "%8.2f", subtotal);
-  mvprintw(i+12+numarticulos, getmaxx(stdscr)-12, "%8.2f", iva);
-  mvprintw(i+13+numarticulos, getmaxx(stdscr)-12, "%8.2f", total);
+  mvprintw(i+12+numarticulos, getmaxx(stdscr)-12, "%8.2f", subtotal);
+  mvprintw(i+13+numarticulos, getmaxx(stdscr)-12, "%8.2f", iva);
+  mvprintw(i+14+numarticulos, getmaxx(stdscr)-12, "%8.2f", total);
   refresh();
 }
 
@@ -539,7 +580,9 @@ void imprime_factura() {
   }
   else {
     comando = calloc(1, mxbuff);
-    sprintf(comando, "lpr -Fb -P%s %s",   lprimp, nmfact);
+    sprintf(comando, "lpr -Fb -P %s %s",  lprimp, nmfact);
+    system(comando);
+    sprintf(comando, "rm -rf %s", nmfact);
     system(comando);
     free(comando);
   }
@@ -625,24 +668,24 @@ int my_form_driver(FORM *form, int c)
 
 int main(int argc, char *argv[]) {
 /*   char encabezado1[mxbuff] = "Sistema OsoPOS - Programa Facturar",
-        encabezado2[mxbuff] = "E. Israel Osorio H., 1999 linucs@punto-deventa.com"; */
-  char   sfecha[20];
+        encabezado2[mxbuff] = "E. Israel Osorio H., 1999-2001 linucs@punto-deventa.com"; */
   char   *obs[maxobs],
          *garantia;
   int    i;
-  unsigned num_venta;
+  unsigned num_venta=0;
+  unsigned folio_fact=0;
   PGconn *con;
   time_t tiempo;
 
   initscr();
   start_color();
-  LeeConfig();
+  read_config();
 
   init_pair(amarillo_sobre_azul, COLOR_YELLOW, COLOR_BLUE);
   init_pair(verde_sobre_negro, COLOR_GREEN, COLOR_BLACK);
   init_pair(normal, COLOR_WHITE, COLOR_BLACK);
 
-  con = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "scaja", "");
+  con = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "scaja", NULL);
   if (con == NULL) {
     aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
             ERROR_SQL);
@@ -657,19 +700,18 @@ int main(int argc, char *argv[]) {
     if (!strcmp(argv[1],"-r")) {
       num_venta = atoi(argv[2]);      
       //      numarticulos = LeeVenta(nmdatos, art);
-      numarticulos = lee_venta(con, num_venta, art);
     }
   clear();
 /*  printw("RFC: ");
   getstr(cliente.rfc);
   clear(); */
-  /*  sprintf(sfecha,"%u-%u-%u\n",fecha.dia,fecha.mes,fecha.anio);
-      mvprintw(0, getmaxx(stdscr)-strlen(sfecha),"%s\n",sfecha);*/
 
   AjustaModoTerminal();
-  captura_cliente(con);
+  captura_cliente(con, &num_venta, &folio_fact);
   muestra_cliente(0,0,cliente);
-  if (argc<=1)
+  if (num_venta)
+    numarticulos = lee_venta(con, num_venta, art);
+  else
     numarticulos = captura_articulos();
   CalculaIVA();
   for (i=0; i<maxobs; i++) {
@@ -677,14 +719,15 @@ int main(int argc, char *argv[]) {
   }
   garantia = calloc(1,maxdes);
   i = CaptObserv(obs, garantia);
-  Muestra_Factura(sfecha, numarticulos, i, obs, garantia);
+  Muestra_Factura(fecha, numarticulos, i, obs, garantia);
   imprime_factura();
   endwin();
-  RegistraFactura(0, art, con);
+  RegistraFactura(folio_fact, art, con);
   for (i=0; i<maxobs; i++) {
     free(obs[i]);
   }
   free(garantia);
+  free(home_directory);
   PQfinish(con);
   return(OK);
 }

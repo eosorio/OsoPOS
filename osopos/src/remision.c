@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.11-1 1999, 2000 E. Israel Osorio H., licencia GPL.
+   Programa Remision 1.13 (C) 1999-2001 E. Israel Osorio H.
    desarrollo@punto-deventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -27,7 +27,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/pos-curses.h"
 #define _pos_curses
 
-#define vers "1.11"
+#define vers "1.13"
 #define release "Electro Hogar"
 
 #ifndef maxdes
@@ -97,6 +97,7 @@ int numarts=0;          /* Número de items capturados   */
 short unsigned maxitemr;
 
   /* Variables de configuración */
+char *home_directory;
 char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *lp_disp_ticket,      /* Definición de miniprinter en /etc/printcap */
   *nmfpie,              /* Pie de página de ticket */
@@ -113,15 +114,23 @@ char *nm_disp_ticket,           /* Nombre de impresora de ticket */
 double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
 
 
-
-/*int LeeConfig(char *nmdatos,
-  char *nmdiario)*/
 int read_config()
 {
-  static char nmconfig[] = "remision.config";
+  char *nmconfig;
   FILE *config;
   static char buff[mxbuff],buf[mxbuff];
   static char *b;
+ 
+  home_directory = calloc(1, 255);
+  nmconfig = calloc(1, 255);
+  config = popen("printenv HOME", "r");
+  fgets(home_directory, 255, config);
+  home_directory[strlen(home_directory)-1] = 0;
+  pclose(config);
+
+  strcpy(nmconfig, home_directory);
+  strcat(nmconfig, "/.osopos/remision.config");
+
 
  /* Raw writing to port will not be supported anymore */
   //nm_disp_ticket = calloc(1, strlen("/dev/lpx")+1);
@@ -134,23 +143,20 @@ int read_config()
   tipo_disp_ticket = calloc(1, strlen("STAR")+1);
   strcpy(tipo_disp_ticket, "STAR");
 
-  nmfpie = calloc(1, strlen("/home/OsoPOS/caja/pie_pagina.txt")+1);
-  strcpy(nmfpie,   "/home/OsoPOS/caja/pie_pagina.txt");
+  nmfpie = calloc(1, strlen("/pie_pagina.txt")+strlen(home_directory)+1);
+  sprintf(nmfpie,   "%s/pie_pagina.txt", home_directory);
 
-  nmfenc = calloc(1, strlen("/home/OsoPOS/caja/encabezado.txt")+1);
-  strcpy(nmfenc,   "/home/OsoPOS/caja/encabezado.txt");
+  nmfenc = calloc(1, strlen("/encabezado.txt")+strlen(home_directory)+1);
+  sprintf(nmfenc,  "%s/encabezado.txt", home_directory);
   
-  nmtickets = calloc(1, strlen("/home/OsoPOS/scaja/log/venta")+1);
-  strcpy(nmtickets,"/home/OsoPOS/scaja/log/venta");
-  
-  nmimprrem = calloc(1, strlen("~/bin/imprem")+1);
-  strcpy(nmimprrem,"~/bin/imprem");
+  nmimprrem = calloc(1, strlen("/usr/bin/imprem")+1);
+  strcpy(nmimprrem,"/usr/bin/imprem");
 
-  nm_avisos = calloc(1, strlen("/home/OsoPOS/log/avisos.txt")+1);
-  strcpy(nm_avisos, "/home/OsoPOS/log/avisos.txt");
+  nm_avisos = calloc(1, strlen("/var/log/osopos/avisos.txt")+1);
+  strcpy(nm_avisos, "/var/log/osopos/avisos.txt");
   
-  dir_avisos = calloc(1, strlen("scaja@osopos")+1);
-  strcpy(nm_avisos, "scaja@osopos");
+  dir_avisos = calloc(1, strlen("scaja")+1);
+  strcpy(dir_avisos, "scaja");
   
   cc_avisos = "";
 
@@ -158,10 +164,13 @@ int read_config()
   strcpy(asunto_avisos, "Aviso de baja existencia");
   
   nm_sendmail = calloc(1, strlen("/usr/sbin/sendmail -t")+1);
-  strcpy(nm_avisos, "/usr/sbin/sendmail -t");
+  strcpy(nm_sendmail, "/usr/sbin/sendmail -t");
 
-  nm_factur = calloc(1, strlen("kfmbrowser http://localhost/osopos-web/factur_web.php"));
-  strcpy(nm_factur, "kfmbrowser http://localhost/osopos-web/factur_web.php");
+//  nm_factur = calloc(1, strlen("kfmbrowser http://localhost/osopos-web/factur_web.php"));
+//  strcpy(nm_factur, "kfmbrowser http://localhost/osopos-web/factur_web.php");
+
+  nm_factur = calloc(1, strlen("/usr/bin/factur"));
+  strcpy(nm_factur, "/usr/bin/factur");
 
   maxitemr = 6;
 
@@ -196,11 +205,6 @@ int read_config()
         lp_disp_ticket = NULL;
         lp_disp_ticket = calloc(1, strlen(buf)+1);
         strcpy(lp_disp_ticket, buf);
-      }
-      else if (!strcmp(b,"registro.ticket")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(nmtickets, strlen(buf)+1);
-        strcpy(nmtickets,buf);
       }
         /* Registro del diario */
       /*      else if (!strcmp(b,"registro")) {
@@ -464,13 +468,6 @@ double capt_remision(//char   *nm_reg_diario,
   *util = 0;
 
   iva = 0.0;
-  /*  registro = fopen(nm_reg_diario,"a");
-  if (registro == NULL)
-  ErrorArchivo(nm_reg_diario); */
-
-  /*  regtemp = fopen(nm_reg_temp,"w");
-  if (regtemp == NULL)
-  ErrorArchivo(nm_reg_temp);*/
 
   v_arts = newwin(getmaxy(stdscr)-8, getmaxx(stdscr)-1, 4, 0);
   scrollok(v_arts, TRUE);
@@ -607,18 +604,7 @@ double capt_remision(//char   *nm_reg_diario,
     *util += ((articulo[j].pu - articulo[j].p_costo) * articulo[j].cant);
         iva_articulo = articulo[j].pu - articulo[j].pu / (articulo[j].iva_porc/100 + 1);
 
-        /*    fprintf(registro,"%s\n",articulo[j].codigo);
-    fprintf(registro,"%d\n",articulo[j].cant);
-    fprintf(registro,"%.2f\n",articulo[j].pu*articulo[j].cant);
-    fprintf(registro,"%.2f\n",iva_articulo*articulo[j].cant); */
-    /* * * * * * * * * * * * * CAMBIAR POR BASE DE DATOS * * * * * * * */
-    /*    fprintf(regtemp, "%s\n", articulo[i].codigo);
-    fprintf(regtemp, "%s\n", articulo[j].desc);
-    fprintf(regtemp, "%d\n", articulo[j].cant);
-    fprintf(regtemp, "%.2f\n" ,articulo[j].pu);
-    fprintf(regtemp, "%.2f\n", articulo[j].iva_porc);*/
   }
-//  fclose(regtemp);
 
   if (i) {
     attrset(COLOR_PAIR(amarillo_sobre_negro));
@@ -627,9 +613,7 @@ double capt_remision(//char   *nm_reg_diario,
     attroff(A_BOLD);
     attrset(COLOR_PAIR(blanco_sobre_negro));
     clrtoeol();
-    //    fprintf(registro,"\n");
   }
-  //  fclose(registro);
 
   free(buff);
   return(subtotal);
@@ -811,18 +795,17 @@ void ImpTicketPie(struct tm fecha, unsigned numventa) {
 void print_ticket_header(char *nm_disp_ticket, char *nm_ticket_header) {
   FILE *impr,*fenc;
   char *s;
-  int i;
 
-  impr = fopen(nm_ticket_header,"w");
+  impr = fopen(nm_disp_ticket,"w");
   if (impr == NULL)
-    ErrorArchivo(nm_ticket_header);
+    ErrorArchivo(nm_disp_ticket);
 
   s = calloc(1, mxbuff);
-  fenc = fopen(nmfenc,"r");
+  fenc = fopen(nm_ticket_header,"r");
   if (!fenc) {
     fprintf(stderr,
       "OsoPOS(Remision): No se puede leer el encabezado de ticket\n\r");
-    fprintf(stderr,"del archivo %s\n",nmfenc);
+    fprintf(stderr,"del archivo %s\n", nm_ticket_header);
     fprintf(impr,
      "Sistema OsoPOS, programa Remision %s en\n",vers);
     fprintf(impr,"un sistema Linux linucs@punto-deventa.com\n");
@@ -831,18 +814,8 @@ void print_ticket_header(char *nm_disp_ticket, char *nm_ticket_header) {
     do {
       fgets(s, sizeof(s), fenc);
       if (!feof(fenc)) {
-        if (!i) /* First line is printed double-height double-width */
-          if (strstr(tipo_disp_ticket, "EPSON"))
-            fprintf(impr, "%c!%c%ca%c%s%ca%c%c!%c", ESC, 48, ESC, 1, s, ESC, 0, ESC, 0);
-          else
-            fprintf(impr, "%cP%s", ESC, s);
-        else
-          if (strstr(tipo_disp_ticket, "EPSON"))
-            fprintf(impr, "%ca%c%s%ca%c", ESC, 1, s, ESC, 0);
-          else
-            fprintf(impr, "%cM%s", ESC, s);
+        fprintf(impr, "%s", s);
       }
-      i++;
     }
     while (!feof(fenc));
     fclose(fenc);
@@ -872,36 +845,14 @@ int AbreCajon(char *tipo_miniimp) {
   return(1);
 }
 
-/*void registra_rem() {
-  FILE *log;
-  static int i;
-
-
-  log = fopen(nmtickets,"a");
-  if (log == NULL)
-    ErrorArchivo(nmtickets);
-
-  for (i=0; i<numarts; i++) {
-    fprintf(log," -> %s\n",articulo[i].desc);
-    fprintf(log, "%20s %3d x %8.2f = %8.2f\n",
-            articulo[i].codigo,articulo[i].cant,articulo[i].pu,
-            articulo[i].pu*articulo[i].cant);
-  }
-  fprintf(log,"                  TOTAL: %8.2f\n",a_pagar);
-  fclose(log);
-}
-*/
-
 void aviso_existencia(struct articulos art)
 {
   FILE *arch;
   char aviso[255];
 
 
-  sprintf(aviso, "Baja existencia en producto de proveedor num. %u\n",
-                 art.id_prov);
-  sprintf(aviso, "%s %s quedan %d\n",
-                 art.codigo, art.desc, art.exist);
+  sprintf(aviso, "Baja existencia en producto de proveedor num. %u\n%s %s quedan %d\n",
+                 art.id_prov, art.codigo, art.desc, art.exist-art.cant);
 
   arch = fopen(nm_avisos, "a");
   if (!arch) {
@@ -909,8 +860,8 @@ void aviso_existencia(struct articulos art)
     getch();
   }
   else {
-        fprintf(arch, "%s", aviso);
-        fclose(arch);
+    fprintf(arch, "%s", aviso);
+    fclose(arch);
   }
 
   arch = popen(nm_sendmail, "w");
@@ -1006,7 +957,7 @@ unsigned obten_num_venta(PGconn *base)
 int main() {
   static char buffer, buf[255];
   static char encabezado1[mxbuff],
-      encabezado2[mxbuff] = "E. Israel Osorio H., 1999,2000 linucs@punto-deventa.com";
+      encabezado2[mxbuff] = "E. Israel Osorio H., 1999-2001 linucs@punto-deventa.com";
   FILE *impr_cmd;
   time_t tiempo;        
   static int dgar;
@@ -1016,10 +967,9 @@ int main() {
   double utilidad;
   struct tm *fecha;     /* Hora y fecha local   */
 
-  //  char *nmdatos,    /* Nombre del archivo de datos de la venta */
   char   *nmdiario;   /* Nombre del registro del diario */
 
-  //  nmdatos  = calloc(1, 31);
+  
   nmdiario = calloc(1, 34);
 
   tiempo = time(NULL);
@@ -1073,7 +1023,6 @@ int main() {
     mvprintw(1,(getmaxx(stdscr)-strlen(encabezado2))/2,
              "%s",encabezado2);
     attrset(COLOR_PAIR(blanco_sobre_negro));
-    //    a_pagar = capt_remision(nmdiario, nmdatos, &numarts, &utilidad);
     a_pagar = capt_remision(&numarts, &utilidad);
 
 
@@ -1121,8 +1070,9 @@ int main() {
         if (buffer != 'C') {
           if (strstr(nm_factur, "http") != NULL)
             sprintf(buf, "%s?id_venta=%d &", nm_factur, num_venta);
-          //sprintf(buf, "~/bin/facturar -r");
-          system(buf); /* Colocar aqui una varibale de configuracion */
+          else
+            sprintf(buf, "%s -r %d", nm_factur, num_venta);
+          system(buf);
         }
         clear();
         mensaje("Aprieta una tecla para continuar (t para terminar)...");
@@ -1130,22 +1080,31 @@ int main() {
         break;
       case 'T':
       default:
-        //formadepago = forma_de_pago();
         imp_ticket_arts();
         sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
+        pclose(impr_cmd);
+        sprintf(buf, "rm -rf %s", nm_disp_ticket);
+        impr_cmd = popen(buf, "r");
         pclose(impr_cmd);
         if (formadepago >= 20) {
           AbreCajon(tipo_disp_ticket);
           sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
           impr_cmd = popen(buf, "w");
           pclose(impr_cmd);
+          sprintf(buf, "rm -rf %s", nm_disp_ticket);
+          impr_cmd = popen(buf, "r");
+          pclose(impr_cmd);
         }
         num_venta = registra_venta(con, "ventas", a_pagar, utilidad,
-                       formadepago, _TEMPORAL, FALSE, *fecha, 0, 0, articulo, numarts);
+                                   formadepago, _TEMPORAL, FALSE, *fecha,
+                                   0, 0, articulo, numarts);
         ImpTicketPie(*fecha, num_venta);
         sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
+        pclose(impr_cmd);
+        sprintf(buf, "rm -rf %s", nm_disp_ticket);
+        impr_cmd = popen(buf, "r");
         pclose(impr_cmd);
         mensaje("Corta el papel y aprieta una tecla para continuar (t para terminar)...");
         buffer = toupper(getch());
@@ -1171,13 +1130,11 @@ int main() {
   refresh();
 
   free(nm_disp_ticket);
-  //  free(nmdatos);
-  //  free(nmdiario);
   free(nm_avisos);
   free(nmfpie);
   free(nmfenc);
-  free(nmtickets);
   free(nmimprrem);
+  free(home_directory);
 
   PQfinish(con);
   endwin();

@@ -66,13 +66,13 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define maxitemlista    2048
 
 WINDOW *v_arts;
-char   *nminvent,
-       *nmdisp,
-       *nmlog;
+char   *nminvent;
+char   *nmdisp;
+char   *home_directory; 
 char   *item[maxitemlista];
 struct articulos art;
 
-int LeeConfig();
+int read_config();
 int imprime_lista(PGconn *con, char *campo_orden);
 
 void muestra_renglon(unsigned renglon, unsigned num_items);
@@ -82,18 +82,28 @@ int form_virtualize(WINDOW *w);
 FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta);
 
 
-int LeeConfig() {
-  char nmconfig[] = "invent.config";
+int read_config() {
+  char *nmconfig;
   FILE *config;
   char buff[mxbuff], buf[mxbuff];
   char *b;
 
-  nmdisp = calloc(1, 9);
-  nmlog =  calloc(1, 17);
-  nminvent = calloc(1, 7);
 
-  strcpy(nmlog,"/home/OsoPOS/log");
-  strcpy(nmdisp, "/dev/lp2");
+  home_directory = calloc(1, 255);
+  nmconfig = calloc(1, 255);
+  config = popen("printenv HOME", "r");
+  fgets(home_directory, 255, config);
+  home_directory[strlen(home_directory)-1] = 0;
+  pclose(config);
+
+  strcpy(nmconfig, home_directory);
+  strcat(nmconfig, "/.osopos/invent.config");
+
+
+  nmdisp = calloc(1, strlen("/tmp/scaja_invent")+1);
+  nminvent = calloc(1, 9);
+
+  strcpy(nmdisp, "/tmp/scaja_invent");
   strcpy(nminvent, "osopos");
 
   config = fopen(nmconfig,"r");
@@ -119,11 +129,6 @@ int LeeConfig() {
         realloc(nminvent, strlen(buf+1));
         strcpy(nminvent,buf);
       }
-      else if (!strcmp(b,"registro")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(nmlog, strlen(buf+1));
-        strcpy(nmlog,buf);
-      }
       else if (!strcmp(b,"impresion.salida")) {
         strcpy(buf, strtok(NULL,"="));
         realloc(nmdisp, strlen(buf+1));
@@ -133,6 +138,11 @@ int LeeConfig() {
     }
     fclose(config);
     return(OK);
+  }
+  else {
+    fprintf(stderr, "No encuentro el archivo de configuración en %s,\n",
+            nmconfig);
+    fprintf(stderr, "usando datos por omisión...\n");
   }
   return(1);
 }
@@ -991,6 +1001,7 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   attrset(COLOR_PAIR(normal));
   clrtobot();
   raw();
+  return(OK);
 }
 
 
@@ -1069,8 +1080,7 @@ int main() {
   WINDOW *v_forma;
 /*         *v_mensaje; */
 
-  LeeConfig();
-  strcat(nmlog, "/");
+  read_config();
 
   initscr();
   start_color();
@@ -1117,7 +1127,6 @@ int main() {
   for (i=0; i<num_items; i++)
     free(item[i]);
   free(nmdisp);
-  free(nmlog);
   free(nminvent);
 
   return(OK);

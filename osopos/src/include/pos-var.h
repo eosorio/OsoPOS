@@ -57,7 +57,7 @@
 #endif
 
 #ifndef maxspcalle
-#define maxspcalle 31
+#define maxspcalle 55
 #endif
 
 #ifndef maxspext
@@ -77,7 +77,7 @@
 #endif
 
 #ifndef maxspedo 
-#define maxspedo   4
+#define maxspedo   30
 #endif
 
 #ifndef maxdepto

@@ -1,11 +1,27 @@
-/* Para generar el binario ejecutable usar				
-   gcc -O ~/fuente/corte.c -lcurses -o ~/bin/corte -lpq */
+/*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
-/* OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Corte 0.0.2-1 1999 E. Israel Osorio H., linucs@starmedia.com
-   con licencia GPL.
-   Lea el archivo README, COPYING y LEAME que contienen
-   los términos de la licencia */
+   OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
+   Programa Corte 0.4 (C) 1999-2001 E. Israel Osorio H.
+   desarrollo@punto-deventa.com
+   Lea el archivo README, COPYING y LEAME que contienen información
+   sobre la licencia de uso de este programa
+
+     Este programa es un software libre; puede usted redistribuirlo y/o
+modificarlo de acuerdo con los términos de la Licencia Pública General GNU
+publicada por la Free Software Foundation: ya sea en la versión 2 de la
+Licencia, o (a su elección) en una versión posterior.
+
+     Este programa es distribuido con la esperanza de que sea útil, pero
+SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
+DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
+GNU para mayores detalles.
+
+     Debería usted haber recibido una copia de la Licencia Pública General
+GNU junto con este programa; de no ser así, escriba a Free Software
+Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
+
+*/
+
 
 #include <stdio.h>
 #include "include/pos-curses.h"
@@ -27,11 +43,21 @@
 #define _FACTURA         2
 #define _TEMPORAL        5
 
+#ifndef maxbuf
+#define maxbuf 255
+#endif
+
 double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad);
 double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur, bool parcial);
-int genera_corte(int parcial, PGconn *con, FILE *disp);
+void genera_corte(int parcial, PGconn *con, FILE *disp);
 void   limpia_registros(PGconn *base);
 void procesa(char opcion, PGconn *con, FILE *disp);
+int read_config();
+
+char buff[maxbuf];
+char nm_file[maxbuf];
+char lp_printer[maxbuf];
+char tipo_imp[maxbuf];
 
 double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad)
 {
@@ -48,7 +74,6 @@ double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad)
   }
   PQclear(res);
 
-  /* fetch instances from the pg_database, the system catalog of databases*/
   comando = calloc(1,mxbuff);
   sprintf(comando,
           "DECLARE cursor_ventas CURSOR FOR SELECT monto,utilidad FROM ventas WHERE (tipo_pago=%d",
@@ -189,7 +214,7 @@ void limpia_registros(PGconn *base)
   char     mensaje[255];
 
   clear();
-  mvprintw(LINES/2, 0,
+  mvprintw(getmaxy(stdscr)/2, 0,
     "No hay forma de recuperar los registros una vez eliminados\n");
   printw("¿Está seguro de borrarlos? N\b");
   if (toupper(getch()) != 'S')
@@ -216,7 +241,7 @@ void limpia_registros(PGconn *base)
     else  {
       printw("No hay ventas en el día de hoy\n");
     }
-    mvprintw(LINES-1, 0, "Presione una tecla para continuar...");
+    mvprintw(getmaxy(stdscr)-1, 0, "Presione una tecla para continuar...");
     getch();
     clear();
   }
@@ -251,7 +276,7 @@ void marca_revisados(PGconn *base)
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     strcpy(mensaje, PQerrorMessage(base));
     clear();
-    move(LINES/2, 0);
+    move(getmaxy(stdscr)/2, 0);
     if (strlen(mensaje)) {
       printw("No se pudieron actualizar los registros del día.\n");
       printw("Mensaje de error: %s\n", mensaje);
@@ -260,7 +285,7 @@ void marca_revisados(PGconn *base)
       printw("Se produjo un error inesperado al actualizar los registros del día...");
     }
     PQclear(res);
-    mvprintw(LINES-1, 0, "Presione una tecla para continuar...");
+    mvprintw(getmaxy(stdscr)-1, 0, "Presione una tecla para continuar...");
     getch();
     clear();
   }
@@ -275,13 +300,20 @@ void marca_revisados(PGconn *base)
   PQclear(res);
 }
 
-int genera_corte(int parcial, PGconn *con, FILE *disp)
+void genera_corte(int parcial, PGconn *con, FILE *disp)
 {
   time_t    tiempo;
   struct tm *fecha;
   double    gran_total = 0.0,
             subtotal   = 0.0,
             util       = 0.0;
+
+  disp = fopen(nm_file, "w");
+  if (disp==NULL) {
+    ErrorArchivo(nm_file);
+    exit(-1);
+  }
+
   tiempo = time(NULL);
   fecha = localtime(&tiempo);
   fprintf(disp, "Corte ");
@@ -321,22 +353,116 @@ int genera_corte(int parcial, PGconn *con, FILE *disp)
 
 void procesa(char opcion, PGconn *con, FILE *disp)
 {
+
+  move(getmaxy(stdscr),0);
+  clrtoeol();
   switch (opcion) {
-    case '1': genera_corte(FALSE, con, disp);
-      break;
-    case '2': genera_corte(TRUE, con, disp);
-      break;
-    case '3': system("less -rf /tmp/impresion.ticket");
-      break;
-    case '6': limpia_registros(con);
-      break;
-    case '4': printw("\n\nFunción no implementada, use el programa \"imprime\"\n");
-              sleep(3);
-      break;
-    case '5': system("pico /tmp/impresion.ticket");
-      break;
-    default:  beep();
+  case '1':
+    genera_corte(FALSE, con, disp);
+    mvprintw(getmaxy(stdscr), 0, "Corte de día generado.");
+    break;
+  case '2':
+    genera_corte(TRUE, con, disp);
+    mvprintw(getmaxy(stdscr), 0, "Corte parcial generado.");
+    break;
+  case '3':
+    sprintf(buff, "less -rf %s", nm_file);
+    system(buff);
+    break;
+  case '4': 
+    sprintf(buff, "lpr -P %s %s", lp_printer, nm_file);
+    system(buff);
+    mvprintw(getmaxy(stdscr), 0, "El corte se mandó a la cola de impresión %s.",
+             lp_printer);
+    break;
+  case '5': 
+    sprintf(buff, "pico %s", nm_file);
+    system(buff);
+    break;
+  case '6':
+    limpia_registros(con);
+    mvprintw(getmaxy(stdscr), 0, "Registros eliminados.");
+    break;
+  case '7' :
+    sprintf(buff, "less -rf /usr/share/doc/osopos/LICENCIA");
+    system(buff);
+    break;
+  default:
+    beep();
   }
+}
+
+
+int read_config() {
+  char       nmconfig[maxbuf];
+  FILE       *config;
+  FILE       *process;
+  char       buf[maxbuf];
+  char       *b;
+  char       home_directory[maxbuf];
+  static int i;
+
+
+  /*process = popen("printenv HOME", "r");
+  if (process != NULL) {
+    fgets(home_directory, maxbuf, config);
+    home_directory[strlen(home_directory)-1] = 0;
+    pclose(process);
+  }
+  else*/
+    sprintf(home_directory, "/home/scaja");
+
+  sprintf(nmconfig, "%s", home_directory);
+  strcat(nmconfig, "/.osopos/corte.config");
+
+  //  nm_file = calloc(1, strlen("/tmp/osopos_corte")+1);
+  sprintf(nm_file,"/tmp/osopos_corte");
+
+  //  tipo_imp = calloc(1, strlen("EPSON")+1);
+  sprintf(tipo_imp,"EPSON");
+
+  //  lp_printer = calloc(1, strlen("ticket")+1);
+  strncpy(lp_printer, "ticket", maxbuf);
+
+
+  config = fopen(nmconfig,"r");
+  if (config) {		/* Si existe archivo de configuración */
+    b = buff;
+    fgets(buff,sizeof(buff),config);
+    while (!feof(config)) {
+      buff [ strlen(buff) - 1 ] = 0;
+
+      if (!strlen(buff) || buff[0] == '#') { /* Linea vacía o coment. */
+        fgets(buff,sizeof(buff),config);
+        continue;
+      }
+
+      strcpy(buf, strtok(buff,"="));
+	/* La función strtok modifica el contenido de la cadena buff	*/
+	/* remplazando con NULL el argumento divisor (en este caso "=") */
+	/* por lo que b queda apuntando al primer token			*/
+
+	/* Busca parámetros de impresora */
+      if (!strcmp(b,"archivo_corte")) {
+        strcpy(buf, strtok(NULL,"="));
+        strcpy(nm_file,buf);
+      }
+      else if (!strcmp(b,"impresora.lpr")) {
+        strncpy(buf, strtok(NULL,"="), maxbuf);
+        strncpy(lp_printer,buf, maxbuf);
+      }
+      else if (!strcmp(b,"impresora.tipo")) {
+        strcpy(buf, strtok(NULL,"="));
+        strcpy(tipo_imp,buf);
+        for (i=0; i<strlen(tipo_imp); i++)
+          tipo_imp[i] = toupper(tipo_imp[i]);
+      }
+      fgets(buff,sizeof(buff),config);
+    }
+    fclose(config);
+    return(0);
+  }
+  return(1);  
 }
 
 
@@ -348,7 +474,7 @@ int main()
 
   initscr();
   if (!has_colors()) {
-    mvprintw(LINES/2,0,
+    mvprintw(getmaxy(stdscr)/2,0,
       "Este equipo no puede producir colores, pulse una tecla para abortar...");
     getch();
     printw("Abortando");
@@ -356,17 +482,14 @@ int main()
     exit(10);
   }
 
+  read_config();
+
+
   con = Abre_Base(NULL, NULL, NULL, NULL, "osopos", NULL, NULL);
   if (!con) {
-    mvprintw(LINES/2, 0,
+    mvprintw(getmaxy(stdscr)/2, 0,
       "ERROR FATAL: No se puede abrir la base de datos. Pulse una tecla para abortar...");
     getch();
-    exit(-1);
-  }
-
-  disp = fopen("/tmp/impresion.ticket", "w");
-  if (disp==NULL) {
-    ErrorArchivo("impresion.ticket");
     exit(-1);
   }
 
@@ -379,8 +502,9 @@ int main()
     mvprintw(5,3,"4. Imprimir los cortes generados");
     mvprintw(6,3,"5. Editar los cortes generados");
     mvprintw(7,3,"6. Limpiar todos los registros de ventas (iniciar nuevo día)");
-    mvprintw(10,3,"0. Salir");
-    mvprintw(12,1,"Opción: ");
+    mvprintw(8,3,"7. Ver licencia de uso");
+    mvprintw(12,3,"0. Salir");
+    mvprintw(14,1,"Opción: ");
 
     opcion = getch();
     if (opcion != '0')
@@ -390,5 +514,8 @@ int main()
 
   PQfinish(con);
   endwin();
+  //  free(lp_printer);
+  //  free(nm_file);
+  //  free(tipo_imp);
   return(OK);
 }

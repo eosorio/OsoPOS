@@ -468,16 +468,22 @@ int registra_venta(PGconn *base,
 
 PGresult *Agrega_en_Inventario(PGconn *base, char *tabla, struct articulos art)
 {
-  char *comando_sql;
+  char *query;
   PGresult *resultado;
 
-  comando_sql = calloc(1,mxbuff);
-  sprintf(comando_sql,
-          "INSERT INTO %s VALUES ('%s', '%s', %.2f, %.2f, %u, %u, %u, '%u', '%u', %.2f, '%s', %.2f)",
-		  tabla, art.codigo, art.desc, art.pu, art.disc, art.exist,
-		  art.exist_min, art.exist_max, art.id_prov, art.id_depto,
-		  art.p_costo, art.prov_clave, art.iva_porc);
-  free(comando_sql);
+  query = calloc(1,mxbuff);
+  sprintf(query,
+          "INSERT INTO %s VALUES ('%s', '%s', %.2f, %.2f, %u, %u, %u, %u, %u, %.2f, '%s', %.2f)",
+	  tabla, art.codigo, art.desc, art.pu, art.disc, art.exist,
+	  art.exist_min, art.exist_max, art.id_prov, art.id_depto,
+	  art.p_costo, art.prov_clave, art.iva_porc);
+  resultado = PQexec(base, query);
+  if (PQresultStatus(resultado) != PGRES_COMMAND_OK) {
+    fprintf(stderr, "Error al registrar artículos.\n%s\n", query);
+    free(query);
+    return(resultado);
+  }  
+  free(query);
   return(resultado);
 }
 

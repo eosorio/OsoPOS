@@ -1,13 +1,12 @@
 Alta prioridad
 ---------------
-* Registrar id_vendedor y id_cajero en tabla ventas
-* Revisar que no se sigan descontando articulos al llegar a cero en
-  existencia
-* Debugear gtk_invent
-* Arreglar uso de apuntadores en LeeConfig de todos los fuentes
+No hay
 
 Mediana prioridad
-* Importar de OsoPOS Web función que hace justificación de lineas
-
-
+------------------
+* En factur: capturar observaciones y garantia en una forma de curses
+* Registrar id_vendedor y id_cajero en tabla ventas
+* Hacer función que haga justificación en impresión (si no se alcanza a
+  imprimir una palabra, la manda a la siguiente línea
+* Optimizar y capturar errores en uso de apuntadores en funciones LeeConfig
 
