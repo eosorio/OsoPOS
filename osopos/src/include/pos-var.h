@@ -27,11 +27,16 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #endif
 
 #define ERROR_ARCHIVO_1   15
+#define FILE_1_ERROR      15
 #define ERROR_ARCHIVO_2   16
+#define FILE_2_ERROR      16
 
 #define ERROR_SQL      -1
+#define SQL_ERROR      -1
 #define ERROR_MEMORIA  -2
+#define MEMORY_ERROR   -2
 #define ERROR_DIVERSO  -5
+#define OTHER_ERROR    -5
 
 #ifndef mxchcant
 #define mxchcant 50
