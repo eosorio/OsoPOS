@@ -48,6 +48,16 @@ unsigned Espacios (FILE* ar, unsigned n) {
 
 /*********************************************************************/
 
+void espacio(char *linea, unsigned num_espacios)
+{
+  int i;
+
+  for (i=0; i<num_espacios; i++)
+    strcat(linea, " ");
+}
+
+/*********************************************************************/
+
 void avance_vert(FILE *disp, unsigned avance, unsigned mode)
 {
   if (mode==0 || mode==1)
