@@ -1,8 +1,8 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Corte 0.4 (C) 1999-2001 E. Israel Osorio H.
-   desarrollo@punto-deventa.com
+   Programa Corte 0.05 (C) 1999-2001 E. Israel Osorio H.
+   desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
 
@@ -28,6 +28,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <time.h>
 #include <unistd.h>
 
+#define VERSION "0.05"
 #define blanco_sobre_negro 1
 #define amarillo_sobre_negro 2
 #define verde_sobre_negro 3
@@ -48,16 +49,18 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #endif
 
 double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad);
-double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur, bool parcial);
-void genera_corte(int parcial, PGconn *con, FILE *disp);
-void   limpia_registros(PGconn *base);
-void procesa(char opcion, PGconn *con, FILE *disp);
+double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur, bool parcial,
+                            unsigned cashier_id);
+void genera_corte(int parcial, PGconn *con, FILE *disp, unsigned cashier_number);
+void   clean_records(PGconn *base);
+char *procesa(char opcion, PGconn *con, FILE *disp);
 int read_config();
 
 char buff[maxbuf];
 char nm_file[maxbuf];
 char lp_printer[maxbuf];
 char tipo_imp[maxbuf];
+char msg[mxbuff];
 
 double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad)
 {
@@ -79,7 +82,7 @@ double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad)
           "DECLARE cursor_ventas CURSOR FOR SELECT monto,utilidad FROM ventas WHERE (tipo_pago=%d",
           tipo_pago);
   if (parcial)
-    strcat(comando, " AND NOT corte_parcial");
+    strcat(comando, " AND (corte & B'10000000')!=B'10000000'");
   strcat(comando, ")");
   res = PQexec(base, comando);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
@@ -116,7 +119,8 @@ double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad)
   return(total);
 }
 
-double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur, bool parcial)
+double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur, bool parcial,
+                            unsigned cashier_id)
 {
   char      *comando;
   int       i;
@@ -133,11 +137,19 @@ double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur, bool parc
 
   /* fetch instances from the pg_database, the system catalog of databases*/
   comando = calloc(1,mxbuff);
-  sprintf(comando,
-          "DECLARE cursor_ventas CURSOR FOR SELECT * FROM ventas WHERE (tipo_factur=%d",
-          tipo_factur);
+  if (cashier_id)
+    sprintf(comando,
+            "DECLARE cursor_ventas CURSOR FOR SELECT * FROM ventas WHERE (id_cajero=%d AND tipo_factur=%d",
+            cashier_id, tipo_factur);
+  else
+    sprintf(comando,
+            "DECLARE cursor_ventas CURSOR FOR SELECT * FROM ventas WHERE (tipo_factur=%d",
+            tipo_factur);
+    
   if (parcial)
-    strcat(comando, " AND NOT corte_parcial");
+    strcat(comando, " AND (corte & B'10000000')!=B'10000000'");
+  else
+    strcat(comando, " AND (corte & B'01000000')!=B'01000000'");
   strcat(comando, ")");
   res = PQexec(base, comando);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
@@ -173,27 +185,29 @@ double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur, bool parc
       fprintf(disp, "Ventas con TICKET:\n");
   }
 
-  fprintf(disp, "No. venta     Monto    Tipo de pago\n");
+  fprintf(disp, "Num. de  Monto    Forma de  Num. de\n");
+  fprintf(disp, " venta              pago    cajero\n");
   for (i=0, total=0; i<PQntuples(res); i++) {
     total += atof(PQgetvalue(res, i, 1));
-    sprintf(comando, "%5s     $%10.2f  ",
+    sprintf(comando, "%5s $%10.2f ",
             PQgetvalue(res, i, 0),
             atof(PQgetvalue(res, i, 1)) );
     fprintf(disp, comando);
     switch ( atoi(PQgetvalue(res, i, 2)) ) {
       case _PAGO_CHEQUE:
-        fprintf(disp, "Cheque\n");
+        fprintf(disp, "Cheque   ");
       break;
       case _PAGO_TARJETA:
-        fprintf(disp, "Tarjeta\n");
+        fprintf(disp, "Tarjeta  ");
       break;
       case _PAGO_CREDITO:
-        fprintf(disp, "Credito\n");
+        fprintf(disp, "Credito  ");
       break;
       case _PAGO_EFECTIVO:
       default:
-        fprintf(disp, "Efectivo\n");
+        fprintf(disp, "Efectivo ");
     }
+    fprintf(disp, "%6d\n", atoi(PQgetvalue(res, i, 7)));
   }
   fprintf(disp, "--------------------------------------\n");
   fprintf(disp, "   TOTAL: $%10.2f\n", total);
@@ -208,19 +222,25 @@ double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur, bool parc
   return(total);
 }
 
-void limpia_registros(PGconn *base)
+void clean_records(PGconn *base)
 {
   PGresult *res;
   char     mensaje[255];
+  FILE     *f_print;
 
   clear();
-  mvprintw(getmaxy(stdscr)/2, 0,
-    "No hay forma de recuperar los registros una vez eliminados\n");
-  printw("¿Está seguro de borrarlos? N\b");
-  if (toupper(getch()) != 'S')
-    return;
-  printw("\n");
-
+  if ((f_print = fopen(nm_file, "r"))) {
+    fclose(f_print);
+    mvprintw(getmaxy(stdscr)/2, 0,
+             "ADVERTENCIA: Ya existe un archivo de impresión de corte.\n");
+    printw("             Si continua, este se reemplazará.\n");
+    /* trans. WARNING: There is a print file. If you proceed, it will be replaced */
+    printw("¿Está seguro de continuar? N\b");
+    /* trans. Are you sure? */
+    if (toupper(getch()) != 'S')
+      return;
+    printw("\n");
+  }
   res = PQexec(base, "BEGIN");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     printw("Error, no se pudo comenzar la transacción para borrar\n");
@@ -230,18 +250,22 @@ void limpia_registros(PGconn *base)
   }
   PQclear(res);
 
-  PQexec(base, "DELETE FROM ventas");
+  PQexec(base, "UPDATE ventas set corte=(corte | B'01000000')");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     strcpy(mensaje, PQerrorMessage(base));
     if (strlen(mensaje)) {
-      printw("No se pudo borrar los registros del día.\n");
+      printw("No puedo modificar los registros de ventas.\n");
+      /* Can't modify day records */
       printw("Mensaje de error: %s\n", mensaje);
+      /* Error message: */
       PQclear(res);
     }
     else  {
       printw("No hay ventas en el día de hoy\n");
+      /* There are no records today */
     }
     mvprintw(getmaxy(stdscr)-1, 0, "Presione una tecla para continuar...");
+    /* Press any key */
     getch();
     clear();
   }
@@ -272,14 +296,16 @@ void marca_revisados(PGconn *base)
 
   mensaje = calloc(1,255);
 
-  res = PQexec(base, "UPDATE ventas SET corte_parcial='T'");
+  res = PQexec(base, "UPDATE ventas SET corte=(corte | B'10000000')");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     strcpy(mensaje, PQerrorMessage(base));
     clear();
     move(getmaxy(stdscr)/2, 0);
     if (strlen(mensaje)) {
       printw("No se pudieron actualizar los registros del día.\n");
+      /* Can't update daily records */
       printw("Mensaje de error: %s\n", mensaje);
+      /* Error message: */
     }
     else {
       printw("Se produjo un error inesperado al actualizar los registros del día...");
@@ -300,7 +326,7 @@ void marca_revisados(PGconn *base)
   PQclear(res);
 }
 
-void genera_corte(int parcial, PGconn *con, FILE *disp)
+void genera_corte(int parcial, PGconn *con, FILE *disp, unsigned cashier_id)
 {
   time_t    tiempo;
   struct tm *fecha;
@@ -320,13 +346,18 @@ void genera_corte(int parcial, PGconn *con, FILE *disp)
   if (parcial)
     fprintf(disp, "parcial ");
 
-  fprintf(disp,"realizado el dia %d/%d/%d\n a las %d:%2d:%2d hrs.\n\n",
-        fecha->tm_mday, (fecha->tm_mon)+1, fecha->tm_year+1900, fecha->tm_hour,
-        fecha->tm_min, fecha->tm_sec);
+  fprintf(disp,"realizado el dia %d/%d/%d\n a las %d:",
+        fecha->tm_mday, (fecha->tm_mon)+1, fecha->tm_year+1900, fecha->tm_hour);
+  if (fecha->tm_min<10)
+    fprintf(disp, "0");
+  fprintf(disp, "%d:", fecha->tm_min);
+  if (fecha->tm_sec<10)
+    fprintf(disp, "0");
+  fprintf(disp, "%d hrs.\n\n", fecha->tm_sec);
 
-  muestra_comprobantes(con, disp, _NOTA_MOSTRADOR, parcial);
-  muestra_comprobantes(con, disp, _FACTURA, parcial);
-  muestra_comprobantes(con, disp, _TEMPORAL, parcial);
+  muestra_comprobantes(con, disp, _NOTA_MOSTRADOR, parcial, cashier_id);
+  muestra_comprobantes(con, disp, _FACTURA, parcial, cashier_id);
+  muestra_comprobantes(con, disp, _TEMPORAL, parcial, cashier_id);
 
   subtotal = suma_pagos(con, _PAGO_EFECTIVO, parcial, &util);
   fprintf(disp, "\nTotal ingresos efectivo: %12.2f\n", subtotal);
@@ -347,56 +378,65 @@ void genera_corte(int parcial, PGconn *con, FILE *disp)
   if (parcial)
     marca_revisados(con);
   else
-    limpia_registros(con);
+    clean_records(con);
 
 }
 
-void procesa(char opcion, PGconn *con, FILE *disp)
+char *procesa(char opcion, PGconn *con, FILE *disp)
 {
+  int cashier_num;
 
   move(getmaxy(stdscr),0);
   clrtoeol();
   switch (opcion) {
   case '1':
-    genera_corte(FALSE, con, disp);
-    mvprintw(getmaxy(stdscr), 0, "Corte de día generado.");
+    genera_corte(FALSE, con, disp, 0);
+    sprintf(msg, "Corte de día generado.");
     break;
   case '2':
-    genera_corte(TRUE, con, disp);
-    mvprintw(getmaxy(stdscr), 0, "Corte parcial generado.");
+    genera_corte(TRUE, con, disp, 0);
+    sprintf(msg,  "Corte parcial generado.");
     break;
   case '3':
+    printw("Indique el número del cajero a reportar: ");
+    wgetnstr(stdscr, msg, mxbuff-1);
+    /****** Catch the user error ******/
+    cashier_num = atoi(msg);
+    genera_corte(TRUE, con, disp, cashier_num);
+    sprintf(msg,  "Corte parcial de cajero %d generado.", cashier_num);
+    break;
+  case '4':
     sprintf(buff, "less -rf %s", nm_file);
     system(buff);
     break;
-  case '4': 
+  case '5': 
     sprintf(buff, "lpr -P %s %s", lp_printer, nm_file);
     system(buff);
-    mvprintw(getmaxy(stdscr), 0, "El corte se mandó a la cola de impresión %s.",
+    sprintf(msg, "El corte se mandó a la cola de impresión %s.",
              lp_printer);
     break;
-  case '5': 
+  case '6': 
     sprintf(buff, "pico %s", nm_file);
     system(buff);
     break;
-  case '6':
-    limpia_registros(con);
-    mvprintw(getmaxy(stdscr), 0, "Registros eliminados.");
+  case '7':
+    clean_records(con);
+    sprintf(msg, "Registros eliminados.");
     break;
-  case '7' :
+  case '8' :
     sprintf(buff, "less -rf /usr/share/doc/osopos/LICENCIA");
     system(buff);
     break;
   default:
     beep();
   }
+  return(msg);
 }
 
 
 int read_config() {
   char       nmconfig[maxbuf];
   FILE       *config;
-  FILE       *process;
   char       buf[maxbuf];
   char       *b;
   char       home_directory[maxbuf];
@@ -481,6 +521,7 @@ int main()
     endwin();
     exit(10);
   }
+  msg[0]=0;
 
   read_config();
 
@@ -495,20 +536,24 @@ int main()
 
   do {
     clear();
+    printw("Programa de corte de caja, v. %s. (C) 1999-2001. E. Israel Osorio H.\n\n",
+           VERSION);
+    mvprintw(getmaxy(stdscr),0, msg);
     printw("Indique la operación a realizar:");
-    mvprintw(2,3,"1. Corte de dia");
-    mvprintw(3,3,"2. Corte parcial");
-    mvprintw(4,3,"3. Ver los cortes generados");
-    mvprintw(5,3,"4. Imprimir los cortes generados");
-    mvprintw(6,3,"5. Editar los cortes generados");
-    mvprintw(7,3,"6. Limpiar todos los registros de ventas (iniciar nuevo día)");
-    mvprintw(8,3,"7. Ver licencia de uso");
-    mvprintw(12,3,"0. Salir");
-    mvprintw(14,1,"Opción: ");
+    mvprintw(4,3,"1. Corte de dia");
+    mvprintw(5,3,"2. Corte parcial de ventas en general");
+    mvprintw(6,3,"3. Corte parcial por cajero");
+    mvprintw(7,3,"4. Ver los cortes generados");
+    mvprintw(8,3,"5. Imprimir los cortes generados");
+    mvprintw(9,3,"6. Editar los cortes generados");
+    mvprintw(10,3,"7. Limpiar todos los registros de ventas (iniciar nuevo día)");
+    mvprintw(12,3,"8. Ver licencia de uso");
+    mvprintw(15,3,"0. Salir");
+    mvprintw(17,1,"Opción: ");
 
     opcion = getch();
     if (opcion != '0')
-      procesa(opcion, con, disp);
+      strcpy(msg, procesa(opcion, con, disp));
   }
   while (opcion != '0');
 
