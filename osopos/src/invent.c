@@ -50,8 +50,14 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define amarillo_sobre_azul   3
 
 #define CAMPO_COD             1
+#define CAMPO_COD2           25
 #define CAMPO_DESCR           3
 #define CAMPO_PU              5
+#define CAMPO_PU2            27 
+#define CAMPO_PU3            29 
+#define CAMPO_PU4            31 
+#define CAMPO_PU5            33
+#define CAMPO_DIVISA         35
 #define CAMPO_EXIS           10
 #define CAMPO_DISC            7
 #define CAMPO_EXMIN          12
@@ -61,7 +67,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define CAMPO_PCOSTO         20
 #define CAMPO_IVA            22
 
-#define version "0.31-1"
+#define version "0.32-1"
 
 #define maxitemlista    2048
 
@@ -72,6 +78,9 @@ char   *home_directory;
 char   *item[maxitemlista];
 struct articulos art;
 PGconn *base_inv;
+char   *db_hostname,  /* Nombre host con base de datos */
+       *db_hostport;  /* Puerto en el que acepta conexiones */
+
 
 int read_config();
 int imprime_lista(PGconn *con, char *campo_orden);
@@ -82,14 +91,20 @@ int quita_renglon(unsigned renglon, unsigned num_items);
 int form_virtualize(WINDOW *w);
 FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta);
 
+int inicializa_lista(PGconn *base, char *campo_orden);
+
+/* Muestra el detalle del artículo */
+int fill_form(FIELD *campo[35], unsigned i, PGconn *base);
 
 int read_config() {
   char *nmconfig;
   FILE *config;
   char buff[mxbuff], buf[mxbuff];
   char *b;
+  char *aux = NULL;
+  int i;
 
-
+  for (i=0; i<mxbuff; buff[i]=0, buf[i++]=0);
   home_directory = calloc(1, 255);
   nmconfig = calloc(1, 255);
   config = popen("printenv HOME", "r");
@@ -107,6 +122,10 @@ int read_config() {
   strcpy(nmdisp, "/tmp/scaja_invent");
   strcpy(nminvent, "osopos");
 
+  db_hostport = NULL;
+  db_hostname = NULL;
+  db_hostname = calloc(1, strlen("255.255.255.255"));
+
   config = fopen(nmconfig,"r");
   if (config) {         /* Si existe archivo de configuración */
     b = buff;
@@ -119,21 +138,47 @@ int read_config() {
         continue;
       }
 
-      strcpy(buf, strtok(buff,"="));
+      strncpy(buf, strtok(buff,"="), mxbuff);
         /* La función strtok modifica el contenido de la cadena buff    */
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
         /* Busca parámetros de operación */
       if (!strcmp(b,"base.datos")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(nminvent, strlen(buf+1));
-        strcpy(nminvent,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nminvent, strlen(buf+1));
+        if (aux != NULL)
+          strncpy(nminvent,buf, mxbuff);
+        else
+          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
+                  b);
       }
       else if (!strcmp(b,"impresion.salida")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(nmdisp, strlen(buf+1));
-        strcpy(nmdisp,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nmdisp, strlen(buf+1));
+        if (aux != NULL)
+          strncpy(nmdisp, buf, strlen(buf));
+        else
+          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.host")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db_hostname, strlen(buf)+1);
+        if (aux != NULL)
+          strncpy(db_hostname,buf, strlen(buf));
+        else
+          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.port")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db_hostport, strlen(buf)+1);
+        if (aux != NULL)
+          strncpy(db_hostport,buf, strlen(buf));
+        else
+          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
+                  b);
       }
       fgets(buff,sizeof(buff),config);
     }
@@ -155,7 +200,7 @@ int inicializa_lista(PGconn *base, char *campo_orden)
   PGresult  *res;
   char *comando;
 
-  v_arts =  newwin(getmaxy(stdscr)-10,getmaxx(stdscr), 7,0);
+  v_arts =  newwin(getmaxy(stdscr)-12,getmaxx(stdscr), 9,0);
 /* Los parámetros anteriores causan un SIGSEGV y los posteriores no */
 /*  v_arts = newwin (LINES-4, COLS-1, 4,0); */
   scrollok(v_arts, TRUE);
@@ -168,7 +213,7 @@ int inicializa_lista(PGconn *base, char *campo_orden)
   PQclear(res);
 
   comando = calloc(1,mxbuff);
-  sprintf(comando,
+  snprintf(comando, mxbuff,
       "DECLARE cursor_arts CURSOR FOR SELECT * FROM articulos ORDER BY \"%s\"",
 	campo_orden);
   res = PQexec(base, comando);
@@ -200,13 +245,13 @@ int inicializa_lista(PGconn *base, char *campo_orden)
 
     if (maxdes+maxcod+maxpreciolong+maxexistlong+3 > getmaxx(stdscr)-1) {
        /* Código */
-      strcpy(comando, PQgetvalue(res,i,0));
+      strncpy(comando, PQgetvalue(res,i,0), maxcod);
       if (strlen(comando)>16)
         comando[16] = 0;
       memcpy(&item[i][0], comando, strlen(comando));
 
        /* Descripción */
-      strcpy(comando, PQgetvalue(res,i,1));
+      strncpy(comando, PQgetvalue(res,i,1), maxdes);
       if (strlen(comando)>31)
         comando[31] = 0;
       memcpy(&item[i][16], comando, strlen(comando));
@@ -220,12 +265,12 @@ int inicializa_lista(PGconn *base, char *campo_orden)
       memcpy(&item[i][16+31+maxpreciolong+1], comando, strlen(comando));
     }
     else {
-      strcpy(comando, PQgetvalue(res,i,0));
+      strncpy(comando, PQgetvalue(res,i,0), maxcod);
       if (strlen(comando)>maxcod)
         comando[maxcod-1] = 0;
       memcpy(&item[i][0], comando, strlen(comando));
 
-      strcpy(comando, PQgetvalue(res,i,1));
+      strncpy(comando, PQgetvalue(res,i,1), maxdes);
       if (strlen(comando)>maxdes)
         comando[maxdes-1] = 0;
       memcpy(&item[i][maxcod+1], comando, strlen(comando));
@@ -260,13 +305,13 @@ void modifica_item(struct articulos art, int i)
     aux = calloc(1, mxbuff);
     if (maxdes+maxcod+maxpreciolong+maxexistlong+3 > getmaxx(stdscr)-1) {
        /* Código */
-      strcpy(aux, art.codigo);
+      strncpy(aux, art.codigo, maxcod);
       if (strlen(aux)>16)
         aux[16] = 0;
       memcpy(&item[i][0], aux, strlen(aux));
 
        /* Descripción */
-      strcpy(aux, art.desc);
+      strncpy(aux, art.desc, maxdes);
       if (strlen(aux)>31)
         aux[31] = 0;
       memcpy(&item[i][16], aux, strlen(aux));
@@ -280,12 +325,12 @@ void modifica_item(struct articulos art, int i)
       memcpy(&item[i][16+31+maxpreciolong+1], aux, strlen(aux));
     }
     else {
-      strcpy(aux, art.codigo);
+      strncpy(aux, art.codigo, maxcod);
       if (strlen(aux)>maxcod)
         aux[maxcod-1] = 0;
       memcpy(&item[i][0], aux, strlen(aux));
 
-      strcpy(aux, art.desc);
+      strncpy(aux, art.desc, maxdes);
       if (strlen(aux)>maxdes)
         aux[maxdes-1] = 0;
       memcpy(&item[i][maxcod+1], aux, strlen(aux));
@@ -472,29 +517,41 @@ int form_virtualize(WINDOW *w)
     }
 }
 
-int llena_campos(FIELD *campo[25], unsigned i, PGconn *base)
+int fill_form(FIELD *campo[35], unsigned i, PGconn *base)
 {
   PGresult           *res;
   char               codigo[maxcod];
   char               *aux;
   char               *comando;
   struct articulos   art;
+  int                j;
 
-
+  for (j=0; j<maxcod; codigo[j++] = 0);
   strncpy(codigo, item[i], maxcod-1);
   codigo[maxcod-1] = 0;
   limpiacad(codigo, TRUE);
   comando = calloc(1, mxbuff);
 
-  res = Busca_en_Inventario(base, "articulos", "codigo", codigo, &art);
+  res = search_product(base, "articulos", "codigo", codigo, &art);
   if (res == NULL) {
     aux = calloc(1, mxbuff);
 
     set_field_buffer(campo[CAMPO_COD], 0, codigo);
+    set_field_buffer(campo[CAMPO_COD2], 0, art.codigo2);
     set_field_buffer(campo[CAMPO_DESCR], 0, art.desc);
 
     sprintf(aux, "%.2f", art.pu);
     set_field_buffer(campo[CAMPO_PU], 0, aux);
+    sprintf(aux, "%.2f", art.pu2);
+    set_field_buffer(campo[CAMPO_PU2], 0, aux);
+    sprintf(aux, "%.2f", art.pu3);
+    set_field_buffer(campo[CAMPO_PU3], 0, aux);
+    sprintf(aux, "%.2f", art.pu4);
+    set_field_buffer(campo[CAMPO_PU4], 0, aux);
+    sprintf(aux, "%.2f", art.pu5);
+    set_field_buffer(campo[CAMPO_PU5], 0, aux);
+
+    set_field_buffer(campo[CAMPO_DIVISA], 0, art.divisa);
 
     sprintf(aux, "%d", art.exist);
     set_field_buffer(campo[CAMPO_EXIS], 0, aux);
@@ -570,32 +627,47 @@ int busca_item(char *codigo, unsigned num_items)
   return(-1);
 }
 
-int interpreta_campos(struct articulos *art, FIELD *campo[25])
+int interpreta_campos(struct articulos *art, FIELD *campo[35])
 {
   int aux;
-  char str_depto[maxdeptolen];
-  char str_prov[maxnickprov];
+  char str_depto[maxdeptolen+1];
+  char str_prov[maxnickprov+1];
+
+  for (aux=0; aux<=maxnickprov; str_prov[aux++] = 0);
+  for (aux=0; aux<=maxdeptolen; str_depto[aux++] = 0);
 
   strncpy(art->codigo, campo[CAMPO_COD]->buf, maxcod-1);
   art->codigo[maxcod-1] = 0;
   limpiacad(art->codigo, TRUE);
+
+  strncpy(art->codigo2, campo[CAMPO_COD2]->buf, maxcod-1);
+  art->codigo2[maxcod-1] = 0;
+  limpiacad(art->codigo2, TRUE);
 
   strncpy(art->desc, campo[CAMPO_DESCR]->buf, maxdes);
   art->desc[maxdes-1] = 0;
   limpiacad(art->desc, TRUE);
 
   art->pu = atof(campo[CAMPO_PU]->buf);
+  art->pu2 = atof(campo[CAMPO_PU2]->buf);
+  art->pu3 = atof(campo[CAMPO_PU3]->buf);
+  art->pu4 = atof(campo[CAMPO_PU4]->buf);
+  art->pu5 = atof(campo[CAMPO_PU5]->buf);
+
+  strncpy(art->divisa, campo[CAMPO_DIVISA]->buf, 3);
+  //  art->desc[3] = 0;
+
   art->exist = atof(campo[CAMPO_EXIS]->buf);
   art->disc = atof(campo[CAMPO_DISC]->buf);
   art->exist_min = atof(campo[CAMPO_EXMIN]->buf);
   art->exist_max = atof(campo[CAMPO_EXMAX]->buf);
 
-  strcpy(str_prov, campo[CAMPO_CODPROV]->buf);
+  strncpy(str_prov, campo[CAMPO_CODPROV]->buf, maxnickprov);
   limpiacad(str_prov, TRUE);
   aux = busca_proveedor(base_inv, str_prov);
   art->id_prov = aux<0 ? 0 : aux;
 
-  strcpy(str_depto, campo[CAMPO_DEPTO]->buf);
+  strncpy(str_depto, campo[CAMPO_DEPTO]->buf, maxdeptolen);
   limpiacad(str_depto, TRUE);
   aux = busca_depto(base_inv, str_depto);
   art->id_depto = aux<0 ? 0 : aux;
@@ -606,12 +678,13 @@ int interpreta_campos(struct articulos *art, FIELD *campo[25])
 }
 
 
-void modifica_articulo(FIELD *campo[25], PGconn *base, unsigned num_items)
+void modifica_articulo(FIELD *campo[35], PGconn *base, unsigned num_items)
 {
   int    item;
   char   codigo[mxbuff];
 
-  strcpy(codigo, campo[CAMPO_COD]->buf);
+  for (item=0; item<mxbuff; codigo[item++] = 0);
+  strncpy(codigo, campo[CAMPO_COD]->buf, maxcod);
   if (codigo[strlen(codigo)-1] == '\n')
     codigo[strlen(codigo)-1] = 0;
   limpiacad(codigo, TRUE);
@@ -627,12 +700,13 @@ void modifica_articulo(FIELD *campo[25], PGconn *base, unsigned num_items)
   }
 
 
-void agrega_articulo(FIELD *campo[25], PGconn *base, unsigned *num_items)
+void agrega_articulo(FIELD *campo[35], PGconn *base, unsigned *num_items)
 {
   int    i;
   char   codigo[mxbuff];
 
-  strcpy(codigo, campo[CAMPO_COD]->buf);
+  for (i=0; i<mxbuff; codigo[i++]=0);
+  strncpy(codigo, campo[CAMPO_COD]->buf, maxcod);
   if (codigo[strlen(codigo)-1] == '\n')
     codigo[strlen(codigo)-1] = 0;
   limpiacad(codigo, TRUE);
@@ -717,6 +791,7 @@ int busca_articulo(FIELD *campo, unsigned num_items)
   int  item;
   char codigo[maxcod];
 
+  for (item=0; item<maxcod; codigo[item++] = 0);
    strncpy(codigo, campo->buf, maxcod-1);
    codigo[maxcod-1] = 0;
    limpiacad(codigo, TRUE);
@@ -727,7 +802,7 @@ int busca_articulo(FIELD *campo, unsigned num_items)
 int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
 {
   FORM  *forma;
-  FIELD *campo[25];
+  FIELD *campo[35];
   char  *etiqueta;
   char  *depto[maxdepto];
   char  **deptos = depto;
@@ -752,8 +827,10 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   }
 
   auxdepto = calloc(1, maxdeptolen+1);
+  if (auxdepto == NULL)
+    return(ERROR_MEMORIA);
   num_deptos = PQntuples(res);
-  for (i=0; i<num_deptos; i++) {
+  for (i=0; i<num_deptos && i<maxdepto; i++) {
     strncpy(auxdepto, PQgetvalue(res, i, 0), maxdeptolen);
     depto[i] = calloc(1, strlen(auxdepto)+1);
     if (depto[i] == NULL) {
@@ -795,9 +872,9 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   etiqueta = "Introduzca los articulos";
 
   /* describe la forma */
-  campo [0] = CreaEtiqueta(1, 0, "Codigo");
+  campo [CAMPO_COD-1] = CreaEtiqueta(1, 0, "Codigo");
   campo [CAMPO_COD] = CreaCampo(2, 0, 1, maxcod);
-  campo [2] = CreaEtiqueta(1, maxcod+1, "Descripcion");
+  campo [CAMPO_DESCR-1] = CreaEtiqueta(1, maxcod+1, "Descripcion");
   campo [CAMPO_DESCR] = CreaCampo(2, maxcod+1, 1, maxdes);
   campo [4] = CreaEtiqueta(1, maxcod+maxdes+2, "P. U.");
   campo [CAMPO_PU] = CreaCampo(2, maxcod+maxdes+2, 1, maxpreciolong);
@@ -823,7 +900,19 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   campo[CAMPO_IVA] = CreaCampo(4, maxexistlong*2+maxexistlong+maxcod*2+maxpreciolong+10,
                                1, maxdisclong);
   campo[23] = CreaEtiqueta(4, maxexistlong*2+maxexistlong+maxcod*2+maxpreciolong+maxdisclong+10, "%");
-  campo[24] = (FIELD *)0;
+  campo[CAMPO_COD2-1] = CreaEtiqueta(5, 0, "Cod. alt.");
+  campo[CAMPO_COD2] = CreaCampo(6, 0, 1, maxcod);
+  campo[CAMPO_PU2-1] = CreaEtiqueta(5, 21, "Precio 2");
+  campo[CAMPO_PU2] = CreaCampo(6, 21, 1, maxpreciolong);
+  campo[CAMPO_PU3-1] = CreaEtiqueta(5, 22+maxpreciolong, "Precio 3");
+  campo[CAMPO_PU3] = CreaCampo(6, 22+maxpreciolong, 1, maxpreciolong);
+  campo[CAMPO_PU4-1] = CreaEtiqueta(5, 23+maxpreciolong*2, "Precio 4");
+  campo[CAMPO_PU4] = CreaCampo(6, 23+maxpreciolong*2, 1, maxpreciolong);
+  campo[CAMPO_PU5-1] = CreaEtiqueta(5, 24+maxpreciolong*3, "Precio 5");
+  campo[CAMPO_PU5] = CreaCampo(6, 24+maxpreciolong*3, 1, maxpreciolong);
+  campo[CAMPO_DIVISA-1] = CreaEtiqueta(5, 25+maxpreciolong*4, "Div");
+  campo[CAMPO_DIVISA] = CreaCampo(6, 25+maxpreciolong*4, 1, 3);
+  campo[36] = (FIELD *)0;
 
   set_field_pad(campo[CAMPO_COD], 0);
   set_field_pad(campo[CAMPO_DESCR], 0);
@@ -884,7 +973,7 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
         i = c;
         muestra_renglon(i, *num_items);
       case ESCAPE:  /* Alt-Enter en PC */
-        llena_campos(campo, i, base);
+        fill_form(campo, i, base);
         MuestraForma(forma, pos_ren, pos_col);
         break;
       case CTRL('D'):
@@ -1093,7 +1182,7 @@ int main() {
   WINDOW *v_forma;
 /*         *v_mensaje; */
 
-  read_config();
+  //  read_config();
 
   initscr();
   start_color();
@@ -1101,7 +1190,8 @@ int main() {
   init_pair(verde_sobre_negro, COLOR_GREEN, COLOR_BLACK);
   init_pair(normal, COLOR_WHITE, COLOR_BLACK);
 
-  base_inv = Abre_Base(NULL, NULL, NULL, NULL, nminvent, "scaja", "");
+  //  base_inv = Abre_Base(db_hostname, db_hostport, NULL, NULL, nminvent, "scaja", "");
+  base_inv = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "scaja", "");
   if (PQstatus(base_inv) == CONNECTION_BAD) {
     printw("FATAL: Falló la conexión a la base de datos %s\n", nminvent);
     printw("Presione <Intro> para terminar...");
