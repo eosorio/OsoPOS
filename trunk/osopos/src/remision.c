@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.38 (C) 1999-2003 E. Israel Osorio H.
+   Programa Remision 1.42 (C) 1999-2003 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -56,8 +56,8 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/print-func.h"
 #define _printfunc
 
-#define vers "1.41"
-#define release "Medelso"
+#define vers "1.42"
+#define release "ElectroH"
 
 #ifndef maxdes
 #define maxdes 39
@@ -140,7 +140,7 @@ int form_virtualize(WINDOW *w, int readchar, int c);
 int busca_art_marcado(char *cod, struct articulos art[maxart], int campo, int ren);
 int imprime_fechas_renta(PGconn *con, PGconn *con_s, time_t *f_pedido, time_t *f_entrega);
 int print_customer_data(PGconn *con, PGconn *con_s, long int id_cliente);
-
+int captura_vendedor();
 volatile int STOP=FALSE; 
 
 FILE *impresora;
@@ -197,6 +197,7 @@ int fd;            /* Descriptor de archivo de puerto serie */
 int serial_num_enable = 0;
 int catalog_search = 0;
 int lease_mode = 0;
+int impresion_garantia = 0;
 
 int init_config()
 {
@@ -2118,6 +2119,21 @@ int forma_de_pago(double *recibo, double *dar)
 
 /***************************************************************************/
 
+int captura_vendedor()
+{
+  char id[mxbuff];
+
+  move(getmaxy(stdscr)-3, 0);
+  clrtoeol();
+
+  mvprintw(getmaxy(stdscr)-2, 0, "¿Número de vendedor? ");
+  clrtoeol();
+  wgetstr(stdscr, id);
+  return(atoi(id));
+}
+
+/***************************************************************************/
+
 /*  PGresult *registra_venta(PGconn *base, */
 /*                           char   *tabla, */
 /*                           int    num_venta, */
@@ -2222,10 +2238,10 @@ void print_ticket_footer(struct tm fecha, unsigned numventa) {
   }
   fprintf(impr,"\n\n\n");
   //  sprintf(s, "      Fanny Nuricumbo Melchor");
-  sprintf(s, "Mercantil del Soconusco SA de CV");
+  sprintf(s, "Francisco Javier Mondragon Villa");
   imprime_razon_social(impr, tipo_disp_ticket,
                        //                       "  La  Botana", s );
-                                             "Medelso", s );
+                                             "Electro Hogar", s );
   free(s);
   fclose(impr);
 }
@@ -3214,18 +3230,25 @@ int main(int argc, char *argv[]) {
 
     if (numarts && a_pagar) {
       attron(A_BOLD);
-      mvprintw(getmaxy(stdscr)-2,0,"¿Expedir Nota de venta, Factura, Ticket, nota de Renta (N,F,T,R)? T\b");
+      if (lease_mode)
+        mvprintw(getmaxy(stdscr)-2,0,"¿Expedir Nota de venta, Factura, Ticket, nota de Renta (N,F,T,R)? T\b");
+      else
+        mvprintw(getmaxy(stdscr)-2,0,"¿Expedir Nota de venta, Factura, Ticket (N,F,T)? T\b");
+
       attroff(A_BOLD);
       buffer = toupper(getch());
+      id_vendedor = captura_vendedor();
       formadepago = forma_de_pago(&importe_recibido, &cambio);
 
       switch (buffer) {
         case 'N':
           attron(A_BOLD);
-          mvprintw(getmaxy(stdscr)-1,0,"¿Días de garantía? : ");
-          attroff(A_BOLD);
-          clrtoeol();
-          scanw("%d",&dgar);
+          if (impresion_garantia) {
+            mvprintw(getmaxy(stdscr)-1,0,"¿Días de garantía? : ");
+            attroff(A_BOLD);
+            clrtoeol();
+            scanw("%d",&dgar);
+          }
           num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
                          _NOTA_MOSTRADOR, *fecha, id_teller, 0, articulo, numarts, almacen);
           if (num_venta<0)
@@ -3278,38 +3301,40 @@ int main(int argc, char *argv[]) {
         break;
 
       case 'R':
-        datos_renta(&id_cliente, &f_pedido, &f_entrega);
-        registra_renta(con, con_s, "rentas", id_cliente, f_pedido, f_entrega, 
-                       articulo, numarts);
+        if (lease_mode) {
+          datos_renta(&id_cliente, &f_pedido, &f_entrega);
+          registra_renta(con, con_s, "rentas", id_cliente, f_pedido, f_entrega, 
+                         articulo, numarts);
 
-        imprime_fechas_renta(con, con_s, &f_pedido, &f_entrega);
-        print_customer_data(con, con_s, id_cliente);
-        print_ticket_arts(importe_recibido, cambio);
-        sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
-        impr_cmd = popen(buf, "w");
-        pclose(impr_cmd);
-        unlink(nm_disp_ticket);
-        if (formadepago >= 20) {
-          AbreCajon(tipo_disp_ticket);
+          imprime_fechas_renta(con, con_s, &f_pedido, &f_entrega);
+          print_customer_data(con, con_s, id_cliente);
+          print_ticket_arts(importe_recibido, cambio);
           sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
           impr_cmd = popen(buf, "w");
           pclose(impr_cmd);
           unlink(nm_disp_ticket);
+          if (formadepago >= 20) {
+            AbreCajon(tipo_disp_ticket);
+            sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
+            impr_cmd = popen(buf, "w");
+            pclose(impr_cmd);
+            unlink(nm_disp_ticket);
+          }
+          print_ticket_footer(*fecha, num_venta);
+          /*igm*/ num_venta=1;
+          if (num_venta>0)
+            clean_journal(nm_journal);
+          sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
+          impr_cmd = popen(buf, "w");
+          pclose(impr_cmd);
+          unlink(nm_disp_ticket);
+          mensaje("Corta el papel y aprieta una tecla para continuar (t para terminar)...");
+          buffer = toupper(getch());
+          print_ticket_header(nmfenc);
+          sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
+          impr_cmd = popen(buf, "w");
+          pclose(impr_cmd);
         }
-        print_ticket_footer(*fecha, num_venta);
-        /*igm*/ num_venta=1;
-        if (num_venta>0)
-          clean_journal(nm_journal);
-        sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
-        impr_cmd = popen(buf, "w");
-        pclose(impr_cmd);
-        unlink(nm_disp_ticket);
-        mensaje("Corta el papel y aprieta una tecla para continuar (t para terminar)...");
-        buffer = toupper(getch());
-        print_ticket_header(nmfenc);
-        sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
-        impr_cmd = popen(buf, "w");
-        pclose(impr_cmd);
         break;
       case 'T':
       default:
