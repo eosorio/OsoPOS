@@ -68,21 +68,37 @@ int wgetkeystrokes(WINDOW *w, char *input_str, int str_len) {
 	  raw();
 	  return(ch - KEY_F0);
 	}
-	if (ch >= 64 && ch<200) {
+	if (ch >= 48 && ch<127) {
       input_str[i+1] = 0;
       input_str[i] = ch;
 	  wprintw(w, "%c", ch);
 	}
 	else
 	  switch(ch) {
-        case '\n':
-		  finished = 1;
-		  echo();
-		  raw();
-  		  return(0);
-		  break;
-        default:
+      case 32: /* Espacio */
+      case 42: /* Asterisco */
+      case 225: /* a acentuada */
+      case 233: /* e acentuada */
+      case 237: /* i acentuada */
+      case 243: /* o acentuada */
+      case 250: /* u acentuada */
+      case 241: /* ñ */
+        input_str[i+1] = 0;
+        input_str[i] = ch;
+        wprintw(w, "%c", ch);
+        break;
+      case '\n':
+        finished = 1;
+        echo();
+        raw();
+        return(0);
+        break;
+      case 127:
+        input_str[i] = 0;
+        i--;
+        break;
+      default:
 	  }
-  }
+  }  /* for */
   return(0);
 }
