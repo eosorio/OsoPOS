@@ -38,6 +38,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define PROCESS_ERROR  -3
 #define ERROR_DIVERSO  -5
 #define OTHER_ERROR    -5
+#define ERR_ITEM       -6  /* El producto no está disponible */
 
 #ifndef mxchcant
 #define mxchcant 50
@@ -151,6 +152,14 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define MX_LON_DIVISA_DES   20
 #endif
 
+#ifndef MX_LON_NUMSERIE
+#define MX_LON_NUMSERIE 50
+#endif
+
+#define _NOTA_MOSTRADOR  1
+#define _FACTURA         2
+#define _TEMPORAL        5
+
 double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
 
  /* Códigos de impresora */
@@ -190,6 +199,7 @@ struct articulos {
            pu4,
            pu5,
            p_costo;            /* Precio de costo      */
+  double   utilidad;           /* Utilidad unitaria en la divisa dada */
   char     divisa[3];          /* Divisa de los precios */
   double   disc;               /* Discuento   .=)      */
   unsigned id_prov, id_prov2;  /* Id de los dos principales proveedores */
@@ -199,6 +209,10 @@ struct articulos {
   double   tax_0;             /* I.E.P.S. (impuesto suntuario) */
   double   tax_1, tax_2, tax_3, tax_4, tax_5;
   char     prov_clave[maxcod]; /* Clave del articulo con proveedor */
+  char     serie[MX_LON_NUMSERIE]; /* Número de serie */
+  unsigned almacen;            /* Almacen de origen */
+  unsigned t_renta;            /* Tiempo proporcionado en renta */
+  short    unidad_t;           /* Unidad del tiempo de renta (0: minutos, ... 3: semanas ... 5:años*/
 };
 
 struct proveedor {

@@ -56,8 +56,8 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/print-func.h"
 #define _printfunc
 
-#define vers "1.42"
-#define release "ElectroH"
+#define vers "1.43"
+#define release "ElPunto"
 
 #ifndef maxdes
 #define maxdes 39
@@ -95,10 +95,6 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define _PAGO_EFECTIVO  20
 #define _PAGO_CHEQUE    21
 
-#define _NOTA_MOSTRADOR  1
-#define _FACTURA         2
-#define _TEMPORAL        5
-
 #include "include/minegocio-remis.h"
 
 int forma_de_pago(double *, double *);
@@ -106,7 +102,7 @@ void Termina(PGconn *con, PGconn *con_s, int error);
 //int LeeConfig(char*, char*);
 double item_capture(PGconn *, int *numart, double *util, double tax[maxtax], struct tm fecha);
 void print_ticket_arts(double importe, double cambio);
-void print_ticket_footer(struct tm fecha, unsigned numvents);
+void print_ticket_footer(struct tm fecha, unsigned numvents, long folio, int serie);
 int AbreCajon(char *tipo_miniimp);
 /* Función que reemplaza a ActualizaEx */
 int actualiza_existencia(PGconn *con, struct tm *fecha);
@@ -185,6 +181,7 @@ int id_vendedor = 0;            /* Número de agente de ventas */
 short unsigned manual_discount; /* Aplicar el descuento manual de precio en la misma línea */
 int iva_incluido;
 int listar_neto;
+
 int lector_serial; /* Cierto si se usa un scanner serial */
 int serial_crlf=1; /* 1 si el scanner envia CRLF, 0 si solamente LF */
 tcflag_t serial_bps=B38400; /* bps por omisión */
@@ -198,31 +195,15 @@ int serial_num_enable = 0;
 int catalog_search = 0;
 int lease_mode = 0;
 int impresion_garantia = 0;
+int serie;        /* Serie de folios de comprobantes */
 
 int init_config()
 {
-  FILE *env_process;
-
   home_directory = calloc(1, 255);
   log_name = calloc(1, 255);
 
-  if (!(env_process = popen("printenv HOME", "r"))) {
-    free(log_name);
-    free(home_directory);
-    return(PROCESS_ERROR);
-  }
-  fgets(home_directory, 255, env_process);
-  home_directory[strlen(home_directory)-1] = 0;
-  pclose(env_process);
-
-  if (!(env_process = popen("printenv LOGNAME", "r"))) {
-    free(log_name);
-    free(home_directory);
-    return(PROCESS_ERROR);
-  }
-  fgets(log_name, 255, env_process);
-  log_name[strlen(log_name)-1] = 0;
-  pclose(env_process);
+  strcpy(home_directory, getenv("HOME"));
+  strcpy(log_name, getenv("LOGNAME"));
 
   nm_journal = calloc(1, mxbuff);
   nm_orig_journal = calloc(1, strlen(home_directory) + strlen("/.last_items.") + 10);
@@ -297,6 +278,8 @@ int init_config()
   manual_discount = 0;
 
   almacen = 1;
+
+  serie = 1;
 
   return(OK);
 }
@@ -1141,33 +1124,16 @@ int lee_articulos(PGconn *base_inventario, PGconn *con_s)
   int   nCampos;
   PGresult* res;
 
-  res = PQexec(base_inventario,"BEGIN");
-  if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr,"Falló comando BEGIN al tratar de leer artículos para colocar en memoria\n");
-    PQclear(res);
-    return(ERROR_SQL);
-  }
-  PQclear(res);
-
-  sprintf(comando, "DECLARE cursor_arts CURSOR FOR SELECT ");
+  sprintf(comando, "SELECT ");
   sprintf(comando, "%s al.codigo, ar.descripcion, al.codigo2, al.pu, ", comando);
   sprintf(comando, "%s al.pu2, al.pu3, al.pu4, al.pu5, al.cant,  al.c_min, ", comando);
   sprintf(comando, "%s al.tax_0, al.tax_1, al.tax_2, al.tax_3, al.tax_4, al.tax_5, ", comando);
   sprintf(comando, "%s ar.iva_porc, ar.p_costo, al.divisa ", comando);
-  sprintf(comando, "%s FROM almacen_%d al, articulos ar WHERE al.codigo=ar.codigo;", comando, almacen);
-  res = PQexec(base_inventario, comando);
-  if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr,"Comando DECLARE CURSOR falló\n");
-    fprintf(stderr,"Error: %s\n",PQerrorMessage(base_inventario));
-    PQclear(res);
-    return(ERROR_SQL);
-  }
-  PQclear(res);
-
-  sprintf(comando, "FETCH ALL in cursor_arts");
+  sprintf(comando, "%s FROM almacen_1 al, articulos ar WHERE al.codigo=ar.codigo AND id_alm=%d ", comando, almacen);
   res = PQexec(base_inventario, comando);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-    fprintf(stderr,"comando FETCH ALL no regresó registros apropiadamente\n");
+    fprintf(stderr,"Error al consultar articulos para cargar en memoria\n");
+    fprintf(stderr,"Error: %s\n",PQerrorMessage(base_inventario));
     PQclear(res);
     return(ERROR_SQL);
   }
@@ -1210,19 +1176,6 @@ int lee_articulos(PGconn *base_inventario, PGconn *con_s)
   }
   PQclear(res);
 
-
-  res = PQexec(base_inventario, "CLOSE cursor_arts");
-  if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr,"Comando CLOSE falló\n");
-    fprintf(stderr,"Error: %s\n",PQerrorMessage(base_inventario));
-    PQclear(res);
-    Termina(base_inventario, con_s, ERROR_SQL);
-  }
-  PQclear(res);
-
-  /* finaliza la transacción */
-  res = PQexec(base_inventario, "END");
-  PQclear(res);
   return(i);
 }
 
@@ -1329,10 +1282,10 @@ int find_db_code(PGconn *con, char *cod, struct articulos *art, int wday) {
   }
   sprintf(query, "%sal.tax_0, al.tax_1, al.tax_2, al.tax_3, al.tax_4, al.tax_5, ", query);
   sprintf(query, "%sar.iva_porc, ar.p_costo, al.divisa, s.id ", query);
-  sprintf(query, "%sFROM almacen_%d al, articulos ar, articulos_series s ", query, almacen);
+  sprintf(query, "%sFROM almacen_1 al, articulos ar, articulos_series s ", query);
   if (lease_mode)
     sprintf(query, "%s, articulos_rentas r ", query );
-  sprintf(query, "%sWHERE al.codigo=ar.codigo ", query);
+  sprintf(query, "%sWHERE al.codigo=ar.codigo AND id_alm=%d ", query, almacen);
 
   if (serial_num_enable) {
     sprintf(query, "%s AND ar.codigo=s.codigo AND s.id='%s' " , query, cod);
@@ -2027,7 +1980,8 @@ double item_capture(PGconn *con, int *numart, double *util,
     i--;
   *numart = i;
   for (j=0; j<(*numart); j++) {
-    *util += ((articulo[j].pu - articulo[j].p_costo) * articulo[j].cant);
+    articulo[j].utilidad = ((articulo[j].pu - articulo[j].p_costo) * articulo[j].cant);
+    *util += (articulo[j].utilidad);
     if (iva_incluido)
       iva_articulo = articulo[j].pu - articulo[j].pu / (articulo[j].iva_porc/100 + 1);
     else
@@ -2134,35 +2088,6 @@ int captura_vendedor()
 
 /***************************************************************************/
 
-/*  PGresult *registra_venta(PGconn *base, */
-/*                           char   *tabla, */
-/*                           int    num_venta, */
-/*                           double total, */
-/*                           double utilidad, */
-/*                           int    tipo_pago, */
-/*                           int    tipo_fact, */
-/*                           bool   corte_parcial) */
-/*  { */
-/*    char     *comando_sql; */
-/*    PGresult *resultado; */
-/*    char     exp_boleana = 'F'; */
-
-/*    if (corte_parcial) */
-/*      exp_boleana = 'T'; */
-/*    comando_sql = calloc(1,mxbuff); */
-/*    sprintf(comando_sql, "INSERT INTO %s VALUES(%d, %.2f, %d, %d, '%c', %.2f)", */
-/*                          tabla, num_venta, total, */
-/*                          tipo_pago, tipo_fact, exp_boleana, utilidad); */
-/*    resultado = PQexec(base, comando_sql); */
-/*    if (PQresultStatus(resultado) != PGRES_COMMAND_OK) { */
-/*      fprintf(stderr,"Comando INSERT INTO falló\n"); */
-/*      fprintf(stderr,"Error: %s\n",PQerrorMessage(base)); */
-/*    } */
-/*    free(comando_sql); */
-/*    return(resultado); */
-/*  } */
-
-
 void Cambio() {
   static double recibo;
   static double dar;
@@ -2205,7 +2130,7 @@ void print_ticket_arts(double importe, double cambio) {
   fclose(impr);
 }
 
-void print_ticket_footer(struct tm fecha, unsigned numventa) {
+void print_ticket_footer(struct tm fecha, unsigned numventa, long folio, int serie) {
   FILE *impr,*fpie;
   static char *s;
 
@@ -2218,7 +2143,7 @@ void print_ticket_footer(struct tm fecha, unsigned numventa) {
   fprintf(impr,"  %2d/%2d/%2d a las %2d:%2d:%2d hrs.\n",
         fecha.tm_mday, (fecha.tm_mon)+1, fecha.tm_year, fecha.tm_hour,
         fecha.tm_min, fecha.tm_sec);
-  fprintf(impr, "  Venta num. %u\n", numventa);
+  fprintf(impr, "Nota num. %ld, serie %c. Venta %u\n", folio, 'A'+serie-1, numventa);
   fpie = fopen(nmfpie,"r");
   if (!fpie) {
     fprintf(stderr,
@@ -2237,11 +2162,10 @@ void print_ticket_footer(struct tm fecha, unsigned numventa) {
     fclose(fpie);
   }
   fprintf(impr,"\n\n\n");
-  //  sprintf(s, "      Fanny Nuricumbo Melchor");
-  sprintf(s, "Francisco Javier Mondragon Villa");
+
+  sprintf(s, "Eq. Xerograficos y de Impresion SA de CV");
   imprime_razon_social(impr, tipo_disp_ticket,
-                       //                       "  La  Botana", s );
-                                             "Electro Hogar", s );
+                                             "E X I", s );
   free(s);
   fclose(impr);
 }
@@ -2369,7 +2293,7 @@ int actualiza_existencia(PGconn *base_inv, struct tm *fecha) {
   char     tabla[255];
   float    pu;
 
-  sprintf(tabla, "almacen_%d", almacen);
+  sprintf(tabla, "almacen_1");
   for(i=0; i<numarts; i++) {
     articulo[i].exist = -1;
     pu = articulo[i].pu;
@@ -2726,7 +2650,7 @@ int busqueda_articulo(char *codigo)
           strcat(b, " ");
       }
 
-      sprintf(item[j], "%-15s %s %9.2f", cod[j], b, barra[i].pu);
+      sprintf(item[j], "%-15s %s %9.2f %.2f", cod[j], b, barra[i].pu, barra[i].exist);
       mvwprintw(v_busq, v_busq->_cury, 1, "%s\n", item[j]);
       j++;
     }
@@ -3127,6 +3051,7 @@ int main(int argc, char *argv[]) {
   static int dgar;
   PGconn *con, *con_s;
   long num_venta = 0;
+  long folio = 0;
   unsigned formadepago;
   double utilidad;
   double tax[maxtax];
@@ -3250,7 +3175,7 @@ int main(int argc, char *argv[]) {
             scanw("%d",&dgar);
           }
           num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
-                         _NOTA_MOSTRADOR, *fecha, id_teller, 0, articulo, numarts, almacen);
+                         _NOTA_MOSTRADOR, serie, &folio, *fecha, id_teller, 0, articulo, numarts, almacen);
           if (num_venta<0)
             aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A',
                             (int)num_venta);
@@ -3278,7 +3203,7 @@ int main(int argc, char *argv[]) {
           pclose(impr_cmd);
         }
         num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
-                       _FACTURA, *fecha, id_teller, 0, articulo, numarts, almacen);
+                       _FACTURA, serie, &folio, *fecha, id_teller, 0, articulo, numarts, almacen);
         if (num_venta<0)
           aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A',
                           (int)num_venta);
@@ -3320,8 +3245,8 @@ int main(int argc, char *argv[]) {
             pclose(impr_cmd);
             unlink(nm_disp_ticket);
           }
-          print_ticket_footer(*fecha, num_venta);
-          /*igm*/ num_venta=1;
+          print_ticket_footer(*fecha, num_venta, folio, serie);
+
           if (num_venta>0)
             clean_journal(nm_journal);
           sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
@@ -3351,14 +3276,14 @@ int main(int argc, char *argv[]) {
           unlink(nm_disp_ticket);
         }
         num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad,
-                                   formadepago, _TEMPORAL, *fecha,
+                                   formadepago, _TEMPORAL, serie, &folio, *fecha,
                                    id_teller, id_vendedor, articulo, numarts, almacen);
         if (num_venta<0)
           aborta_remision(con, con_s,
                           "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A',
                           (int)num_venta);
 
-        print_ticket_footer(*fecha, num_venta);
+        print_ticket_footer(*fecha, num_venta, folio, serie);
         if (num_venta>0)
           clean_journal(nm_journal);
         sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
