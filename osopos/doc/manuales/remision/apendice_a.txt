@@ -1,6 +1,12 @@
-                               APENDICE
-          PARÁMETROS DE CONFIGURACIÓN DEL PROGRAMA REMISION
+                                 APENDICE A
+               PARÁMETROS DE CONFIGURACIÓN DEL PROGRAMA REMISIÓN
 
+A continuación se indican los parámtros que permiten configurar al programa Remisión.
+La primera línea de la sintáxis indica el nombre del parámetro, seguido del tipo de
+parámetro. Los parámetros globales se usan en el archivo /etc/osopos/remision.config,
+mientras que los locales se usan en ~/.osopos/remision.config. En la tercera línea se
+indica que tipo de valor se debe usar (números, letras o valores definidos) y por
+último una breve descripción del parámetro.
 
 lp_ticket
 global
@@ -53,9 +59,27 @@ Tipo: Caracter
 Nombre de la base de datos definido en el servidor
 
 db.usuario
-global
+local *deshabilitada*
 Tipo: Caracter
 Nombre del usuario que se conectará a la base de datos. Debe ser un usuario registrado en el sistema de base de datos.
+NOTA: Por seguridad, esta opción no es configurable. El sistema tomará el nombre de login del usuario que esté
+ejecutando el programa.
+
+db.passwd
+local
+Tipo: Caracter
+Contraseña de base de datos del usuario que ejecuta el programa. Si no se especifica alguna, el sistema la solicitará
+al inicio de la ejecución del programa.
+
+db.sup_usuario
+global
+Tipo: Caracter
+Nombre del usuario de base de datos que se conectará a esta con privilegios administrativos. Debe ser un usuario registrado en el sistema de base de datos y contar con los permisos de escritura y modificación de tablas.
+
+db.passwd
+global
+Tipo: Caracter
+Contraseña de base de datos del usuario especificado en db.sup_usuario. Este parámetro es obligatorio.
 
 renglones.articulos
 global, local
@@ -117,7 +141,19 @@ global, local
 Tipo: Fijo. Valores posibles: 2400, 4800, 9600, 19200, 38400.
 Velocidad de transmisión del lector de c. de barras, en bps.
 
+scanner_terminador
+local
+Tipo: Numérico entero.
+Número decimal que representa el terminador del scanner. Para el uso de OsoPOS Web se recomienda que sea
+9 (tabulador). El valor por omisión es 10.
+
 iva_incluido
 global
 Tipo: Fijo. Valores posibles: 0 ó 1.
 Indica con (1) si los precios incluyen el I.V.A., y con (0) si hay que agregarlo.
+
+desglosar_descuento
+global
+Tipo: Numérico entero. Valores posibles: 0 ó 1.
+Indica con (1) si la modificación de precio aparecerá en la siguiente línea, cual si fuera un
+artículo más.
