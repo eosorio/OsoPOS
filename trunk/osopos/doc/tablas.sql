@@ -31,6 +31,28 @@ REVOKE ALL ON articulos FROM PUBLIC;
 GRANT SELECT ON articulos to GROUP osopos;
 GRANT ALL ON articulos TO "scaja";
 
+CREATE TABLE articulos_costos (
+  codigo        varchar(20) NOT NULL,
+  id_prov       int4 NOT NULL,
+  costo1        real NOT NULL,
+  costo2        real NOT NULL,
+  prov_clave    varchar(20),
+  iva_porc      real NOT NULL,
+  entrega1      int2,
+  entrega2      int2,
+  costo_envio1  real,
+  costo_envio2  real,
+  actualizacion datetime,
+  status        character(1),
+  divisa        character(3) NOT NULL DEFAULT 'MXP'
+);
+REVOKE ALL ON articulos_costos FROM PUBLIC;
+GRANT SELECT ON articulos_costos to GROUP osopos;
+GRANT ALL ON articulos_costos TO "scaja";
+  
+
+);
+
 CREATE TABLE almacen_1 (
   codigo        varchar(20) PRIMARY KEY NOT NULL,
   pu            real DEFAULT 0,
@@ -88,22 +110,28 @@ GRANT ALL ON article_desc TO "scaja";
 CREATE TABLE compras (
   codigo        varchar(20) NOT NULL,
   ct            real NOT NULL,
-  fecha         date NOT NULL,
-  hora          time NOT NULL,
+  cookie        varchar(8) NOT NULL,
   costo         real NOT NULL,
-  almacen       int2,
   Primary Key ("codigo")
 );
 REVOKE ALL ON compras FROM PUBLIC;
 GRANT SELECT ON compras to GROUP osopos;
 GRANT ALL ON compras TO "scaja";
 
+CREATE TABLE corte (
+  numero        int4 PRIMARY KEY NOT NULL,
+  bandera       BIT(8) DEFAULT B'0' NOT NULL
+);
+REVOKE ALL ON corte FROM PUBLIC;
+GRANT SELECT ON corte to GROUP osopos;
+GRANT INSERT,SELECT,UPDATE ON corte TO "supervisor";
+
 CREATE TABLE ventas (
   numero            SERIAL PRIMARY KEY,
   monto             real,
   tipo_pago         int2 DEFAULT 20 NOT NULL,
   tipo_factur       int2 DEFAULT 5 NOT NULL,
-  corte             BIT(8) DEFAULT B'0',
+  corte             BIT(8) DEFAULT B'00000000',
   utilidad          real,
   id_vendedor       int4 DEFAULT 0 NOT NULL,
   id_cajero         int4 DEFAULT 0 NOT NULL,
@@ -119,8 +147,8 @@ CREATE TABLE ventas (
 );
 
 REVOKE ALL ON ventas FROM PUBLIC;
-GRANT SELECT ON compras to GROUP osopos;
-GRANT ALL ON ventas TO "scaja";
+GRANT SELECT ON ventas to GROUP osopos;
+GRANT INSERT,SELECT ON ventas TO "supervisor";
 
 CREATE TABLE ventas_detalle (
   "id_venta"        int4 NOT NULL,
@@ -288,28 +316,29 @@ GRANT SELECT ON modulo_perfil TO GROUP osopos;
 GRANT ALL ON modulo_perfil TO "scaja";
 
 CREATE TABLE modulo (
-  id           SERIAL,
-  nombre       VARCHAR(30)
+  "id"           serial,
+  "nombre"       varchar(30),
+  "desc"         varchar(60)
 );
 REVOKE ALL ON modulo FROM PUBLIC;
 GRANT SELECT ON modulo TO GROUP osopos;
 
-INSERT INTO modulo (nombre) VALUES ('invent_ver_pcosto');
-INSERT INTO modulo (nombre) VALUES ('invent_ver_prov');
-INSERT INTO modulo (nombre) VALUES ('invent_borrar_item');
-INSERT INTO modulo (nombre) VALUES ('invent_cambiar_item');
-INSERT INTO modulo (nombre) VALUES ('invent_depto_renombrar');
-INSERT INTO modulo (nombre) VALUES ('invent_general');
-INSERT INTO modulo (nombre) VALUES ('movinv_general');
-INSERT INTO modulo (nombre) VALUES ('movinv_compra');
-INSERT INTO modulo (nombre) VALUES ('movinv_venta');
-INSERT INTO modulo (nombre) VALUES ('movinv_devventa');
-INSERT INTO modulo (nombre) VALUES ('movinv_devcompra');
-INSERT INTO modulo (nombre) VALUES ('movinv_merma');
-INSERT INTO modulo (nombre) VALUES ('movinv_tsalida');
-INSERT INTO modulo (nombre) VALUES ('movinv_tentrada');
-INSERT INTO modulo (nombre) VALUES ('usuarios_general');
-INSERT INTO modulo (nombre) VALUES ('caja_cajon_manual');
+INSERT INTO modulo (nombre, "desc") VALUES ('invent_ver_pcosto', 'Inventarios. Ver precio de costo');
+INSERT INTO modulo (nombre, "desc") VALUES ('invent_ver_prov', 'Inventarios. Ver proveedores');
+INSERT INTO modulo (nombre, "desc") VALUES ('invent_borrar_item', 'Inventarios. Borrar item');
+INSERT INTO modulo (nombre, "desc") VALUES ('invent_cambiar_item', 'Inventarios. Modificar item');
+INSERT INTO modulo (nombre, "desc") VALUES ('invent_depto_renombrar', 'Inventarios. Renombrar departamento');
+INSERT INTO modulo (nombre, "desc") VALUES ('invent_general', 'Inventarios. Acceso general');
+INSERT INTO modulo (nombre, "desc") VALUES ('movinv_general', 'Mov. al inv. Acceso general');
+INSERT INTO modulo (nombre, "desc") VALUES ('movinv_compra', 'Mov. al inv. Registrar compras');
+INSERT INTO modulo (nombre, "desc") VALUES ('movinv_venta', 'Mov. al inv. Registrar ventas');
+INSERT INTO modulo (nombre, "desc") VALUES ('movinv_devventa', 'Mov. al inv. Registrar dev. de ventas');
+INSERT INTO modulo (nombre, "desc") VALUES ('movinv_devcompra', 'Mov. al inv. Registrar dev. compras');
+INSERT INTO modulo (nombre, "desc") VALUES ('movinv_merma', 'Mov. al inv. Registrar mermas');
+INSERT INTO modulo (nombre, "desc") VALUES ('movinv_tsalida', 'Mov. al inv. Registrar transferencia de salida');
+INSERT INTO modulo (nombre, "desc") VALUES ('movinv_tentrada', 'Mov. al inv. Registrar transferencia de entrada');
+INSERT INTO modulo (nombre, "desc") VALUES ('usuarios_general', 'Admin. de usuarios. Acceso general');
+INSERT INTO modulo (nombre, "desc") VALUES ('caja_cajon_manual', 'Operación de caja. Apertura manual de cajón de efectivo');
 
 CREATE TABLE modulo_usuarios (
   id           int NOT NULL DEFAULT 0,
