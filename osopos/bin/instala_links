@@ -1,0 +1,26 @@
+#!/bin/bash
+
+if [ -f /home/OsoPOS/bin/remision ]; then
+  if [ ! -L ~/bin/remision ]; then
+      ln -s /home/OsoPOS/bin/remision ~/bin/remision
+  fi
+else
+  echo "No existe el programa remision"
+fi
+
+if [ -f /home/OsoPOS/bin/factur ]; then
+  if [ ! -L ~/bin/factur ]; then
+      ln -s /home/OsoPOS/bin/factur ~/bin/factur
+  fi
+else
+  echo "No existe el programa factur"
+fi
+
+if [ -f /home/OsoPOS/bin/imprrem ]; then
+  if [ ! -L ~/bin/imprrem ]; then
+      ln -s /home/OsoPOS/bin/imprrem ~/bin/imprrem
+  fi
+else
+  echo "No existe el programa factur"
+fi
+
