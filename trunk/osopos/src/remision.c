@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.34 (C) 1999-2003 E. Israel Osorio H.
+   Programa Remision 1.38 (C) 1999-2003 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -48,8 +48,8 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/print-func.h"
 #define _printfunc
 
-#define vers "1.34"
-#define release "La Botana"
+#define vers "1.38"
+#define release "El Punto"
 
 #ifndef maxdes
 #define maxdes 39
@@ -87,11 +87,11 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 #include "include/minegocio-remis.h"
 
-int forma_de_pago();
+int forma_de_pago(double *, double *);
 void Termina(PGconn *con, PGconn *con_s, int error);
 //int LeeConfig(char*, char*);
 double item_capture(PGconn *, int *numart, double *util, double tax[maxtax], struct tm fecha);
-void print_ticket_arts();
+void print_ticket_arts(double importe, double cambio);
 void print_ticket_footer(struct tm fecha, unsigned numvents);
 int AbreCajon(char *tipo_miniimp);
 /* Función que reemplaza a ActualizaEx */
@@ -99,7 +99,7 @@ int actualiza_existencia(PGconn *con, struct tm *fecha);
 /* Esta función reemplaza a leebarras */
 int lee_articulos(PGconn *, PGconn *);
 void show_item_list(WINDOW *vent, int i, short cr);
-void show_subtotal(double);
+void show_subtotal(double, double, double);
 void mensaje(char *texto);
 void aviso_existencia(struct articulos art);
 void switch_pu(WINDOW *, struct articulos *, int, double *, double tax[maxtax], int);
@@ -110,8 +110,7 @@ int check_for_journal(char *dir_name);
 int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
                      double tax[maxtax], char *last_sale_fname);
 int aborta_remision(PGconn *con, PGconn *con_s, char *mensaje, char tecla, int senial);
-void signal_handler_IO (int status);
-void captura_serial(char *);
+//void captura_serial(char *);
 void init_serial(struct sigaction *saio, struct termios *oldtio, struct termios *newtio);
 void signal_handler_IO (int status);
 void close_serial(int fd, struct termios *tio);
@@ -154,7 +153,6 @@ char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *asunto_avisos, /* Asunto del correo de avisos */
   *cc_avisos;     /* con copia para */
 char   s_divisa[3];       /* Designación de la divisa que se usa para cobrar en la base de datos */
-double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
 short unsigned search_2nd;  /* ¿Buscar código alternativo al mismo tiempo que el primario ? */ 
 int id_teller = 0;
 short unsigned manual_discount; /* Aplicar el descuento manual de precio en la misma línea */
@@ -254,7 +252,6 @@ int init_config()
   db.name = calloc(1, strlen("elpuntodeventa.com"));
   db.user = calloc(1, strlen(log_name)+1);
   strcpy(db.user, log_name);
-  db.passwd = calloc(1, mxbuff);
   db.sup_user = calloc(1, strlen("scaja")+1);
 
   maxitemr = 6;
@@ -263,7 +260,7 @@ int init_config()
   TAX_PERC_DEF = 15;
   strcpy(s_divisa, "MXP");
 
-  manual_discount = 1;
+  manual_discount = 0;
 
   almacen = 1;
 
@@ -665,7 +662,7 @@ int read_global_config()
           aux = NULL;
         }
         else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+          fprintf(stderr, "remision. Error de memoria en argumento de configuración %s\n",
                   b);
       }
       else if (!strcmp(b,"db.sup_passwd")) {
@@ -791,12 +788,16 @@ int read_global_config()
        strncpy(buf, strtok(NULL,"="), mxbuff);
        iva_incluido = atoi(buf);
      }
-      else if (!strcmp(b, "listar_precio_neto")) {
+     else if (!strcmp(b, "listar_precio_neto")) {
        strncpy(buf, strtok(NULL,"="), mxbuff);
        listar_neto = atoi(buf);
-      }
-      if (!feof(config))
-        fgets(buff,mxbuff,config);
+     }
+     else if (!strcmp(b, "desglosar_descuento")) {
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       manual_discount = atoi(buf);
+     }
+     if (!feof(config))
+       fgets(buff,mxbuff,config);
     }
     fclose(config);
     if (aux != NULL)
@@ -1355,7 +1356,7 @@ void show_item_list(WINDOW *vent, int i, short cr) {
   else
     iva_articulo = articulo[i].pu * (articulo[i].iva_porc/100);
 
-  mvwprintw(vent, vent->_cury,  0, "%2.2f %-15s", articulo[i].cant, articulo[i].codigo);
+  mvwprintw(vent, vent->_cury,  0, "%3.2f %-15s", articulo[i].cant, articulo[i].codigo);
   mvwprintw(vent, vent->_cury, 22, "%-39s", articulo[i].desc);
 
   if (listar_neto && !iva_incluido)
@@ -1370,10 +1371,14 @@ void show_item_list(WINDOW *vent, int i, short cr) {
   wrefresh(vent);
 }
 
-void show_subtotal(double subtotal) {
+void show_subtotal(double subtotal, double iva, double total) {
+  int pos_y;
 
+  pos_y = getmaxy(stdscr)-5;
   attrset(COLOR_PAIR(verde_sobre_negro));
-  mvprintw(getmaxy(stdscr)-5,0,"Subtotal acumulado: $%8.2f",subtotal);
+  mvprintw(pos_y,0,"Subt. acumulado: $%8.2f",subtotal);
+  mvprintw(pos_y, 35, "I.V.A: $%7.2f",iva);
+  mvprintw(pos_y, 60, "Total: $%8.2f", total);
   attrset(COLOR_PAIR(blanco_sobre_negro));
   clrtoeol();
 }
@@ -1385,11 +1390,12 @@ void switch_pu(WINDOW *v_arts,
                double tax[maxtax],
                int i) 
 {
-  double iva_articulo;
-  double tax_item[maxtax];
-  double new_pu;
+  double iva_articulo, iva_articulo_o;
+  double tax_item[maxtax], tax_item_o[maxtax];
+  double new_pu, old_pu;
   int j;
 
+  old_pu = art->pu;
   switch (which_pu) {
   case 2:
     new_pu = art->pu2;
@@ -1405,26 +1411,36 @@ void switch_pu(WINDOW *v_arts,
     new_pu = art->pu5;
   }
 
-  if (iva_incluido)
+  if (iva_incluido) {
     iva_articulo = new_pu - new_pu / (art->iva_porc/100 + 1);
-  else
+    iva_articulo_o = old_pu - old_pu / (art->iva_porc/100 + 1);
+  }
+  else {
     iva_articulo = new_pu * (art->iva_porc/100);
-  iva += (iva_articulo * art->cant);
+    iva_articulo_o = old_pu * (art->iva_porc/100);
+  }
+  iva += ((iva_articulo-iva_articulo_o) * art->cant);
 
   tax_item[0] =  new_pu - new_pu / (art->tax_0/100 + 1);
+  tax_item_o[0] =  old_pu - old_pu / (art->tax_0/100 + 1);
   tax_item[1] =  new_pu - new_pu / (art->tax_1/100 + 1);
+  tax_item_o[1] =  old_pu - old_pu / (art->tax_1/100 + 1);
   tax_item[2] =  new_pu - new_pu / (art->tax_2/100 + 1);
+  tax_item_o[2] =  old_pu - old_pu / (art->tax_2/100 + 1);
   tax_item[3] =  new_pu - new_pu / (art->tax_3/100 + 1);
+  tax_item_o[3] =  old_pu - old_pu / (art->tax_3/100 + 1);
   tax_item[4] =  new_pu - new_pu / (art->tax_4/100 + 1);
+  tax_item_o[4] =  old_pu - old_pu / (art->tax_4/100 + 1);
   tax_item[5] =  new_pu - new_pu / (art->tax_5/100 + 1);
+  tax_item_o[5] =  old_pu - old_pu / (art->tax_5/100 + 1);
   for (j=0; j<maxtax; j++)
-    tax[j] += (tax_item[j] * art->cant);
+    tax[j] += ((tax_item[j]-tax_item_o[j]) * art->cant);
 
   *subtotal += (art->cant * (new_pu - art->pu));
   art->pu = new_pu;
   wmove(v_arts, v_arts->_cury-1, 0);
   show_item_list(v_arts, i-1, TRUE);
-  show_subtotal(*subtotal);
+  show_subtotal(*subtotal, iva, *subtotal+(!iva_incluido*iva));
 
 
 }
@@ -1519,7 +1535,7 @@ double item_capture(PGconn *con, int *numart, double *util,
         case 3: /* F3 */
           journal_marked_items(nm_journal, "cancela", 0);
           cancela_articulo(v_arts, &i, &subtotal, tax, &iva, last_sale_fname);
-          show_subtotal(subtotal);
+          show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
           mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
           continue;
           break;
@@ -1566,8 +1582,8 @@ double item_capture(PGconn *con, int *numart, double *util,
         mensaje("Error en multiplicador. Intente de nuevo");
         continue;
       }
-      for (j=0; !isdigit(buff[j]); j++);
-      for (k=0; isdigit(buff[j]) && j<strlen(buff); j++,k++)
+      for (j=0; !isdigit(buff[j]) && buff[j]!='.'; j++);
+      for (k=0; (isdigit(buff[j]) || buff[j]=='.') && j<strlen(buff); j++,k++)
         articulo[i].desc[k] = buff[j];
       articulo[i].desc[k]=0;
       articulo[i].cant = atof(articulo[i].desc);
@@ -1608,7 +1624,7 @@ double item_capture(PGconn *con, int *numart, double *util,
         if (iva_incluido)
           iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
         else
-          iva_articulo = articulo[i-1].pu - articulo[i-1].iva_porc/100;
+          iva_articulo = articulo[i-1].pu * articulo[i-1].iva_porc/100;
         tax_item[0] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_0/100 + 1);
         tax_item[1] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_1/100 + 1);
         tax_item[2] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_2/100 + 1);
@@ -1626,7 +1642,7 @@ double item_capture(PGconn *con, int *numart, double *util,
         wmove(v_arts, v_arts->_cury-1, v_arts->_curx);
         show_item_list(v_arts, i-1, TRUE);
       }
-      show_subtotal(subtotal);
+      show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
 
       articulo[i].desc[0] = 0;
       articulo[i].cant = 1;
@@ -1663,7 +1679,7 @@ double item_capture(PGconn *con, int *numart, double *util,
 
         wmove(v_arts, v_arts->_cury-1, v_arts->_curx);
         show_item_list(v_arts, i-1, TRUE);
-        show_subtotal(subtotal);
+        show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
         continue;
       }
 
@@ -1683,7 +1699,7 @@ double item_capture(PGconn *con, int *numart, double *util,
       }
       if (strstr(articulo[i].desc,"ancela") && i) {
         cancela_articulo(v_arts, &i, &subtotal, &iva, tax, last_sale_fname);
-        show_subtotal(subtotal);
+        show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
         continue;
       }
       do {
@@ -1712,15 +1728,11 @@ double item_capture(PGconn *con, int *numart, double *util,
         journal_last_sale(i, last_sale_fname);
         journal_marked_items(nm_journal, buff2, exist_journal);
 
-        articulo[i-1].pu += articulo[i].pu;
-        articulo[i].codigo[0] = 0;
-        articulo[i].desc[0] = 0;
-
         if (articulo[i-1].iva_porc) {
           if (iva_incluido)
-            iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+            iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i-1].iva_porc/100 + 1);
           else
-            iva_articulo = articulo[i].pu * (articulo[i].iva_porc/100);
+            iva_articulo = articulo[i].pu * (articulo[i-1].iva_porc/100);
         }
         else
           iva_articulo = 0;
@@ -1750,13 +1762,17 @@ double item_capture(PGconn *con, int *numart, double *util,
         else
           tax_item[5] = 0;
 
+        articulo[i-1].pu += articulo[i].pu;
+        articulo[i].codigo[0] = 0;
+        articulo[i].desc[0] = 0;
+
         subtotal += (articulo[i-1].cant * articulo[i].pu);
         iva += (iva_articulo * articulo[i-1].cant);
         for (j=0; j<maxtax; j++)
           tax[j] += (tax_item[j] * articulo[i-1].cant);
         wmove(v_arts, v_arts->_cury-1, 0);
         show_item_list(v_arts, i-1, TRUE);
-        show_subtotal(subtotal);
+        show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
         continue;
       }
       /* Artículo no registrado */
@@ -1812,7 +1828,7 @@ double item_capture(PGconn *con, int *numart, double *util,
         tax[j] += (tax_item[j] * articulo[i].cant);
 
       subtotal += (articulo[i].pu * articulo[i].cant);
-      show_subtotal(subtotal);
+      show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
       articulo[++i].cant = 1;
     }
     else {  /* Articulo registrado */
@@ -1835,7 +1851,7 @@ double item_capture(PGconn *con, int *numart, double *util,
       for (j=0; j<maxtax; j++)
         tax[j] += (tax_item[j] * articulo[i].cant);
 
-      show_subtotal(subtotal);
+      show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
       articulo[++i].cant = 1;
     }
   }
@@ -1862,7 +1878,7 @@ double item_capture(PGconn *con, int *numart, double *util,
   if (i) {
     attrset(COLOR_PAIR(amarillo_sobre_negro));
     attron(A_BOLD);
-    mvprintw(getmaxy(stdscr)-5,0, "Total a pagar: %.2f", subtotal); /* Sale total */
+    mvprintw(getmaxy(stdscr)-5,0, "Total a pagar: %.2f", subtotal+(!iva_incluido*iva)); /* Sale total */
     attroff(A_BOLD);
     attrset(COLOR_PAIR(blanco_sobre_negro));
     clrtoeol();
@@ -1872,15 +1888,13 @@ double item_capture(PGconn *con, int *numart, double *util,
   free(buff2);
   if (lector_serial)
     close_serial(fd, &oldtio);
-  return(subtotal);
+  return(subtotal+(!iva_incluido*iva));
 }
 
 /***************************************************************************/
 
-int forma_de_pago()
+int forma_de_pago(double *recibo, double *dar)
 {
-  static double recibo = 0.0;
-  static double dar;
   char opcion;
   int tipo;
 
@@ -1899,8 +1913,8 @@ int forma_de_pago()
     mvprintw(getmaxy(stdscr)-2, 25, "T");
     mvprintw(getmaxy(stdscr)-2, 33, "C");
     mvprintw(getmaxy(stdscr)-2, 42, "H");
-    if (recibo) {
-      recibo = 0.0;
+    if (*recibo != 0.0) {
+      *recibo = 0.0;
       attroff(A_BLINK);
     }
     attrset(COLOR_PAIR(blanco_sobre_negro));
@@ -1923,17 +1937,17 @@ int forma_de_pago()
       default: recibo++;
     }
   }
-  while (recibo);
+  while (*recibo);
 
   if (tipo >= 20) {
     mvprintw(getmaxy(stdscr)-2,0,"Se recibe: ");
     clrtoeol();
-    scanw("%lf",&recibo);
-    if (recibo >= a_pagar)
-      dar = recibo - a_pagar;
+    scanw("%lf",recibo);
+    if (*recibo >= a_pagar)
+      *dar = *recibo - a_pagar;
     else
-      dar = 0;
-    mvprintw(getmaxy(stdscr)-2, getmaxx(stdscr)/2, "Cambio de: %.2f", dar);
+      *dar = 0;
+    mvprintw(getmaxy(stdscr)-2, getmaxx(stdscr)/2, "Cambio de: %.2f", *dar);
   }
   return(tipo);
 }
@@ -1983,7 +1997,7 @@ void Cambio() {
   mvprintw(getmaxy(stdscr)-2,getmaxx(stdscr)/2,"Cambio de: %.2f\n",dar);
 }
 
-void print_ticket_arts() {
+void print_ticket_arts(double importe, double cambio) {
   FILE *impr;
   static int i;
 
@@ -2006,6 +2020,7 @@ void print_ticket_arts() {
   else
     fprintf(impr, "\n     Total: %10.2f\n", a_pagar);
   fprintf(impr, "     I.V.A.: %10.2f\n", iva);
+  fprintf(impr, "Recibido: %.2f  Cambio: %.2f\n", importe, cambio);
   fprintf(impr, "E = Exento\n\n");
   fclose(impr);
 }
@@ -2042,8 +2057,11 @@ void print_ticket_footer(struct tm fecha, unsigned numventa) {
     fclose(fpie);
   }
   fprintf(impr,"\n\n\n");
+  //  sprintf(s, "      Fanny Nuricumbo Melchor");
+  sprintf(s, "Eduardo Israel Osorio Hernandez");
   imprime_razon_social(impr, tipo_disp_ticket,
-                       "   La Botanita", "   Fernando Garcia Torres    " );
+                       //                       "  La  Botana", s );
+                                             "elpuntodeventa", s );
   free(s);
   fclose(impr);
 }
@@ -2148,7 +2166,7 @@ int actualiza_existencia(PGconn *base_inv, struct tm *fecha) {
   for(i=0; i<numarts; i++) {
     articulo[i].exist = -1;
     pu = articulo[i].pu;
-    if (!search_product(base_inv, tabla, "codigo", articulo[i].codigo, &articulo[i]))
+    if (search_product(base_inv, tabla, "codigo", articulo[i].codigo, TRUE, &articulo[i]) != OK)
       continue;
     if (articulo[i].exist > articulo[i].exist_min  &&
                 articulo[i].exist-articulo[i].cant <= articulo[i].exist_min) {
@@ -2431,6 +2449,7 @@ int main(int argc, char *argv[]) {
   unsigned formadepago;
   double utilidad;
   double tax[maxtax];
+  double importe_recibido, cambio;
   struct tm *fecha;     /* Hora y fecha local   */
   int i;
 
@@ -2464,8 +2483,10 @@ int main(int argc, char *argv[]) {
             ERROR_SQL);
   }
   //  con = Abre_Base(db.hostname, db.hostport, NULL, NULL, "osopos", log_name, "");
-  if (db.passwd == NULL)
+  if (db.passwd == NULL) {
+    db.passwd = calloc(1, mxbuff);
     obten_passwd(db.user, db.passwd);
+  }
   con = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.user, db.passwd); 
   if (con == NULL) {
     aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
@@ -2503,7 +2524,8 @@ int main(int argc, char *argv[]) {
     fecha->tm_year += 1900;
     for (i=0; i<maxtax; i++)
       tax[i] = 0.0;
-
+    importe_recibido = 0.0;
+    cambio = 0.0;
 
     clear();
     mvprintw(0,0,"%u/%u/%u",
@@ -2519,20 +2541,20 @@ int main(int argc, char *argv[]) {
 
     if (numarts && a_pagar) {
       attron(A_BOLD);
-      mvprintw(getmaxy(stdscr)-2,0,"¿Imprimir Remision, Factura o Ticket (R,F,T)? T\b");
+      mvprintw(getmaxy(stdscr)-2,0,"¿Imprimir Nota, Factura o Ticket (N,F,T)? T\b");
       attroff(A_BOLD);
       buffer = toupper(getch());
-      formadepago = forma_de_pago();
+      formadepago = forma_de_pago(&importe_recibido, &cambio);
 
       switch (buffer) {
-        case 'R':
+        case 'N':
           attron(A_BOLD);
           mvprintw(getmaxy(stdscr)-1,0,"¿Días de garantía? : ");
           attroff(A_BOLD);
           clrtoeol();
           scanw("%d",&dgar);
           num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
-                         _NOTA_MOSTRADOR, FALSE, *fecha, id_teller, 0, articulo, numarts, almacen);
+                         _NOTA_MOSTRADOR, *fecha, id_teller, 0, articulo, numarts, almacen);
           if (num_venta<0)
             aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A', (int)num_venta);
             
@@ -2559,7 +2581,7 @@ int main(int argc, char *argv[]) {
           pclose(impr_cmd);
         }
         num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
-                       _FACTURA, FALSE, *fecha, id_teller, 0, articulo, numarts, almacen);
+                       _FACTURA, *fecha, id_teller, 0, articulo, numarts, almacen);
         if (num_venta<0)
           aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A', (int)num_venta);
             
@@ -2581,8 +2603,8 @@ int main(int argc, char *argv[]) {
         break;
       case 'T':
       default:
-        print_ticket_arts();
-        sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
+        print_ticket_arts(importe_recibido, cambio);
+        sprintf(buf, "lpr -l -P %s %s", lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
         pclose(impr_cmd);
         unlink(nm_disp_ticket);
@@ -2594,7 +2616,7 @@ int main(int argc, char *argv[]) {
           unlink(nm_disp_ticket);
         }
         num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad,
-                                   formadepago, _TEMPORAL, FALSE, *fecha,
+                                   formadepago, _TEMPORAL, *fecha,
                                    id_teller, 0, articulo, numarts, almacen);
         if (num_venta<0)
           aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A', (int)num_venta);
