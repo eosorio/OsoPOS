@@ -61,7 +61,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define CAMPO_PCOSTO         20
 #define CAMPO_IVA            22
 
-#define version "0.30-1"
+#define version "0.31-1"
 
 #define maxitemlista    2048
 
@@ -71,6 +71,7 @@ char   *nmdisp;
 char   *home_directory; 
 char   *item[maxitemlista];
 struct articulos art;
+PGconn *base_inv;
 
 int read_config();
 int imprime_lista(PGconn *con, char *campo_orden);
@@ -571,6 +572,10 @@ int busca_item(char *codigo, unsigned num_items)
 
 int interpreta_campos(struct articulos *art, FIELD *campo[25])
 {
+  int aux;
+  char str_depto[maxdeptolen];
+  char str_prov[maxnickprov];
+
   strncpy(art->codigo, campo[CAMPO_COD]->buf, maxcod-1);
   art->codigo[maxcod-1] = 0;
   limpiacad(art->codigo, TRUE);
@@ -584,8 +589,17 @@ int interpreta_campos(struct articulos *art, FIELD *campo[25])
   art->disc = atof(campo[CAMPO_DISC]->buf);
   art->exist_min = atof(campo[CAMPO_EXMIN]->buf);
   art->exist_max = atof(campo[CAMPO_EXMAX]->buf);
-  art->id_prov = atoi(campo[CAMPO_CODPROV]->buf);
-  art->id_depto = atoi(campo[18]->buf);
+
+  strcpy(str_prov, campo[CAMPO_CODPROV]->buf);
+  limpiacad(str_prov, TRUE);
+  aux = busca_proveedor(base_inv, str_prov);
+  art->id_prov = aux<0 ? 0 : aux;
+
+  strcpy(str_depto, campo[CAMPO_DEPTO]->buf);
+  limpiacad(str_depto, TRUE);
+  aux = busca_depto(base_inv, str_depto);
+  art->id_depto = aux<0 ? 0 : aux;
+
   art->p_costo = atof(campo[CAMPO_PCOSTO]->buf);
   art->iva_porc = atof(campo[CAMPO_IVA]->buf);
   return(OK);
@@ -1074,7 +1088,6 @@ int imprime_lista(PGconn *con, char *campo_orden)
 
 
 int main() {
-  PGconn *base_inv;
   int    i,
          num_items;
   WINDOW *v_forma;
