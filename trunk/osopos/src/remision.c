@@ -99,6 +99,7 @@ struct articulos articulo[maxart], barra[mxmembarra];
 int numarts=0;          /* Número de items capturados   */
 short unsigned maxitemr;
 pid_t pid;
+char *program_name;
 
   /* Variables de configuración */
 char *home_directory;
@@ -184,7 +185,8 @@ int read_config()
   dir_avisos = calloc(1, strlen("scaja@")+1);
   strcpy(dir_avisos, "scaja@");
   
-  cc_avisos = NULL;
+  cc_avisos = calloc(1, 1);
+  cc_avisos[0] = 0;
 
   asunto_avisos = calloc(1, strlen("Aviso de baja existencia")+1);
   strcpy(asunto_avisos, "Aviso de baja existencia");
@@ -238,8 +240,10 @@ int read_config()
       else if (!strcmp(b, "lp_ticket")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(lp_disp_ticket, strlen(buf)+1);
-        if (aux != NULL)
+        if (aux != NULL) {
           strcpy(lp_disp_ticket, buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr,
                   "remision. Error de memoria en argumento de configuracion %s\n",
@@ -248,8 +252,10 @@ int read_config()
       else if (!strcmp(b,"ticket.pie")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nmfpie, strlen(buf)+1);
-        if (aux != NULL)
-          strncpy(nmfpie, buf, strlen(buf));
+        if (aux != NULL) {
+          strcpy(nmfpie, buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr,
                   "remision. Error de memoria en argumento de configuracion %s\n",
@@ -258,8 +264,10 @@ int read_config()
       else if (!strcmp(b,"ticket.encabezado")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nmfenc, strlen(buf)+1);
-        if (aux != NULL)
+        if (aux != NULL) {
           strcpy(nmfenc,buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
@@ -267,8 +275,10 @@ int read_config()
       else if (!strcmp(b,"miniimpresora.tipo")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(tipo_disp_ticket, strlen(buf)+1);
-        if (aux != NULL)
+        if (aux != NULL) {
           strcpy(tipo_disp_ticket,buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr,
                   "remision. Error de memoria en argumento de configuracion %s\n",
@@ -277,8 +287,10 @@ int read_config()
       else if (!strcmp(b,"programa.factur")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nm_factur, strlen(buf)+1);
-        if (aux != NULL)
+        if (aux != NULL) {
           strcpy(nm_factur, buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr,
                  "remision. Error de memoria en argumento de configuracion %s\n", b);
@@ -286,8 +298,10 @@ int read_config()
       else if (!strcmp(b,"programa.imprem")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nmimprrem, strlen(buf)+1);
-        if (aux != NULL)
-          strncpy(nmimprrem,buf, strlen(buf));
+        if (aux != NULL) {
+          strcpy(nmimprrem,buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
@@ -295,8 +309,10 @@ int read_config()
       else if (!strcmp(b,"db.host")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(db_hostname, strlen(buf)+1);
-        if (aux != NULL)
-          strncpy(db_hostname,buf, strlen(buf));
+        if (aux != NULL) {
+          strcpy(db_hostname,buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
@@ -304,8 +320,10 @@ int read_config()
       else if (!strcmp(b,"db.port")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(db_hostport, strlen(buf)+1);
-        if (aux != NULL)
-          strncpy(db_hostport,buf, strlen(buf));
+        if (aux != NULL) {
+          strcpy(db_hostport,buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
@@ -321,8 +339,10 @@ int read_config()
       else if (!strcmp(b,"avisos")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nm_avisos, strlen(buf)+1);
-        if (aux != NULL)
-          strncpy(nm_avisos,buf, strlen(buf));
+        if (aux != NULL) {
+          strcpy(nm_avisos,buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
@@ -330,8 +350,10 @@ int read_config()
       else if (!strcmp(b,"email.avisos")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(dir_avisos, strlen(buf)+1);
-        if (aux != NULL)
-          strncpy(dir_avisos,buf, strlen(buf));
+        if (aux != NULL) {
+          strcpy(dir_avisos,buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
@@ -339,8 +361,10 @@ int read_config()
       else if (!strcmp(b,"asunto.email")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(asunto_avisos, strlen(buf)+1);
-        if (aux != NULL)
-          strncpy(asunto_avisos,buf, strlen(buf));
+        if (aux != NULL) {
+          strcpy(asunto_avisos,buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
@@ -348,8 +372,10 @@ int read_config()
       else if (!strcmp(b,"cc.avisos")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(cc_avisos, strlen(buf)+1);
-        if (aux != NULL)
-          strncpy(cc_avisos,buf, strlen(buf));
+        if (aux != NULL) {
+          strcpy(cc_avisos, buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
@@ -357,8 +383,10 @@ int read_config()
       else if (!strcmp(b,"programa.sendmail")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nm_sendmail, strlen(buf)+1);
-        if (aux != NULL)
-          strncpy(nm_sendmail,buf, strlen(buf));
+        if (aux != NULL) {
+          strcpy(nm_sendmail,buf);
+          aux = NULL;
+        }
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
@@ -1336,7 +1364,8 @@ int  check_for_journal(char *dirname) {
     return(FILE_1_ERROR);
 
   /* IGM We need to change de hardcode in the near future */
-  p_cmd = popen("/sbin/pidof remision", "r");
+  sprintf(buf, "/sbin/pidof %s", program_name);
+  p_cmd = popen(buf, "r");
 
   if (!feof(p_cmd))
     fgets(buf, mxbuff, p_cmd);
@@ -1355,30 +1384,27 @@ int  check_for_journal(char *dirname) {
   }
 
   /* We could use scandir() for this */
-  while ((dir_ent = readdir(dir)) != NULL) {
+  while ((dir_ent = readdir(dir)) != NULL  &&  !orphan) {
     if (strstr(dir_ent->d_name, ".last_items.")!=NULL) {
       strcpy(buff2, dir_ent->d_name+12);
       i = 0;
-      orphan = 1;
-      while (pid[i] != NULL) {
+      orphan = atoi(buff2);
+      while (pid[i] != NULL && orphan) {
         if (strcmp(buff2, pid[i++]) == 0)
-          continue;
+          orphan = 0;
       }
       /* If we get here, there was a process lost and an orphan sale */
-      closedir(dir);
-      free(buff2);
-      return(atoi(buff2));
     }
   }
   closedir(dir);
   free(buff2);
-  return(OK);
+  return(orphan);
 }
 
  /********************************************************/
    
 
-int main() {
+int main(int argc, char *argv[]) {
   static char buffer, buf[255];
   static char encabezado1[mxbuff],
       encabezado2[mxbuff] = "E. Israel Osorio H., 1999-2001 soporte@elpuntodeventa.com";
@@ -1392,6 +1418,7 @@ int main() {
   struct tm *fecha;     /* Hora y fecha local   */
 
 
+  program_name = argv[0];
 
   tiempo = time(NULL);
   fecha = localtime(&tiempo);
