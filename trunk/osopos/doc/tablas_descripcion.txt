@@ -1,0 +1,4 @@
+Tabla articulos
+tax_0 hasta tax_5
+Porcentaje de impuesto (impuesto 0 se considera el Impuesto Especial
+sobre Producción y servicios, mejor conocido como el impuesto suntuoso).
