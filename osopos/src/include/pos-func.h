@@ -60,7 +60,6 @@ int sale_register(PGconn *base, PGconn *base_sup,
                   double utilidad,
                   int tipo_pago,
                   int tipo_factur,
-                  int corte_parcial,
                   struct tm fecha,
                   int id_teller,
                   int id_seller,
@@ -81,16 +80,12 @@ PGconn *Abre_Base( char *host_pg,     /* nombre de host en servidor back end */
                    char *login,
                    char *passwd   );
 
-/* Le cambio el nombre a la siguiente función */
-/*PGresult *Busca_en_Inventario(PGconn *base, 
-			      char *tabla,
-			      char *campo,
-			      char *llave,
-			      struct articulos *art);*/
+
 PGresult *search_product(PGconn *base, 
 			      char *tabla,
 			      char *campo,
 			      char *llave,
+                              int  exacto,
 			      struct articulos *art);
 
 short imprime_doc(char *ruta_doc, char *nm_disp);
@@ -371,7 +366,6 @@ int sale_register(PGconn *base, PGconn *base_sup,
                   double utilidad,
                   int tipo_pago,
                   int tipo_factur,
-                  int corte_parcial,
                   struct tm fecha,
                   int id_teller,
                   int id_seller,
@@ -384,18 +378,16 @@ int sale_register(PGconn *base, PGconn *base_sup,
   char *ch_aux;
   char *corte;
   int num_venta, i;
+  int descto_aplicado=0;
   PGresult *res;
 
   query = calloc(1, 1024);
   if (query == NULL)
     return (ERROR_MEMORIA);
 
-  if (corte_parcial)
-    corte = "10000000";
-  else
-    corte = "00000000";
-  sprintf(query, "INSERT INTO ventas (monto, tipo_pago, tipo_factur, corte, utilidad, id_vendedor, id_cajero, fecha, hora, iva, tax_0, tax_1, tax_2, tax_3, tax_4, tax_5) VALUES (%.2f, %d, %d, B'%s', %.2f, %d, %d, '%d-%d-%d', '%d:%d:%d', %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f)",
-          monto, tipo_pago, tipo_factur, corte, utilidad, id_seller, id_teller,
+  corte = "00000000";
+  sprintf(query, "INSERT INTO ventas (monto, tipo_pago, tipo_factur, utilidad, id_vendedor, id_cajero, fecha, hora, iva, tax_0, tax_1, tax_2, tax_3, tax_4, tax_5) VALUES (%.2f, %d, %d, %.2f, %d, %d, '%d-%d-%d', '%d:%d:%d', %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f)",
+          monto, tipo_pago, tipo_factur, utilidad, id_seller, id_teller,
           fecha.tm_year, (fecha.tm_mon)+1, fecha.tm_mday,
           fecha.tm_hour, fecha.tm_min, fecha.tm_sec, iva,
           tax[0], tax[1], tax[2], tax[3], tax[4], tax[5]);
@@ -439,17 +431,27 @@ int sale_register(PGconn *base, PGconn *base_sup,
       return(ERROR_SQL);
     }
   }
-  if (checa_descuento(base, num_venta, almacen)) {
-    sprintf(query, "UPDATE ventas SET corte=B'00010000' WHERE numero=%d",
-            num_venta);
+  descto_aplicado = checa_descuento(base, num_venta, almacen);
+  if (descto_aplicado)
+    corte = "00010000";
+  else
+    corte = "00000000";
+
+  sprintf(query, "INSERT INTO corte (numero,bandera) VALUES (%d, B'%s')", num_venta, corte);
+  res = PQexec(base_sup, query);
+  /* Comparamos compatibilidad con versiones anteriores */
+  if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+    fprintf(stderr, "Error al registrar ventas. Actualize su versión.\n");
+    /* Tratamos de hacerlo al estilo antiguo */
+    sprintf(query, "UPDATE ventas SET corte=B'%s' WHERE numero=%d", corte, num_venta);
     res = PQexec(base_sup, query);
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-      fprintf(stderr, "Error al registrar ventas.\n%s\n", query);
+      fprintf(stderr, "Error al registrar ventas.\n");
       free(query);
       PQclear(res);
       return(ERROR_SQL);
     }
-  }  
+  }
   free(query);
 
   return(num_venta);
@@ -581,6 +583,7 @@ PGresult *search_product(PGconn *base,
 			      char *tabla,
 			      char *campo,
 			      char *llave,
+                              int exacto,
 			      struct articulos *art)
 {
   char      *query;
@@ -595,8 +598,12 @@ PGresult *search_product(PGconn *base,
 
   query = calloc(1,mxbuff*2);
   sprintf(query, "DECLARE cursor_arts CURSOR FOR SELECT ar.codigo, ar.descripcion, al.pu, al.pu2, al.pu3, al.pu4, al.pu5, ar.descuento, al.cant, al.c_min, al.c_max, ar.id_prov1, ar.id_depto, ar.p_costo, ar.prov_clave, ar.iva_porc, ar.divisa, ar.codigo2 ");
-  sprintf(query, "%s FROM %s al, articulos ar WHERE al.%s~*'%s' AND ar.%s~*'%s'",
-          query, tabla, campo, llave, campo, llave);
+  sprintf(query, "%s FROM %s al, articulos ar ",
+          query, tabla);
+  if (exacto)
+    sprintf(query, "%s WHERE al.%s='%s' AND ar.%s='%s'", query, campo, llave, campo, llave);
+  else
+    sprintf(query, "%s WHERE al.%s~*'%s' AND ar.%s~*'%s'", query, campo, llave, campo, llave);
   res = PQexec(base, query);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     fprintf(stderr,"Fallo comando DECLARE CURSOR al buscar un artículo\n");
@@ -634,10 +641,10 @@ PGresult *search_product(PGconn *base,
     art->id_prov = atoi(PQgetvalue(res,0,11));
     art->id_depto = atoi(PQgetvalue(res,0,12));
     art->p_costo = atof(PQgetvalue(res,0,13));
-	strncpy(art->prov_clave, PQgetvalue(res, 0, 14), maxcod);
+    strncpy(art->prov_clave, PQgetvalue(res, 0, 14), maxcod);
     art->iva_porc = atof(PQgetvalue(res, 0, 15));
-	strncpy(art->divisa, PQgetvalue(res, 0, 16), 3);
-	strncpy(art->codigo2, PQgetvalue(res, 0, 17), maxcod);
+    strncpy(art->divisa, PQgetvalue(res, 0, 16), 3);
+    strncpy(art->codigo2, PQgetvalue(res, 0, 17), maxcod);
   }
   PQclear(res);
 
@@ -834,7 +841,7 @@ int checa_descuento(PGconn *base, int num_venta, int almacen) {
 
   res = PQexec(base, query);
   if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
-    fprintf(stderr, "Error al consultar permisos del usuario\n");
+    fprintf(stderr, "Error al consultar ventas\n");
     fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
 	PQclear(res);
     return(ERROR_SQL);
