@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Corte 0.06 (C) 1999-2002 E. Israel Osorio H.
+   Programa Corte 0.10 (C) 1999-2002 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -28,7 +28,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <time.h>
 #include <unistd.h>
 
-#define VERSION "0.07"
+#define VERSION "0.10"
 #define blanco_sobre_negro 1
 #define amarillo_sobre_negro 2
 #define verde_sobre_negro 3
@@ -54,7 +54,7 @@ double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur,
                             double *iva, double *ieps, bool parcial,
                             unsigned cashier_id, long f_sale, long l_sale);
 void genera_corte(int parcial, PGconn *con, FILE *disp, unsigned cashier_number,
-                  unsigned first_sale, unsigned last_sale);
+                  long first_sale, long last_sale);
 void   clean_records(PGconn *base);
 char *procesa(char opcion, PGconn *con, FILE *disp);
 int read_config();
@@ -108,28 +108,34 @@ double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad, d
   }
   PQclear(res);
 
-  comando = calloc(1,mxbuff);
+  comando = calloc(1,mxbuff*2);
 
 
   if (f_sale) {
     sprintf(comando,
-            "DECLARE cursor_v CURSOR FOR SELECT sum(monto), sum(utilidad), sum(iva), sum(tax_0), sum(tax_1), sum(tax_2), sum(tax_3), sum(tax_4), sum(tax_5) FROM ventas WHERE tipo_pago=%d AND numero>=%u" ,
+            "DECLARE cursor_v CURSOR FOR SELECT sum(v.monto), sum(v.utilidad), sum(v.iva), sum(v.tax_0), sum(v.tax_1), sum(v.tax_2), sum(v.tax_3), sum(v.tax_4), sum(v.tax_5) FROM ventas v, corte c WHERE v.tipo_pago=%d AND v.numero>=%u" ,
             tipo_pago, f_sale);
     if (l_sale)
-      sprintf(comando+strlen(comando), " AND numero<=%u", l_sale);
+      sprintf(comando+strlen(comando), " AND v.numero<=%u", l_sale);
   }
   else {
+    sprintf(comando, "DECLARE cursor_v CURSOR FOR SELECT sum(v.monto), sum(v.utilidad), sum(v.iva), ");
+    strcat(comando, "sum(v.tax_0), sum(v.tax_1), sum(v.tax_2), sum(v.tax_3), ");
+    strcat(comando, "sum(v.tax_4), sum(v.tax_5) FROM ventas v, corte c ");
+
     if (cashier_id)
-      sprintf(comando,
-              "DECLARE cursor_v CURSOR FOR SELECT sum(monto), sum(utilidad), sum(iva), sum(tax_0), sum(tax_1), sum(tax_2), sum(tax_3), sum(tax_4), sum(tax_5) FROM ventas WHERE (id_cajero=%d AND tipo_pago=%d",
+      sprintf(comando+strlen(comando), "WHERE (v.id_cajero=%d AND v.tipo_pago=%d ",
               cashier_id, tipo_pago);
     else
-      sprintf(comando,
-              "DECLARE cursor_v CURSOR FOR SELECT sum(monto), sum(utilidad), sum(iva), sum(tax_0), sum(tax_1), sum(tax_2), sum(tax_3), sum(tax_4), sum(tax_5) FROM ventas WHERE (tipo_pago=%d",
-              tipo_pago);
-    if (parcial)
-      strcat(comando, " AND (corte & B'10000000')!=B'10000000'");
-    strcat(comando, ")");
+      sprintf(comando+strlen(comando),
+              "WHERE (v.tipo_pago=%d ", tipo_pago);
+
+    strcat(comando, "AND c.numero=v.numero AND ");
+ 
+   if (parcial)
+      strcat(comando, "(c.bandera & B'10000000')!=B'10000000') ");
+    else
+      strcat(comando, "(c.bandera & B'01000000')!=B'01000000')");
   }
     
   res = PQexec(base, comando);
@@ -189,28 +195,28 @@ double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur,
   comando = calloc(1,mxbuff*2);
   if (f_sale) {
     sprintf(comando,
-            "DECLARE cursor_v CURSOR FOR SELECT numero,monto,tipo_pago,iva,tax_0,id_cajero,CASE WHEN (corte&B'00010000'=B'00010000') THEN '*' ELSE ' ' END AS x FROM ventas WHERE tipo_factur=%d AND numero>=%d" ,
+            "DECLARE cursor_v CURSOR FOR SELECT v.numero,v.monto,v.tipo_pago,v.iva,v.tax_0,v.id_cajero,CASE WHEN (c.bandera&B'00010000'=B'00010000') THEN '*' ELSE ' ' END AS x FROM ventas v, corte c WHERE c.numero=v.numero AND v.tipo_factur=%d AND v.numero>=%ld" ,
             tipo_factur, f_sale);
     if (l_sale)
-      sprintf(comando+strlen(comando), " AND numero<=%d", l_sale);
+      sprintf(comando+strlen(comando), " AND v.numero<=%ld", l_sale);
   }
   else {
     if (cashier_id)
       sprintf(comando,
-              "DECLARE cursor_v CURSOR FOR SELECT numero,monto,tipo_pago,iva,tax_0,id_cajero,CASE WHEN (corte&B'00010000'=B'00010000') THEN '*' ELSE ' ' END AS x FROM ventas WHERE (id_cajero=%d AND tipo_factur=%d",
+              "DECLARE cursor_v CURSOR FOR SELECT v.numero,v.monto,v.tipo_pago,v.iva,v.tax_0,v.id_cajero,CASE WHEN (c.bandera&B'00010000'=B'00010000') THEN '*' ELSE ' ' END AS x FROM ventas v, corte c WHERE (v.numero=c.numero AND v.id_cajero=%d AND v.tipo_factur=%d",
               cashier_id, tipo_factur);
     else
       sprintf(comando,
-              "DECLARE cursor_v CURSOR FOR SELECT numero,monto,tipo_pago,iva,tax_0,id_cajero,CASE WHEN (corte&B'00010000'=B'00010000') THEN '*' ELSE ' ' END AS x FROM ventas WHERE (tipo_factur=%d",
+              "DECLARE cursor_v CURSOR FOR SELECT v.numero,v.monto,v.tipo_pago,v.iva,v.tax_0,v.id_cajero,CASE WHEN (c.bandera&B'00010000'=B'00010000') THEN '*' ELSE ' ' END AS x FROM ventas v, corte c WHERE (v.numero=c.numero AND v.tipo_factur=%d",
               tipo_factur);
     
     if (parcial)
-      strcat(comando, " AND (corte & B'10000000')!=B'10000000'");
+      strcat(comando, " AND (c.bandera & B'10000000')!=B'10000000'");
     else
-      strcat(comando, " AND (corte & B'01000000')!=B'01000000'");
+      strcat(comando, " AND (c.bandera & B'01000000')!=B'01000000'");
     strcat(comando, ")");
   }
-  strcat(comando, " ORDER BY numero");
+  strcat(comando, " ORDER BY v.numero");
   res = PQexec(base, comando);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     fprintf(stderr,"Falló comando DECLARE CURSOR al buscar los registro de ventas\n");
@@ -245,8 +251,8 @@ double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur,
       fprintf(disp, "Ventas con TICKET:\n");
   }
 
-  fprintf(disp, " Num. de  Monto    Forma de  Num. de\n");
-  fprintf(disp, "  venta              pago    cajero\n");
+  fprintf(disp, " Num. de    Monto    Forma de  Num. de\n");
+  fprintf(disp, "  venta                pago    cajero\n");
   for (i=0, total=0; i<PQntuples(res); i++) {
     total   += atof(PQgetvalue(res, i,  1));
     (*iva)  += atof(PQgetvalue(res, i, 3));
@@ -318,7 +324,7 @@ void clean_records(PGconn *base)
   }
   PQclear(res);
 
-  PQexec(base, "UPDATE ventas set corte=(corte | B'01000000')");
+  PQexec(base, "UPDATE corte SET bandera=(bandera | B'01000000')");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     strcpy(mensaje, PQerrorMessage(base));
     if (strlen(mensaje)) {
@@ -364,9 +370,9 @@ void marca_revisados(PGconn *base, int num_cajero)
 
   mensaje = calloc(1,255);
 
-  sprintf(mensaje, "UPDATE ventas SET corte=(corte | B'10000000')");
+  sprintf(mensaje, "UPDATE corte SET bandera=(bandera | B'10000000')");
   if (num_cajero>=0)
-    sprintf(mensaje, "%s WHERE id_cajero=%d ", mensaje, num_cajero);
+    sprintf(mensaje, "%s FROM ventas v WHERE v.id_cajero=%d AND v.numero=corte.numero ", mensaje, num_cajero);
 
   res = PQexec(base, mensaje);
   mensaje[0]=0;
@@ -401,7 +407,7 @@ void marca_revisados(PGconn *base, int num_cajero)
 }
 
 void genera_corte(int parcial, PGconn *con, FILE *disp, unsigned cashier_id,
-                  unsigned f_sale, unsigned l_sale)
+                  long f_sale, long l_sale)
 {
   int i;
   time_t    tiempo;
@@ -719,17 +725,6 @@ int read_global_config()
                   "corte. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
-      else if (!strcmp(b,"programa.factur")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(nm_factur, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(nm_factur, buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr,
-                  "corte. Error de memoria en argumento de configuracion %s\n", b);
-      }
       else if (!strcmp(b,"db.host")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(db.hostname, strlen(buf)+1);
@@ -771,7 +766,7 @@ int read_global_config()
           aux = NULL;
         }
         else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
       else if (!strcmp(b,"db.sup_passwd")) {
