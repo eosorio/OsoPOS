@@ -21,19 +21,28 @@ GRANT ALL ON articulos TO "scaja";
 CREATE TABLE ventas (
   numero            SERIAL PRIMARY KEY,
   monto             real,
-  tipo_pago         int2,
-  tipo_factur       int2,
+  tipo_pago         int2 NOT NULL DEFAULT 20,
+  tipo_factur       int2 NOT NULL DEFAULT 5,
   corte_parcial     bool DEFAULT 'f',
   utilidad          real,
   id_vendedor       int4 NOT NULL DEFAULT 0,
   id_cajero         int4 NOT NULL DEFAULT 0,
-  fecha             date NOT NULL DEFAULT now,
-  hora              time NOT NULL DEFAULT now
+  fecha             date NOT NULL,
+  hora              time NOT NULL
 );
 
 REVOKE ALL ON ventas FROM PUBLIC;
 GRANT INSERT,SELECT ON ventas TO "caja1";
 GRANT INSERT,SELECT,UPDATE,DELETE ON ventas TO "scaja";
+
+CREATE TABLE ventas_detalle (
+  "id_venta"        int4 NOT NULL,
+  "codigo"          varchar(20) NOT NULL,
+  "descrip"         varchar(40) NOT NULL,
+  "cantidad"        int2,
+  "pu"              float NOT NULL DEFAULT 0,
+  "iva_porc"        float not null default 15
+);
 
 CREATE TABLE facturas_ingresos (
   id                SERIAL PRIMARY KEY,

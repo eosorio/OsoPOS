@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.9-1 1999, 2000 E. Israel Osorio H., licencia GPL.
+   Programa Remision 1.10-1 1999, 2000 E. Israel Osorio H., licencia GPL.
    desarrollo@punto-deventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -27,7 +27,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/pos-curses.h"
 #define _pos_curses
 
-#define vers "1.9"
+#define vers "1.10"
 #define release "Electro Hogar"
 
 #ifndef maxdes
@@ -76,7 +76,7 @@ int forma_de_pago();
 
 void Termina(PGconn *con, int error);
 int LeeConfig(char*, char*);
-double capt_remision(char *nm_reg_diario, char *nm_reg_temp, int *numart, double *util);
+double capt_remision(char *nm_reg_diario, /*char *nm_reg_temp,*/ int *numart, double *util);
 void imp_ticket_arts();
 void ImpTicketPie(struct tm fecha, unsigned numvents);
 /* Función que reemplaza a ActualizaEx */
@@ -113,8 +113,9 @@ char *nm_disp_ticket,		/* Nombre de impresora de ticket */
 
 
 
-int LeeConfig(char *nmdatos,
-              char *nmdiario)
+/*int LeeConfig(char *nmdatos,
+  char *nmdiario)*/
+int read_config(char *nmdiario)
 {
   static char nmconfig[] = "remision.config";
   FILE *config;
@@ -130,7 +131,7 @@ int LeeConfig(char *nmdatos,
   tipo_disp_ticket = calloc(1, strlen("STAR")+1);
   strcpy(tipo_disp_ticket, "STAR");
 
-  strcpy(nmdatos,  "/home/OsoPOS/caja/venta.ultima");
+  //  strcpy(nmdatos,  "/home/OsoPOS/caja/venta.ultima");
 
   strcpy(nmdiario, "/home/OsoPOS/scaja/log/ventas.hoy");
 
@@ -201,11 +202,11 @@ int LeeConfig(char *nmdatos,
         strcpy(nmtickets,buf);
       }
        /* Archivo de última venta */
-      else if (!strcmp(b,"datos")) {
+      /*      else if (!strcmp(b,"datos")) {
         strcpy(buf, strtok(NULL,"="));
         realloc(nmdatos, strlen(buf)+1);
         strcpy(nmdatos,buf);
-      }
+        }*/
       else if (!strcmp(b,"num_venta")) {
         strcpy(buf, strtok(NULL,"="));
         realloc(nm_num_venta, strlen(buf)+1);
@@ -444,12 +445,13 @@ void muestra_subtotal(double subtotal) {
 /***************************************************************************/
 
 double capt_remision(char   *nm_reg_diario,
-                     char   *nm_reg_temp,
+                     //char   *nm_reg_temp,
                      int    *numart,
                      double *util) {
   double  subtotal = 0.0;
   double  iva_articulo;
-  FILE    *registro,*regtemp;
+  FILE    *registro;
+  //FILE    *regtemp;
   int     i=0,
           j,k;
   char    *buff;
@@ -461,9 +463,9 @@ double capt_remision(char   *nm_reg_diario,
   if (registro == NULL)
     ErrorArchivo(nm_reg_diario);
 
-  regtemp = fopen(nm_reg_temp,"w");
+  /*  regtemp = fopen(nm_reg_temp,"w");
   if (regtemp == NULL)
-    ErrorArchivo(nm_reg_temp);
+  ErrorArchivo(nm_reg_temp);*/
 
   v_arts = newwin(getmaxy(stdscr)-8, getmaxx(stdscr)-1, 4, 0);
   scrollok(v_arts, TRUE);
@@ -603,13 +605,13 @@ double capt_remision(char   *nm_reg_diario,
     fprintf(registro,"%.2f\n",articulo[j].pu*articulo[j].cant);
     fprintf(registro,"%.2f\n",iva_articulo*articulo[j].cant);
     /* * * * * * * * * * * * * CAMBIAR POR BASE DE DATOS * * * * * * * */
-    fprintf(regtemp, "%s\n", articulo[i].codigo);
+    /*    fprintf(regtemp, "%s\n", articulo[i].codigo);
     fprintf(regtemp, "%s\n", articulo[j].desc);
     fprintf(regtemp, "%d\n", articulo[j].cant);
     fprintf(regtemp, "%.2f\n" ,articulo[j].pu);
-	fprintf(regtemp, "%.2f\n", articulo[j].iva_porc);
+    fprintf(regtemp, "%.2f\n", articulo[j].iva_porc);*/
   }
-  fclose(regtemp);
+//  fclose(regtemp);
 
   if (i) {
     attrset(COLOR_PAIR(amarillo_sobre_negro));
@@ -994,10 +996,10 @@ int main() {
   double utilidad;
   struct tm *fecha;	/* Hora y fecha local	*/
 
-  char *nmdatos,   	/* Nombre del archivo de datos de la venta */
-       *nmdiario;   /* Nombre del registro del diario */
+  //  char *nmdatos,   	/* Nombre del archivo de datos de la venta */
+  char   *nmdiario;   /* Nombre del registro del diario */
 
-  nmdatos  = calloc(1, 31);
+  //  nmdatos  = calloc(1, 31);
   nmdiario = calloc(1, 34);
 
   tiempo = time(NULL);
@@ -1005,7 +1007,8 @@ int main() {
   fecha->tm_year += 1900;
 
   initscr();
-  LeeConfig(nmdatos, nmdiario);
+  //  LeeConfig(nmdatos, nmdiario);
+  read_config(nmdiario);
   if (!has_colors()) {
     aborta("Este equipo no puede producir colores, pulse una tecla para abortar...",
             10);
@@ -1051,7 +1054,8 @@ int main() {
     mvprintw(1,(getmaxx(stdscr)-strlen(encabezado2))/2,
 	     "%s",encabezado2);
     attrset(COLOR_PAIR(blanco_sobre_negro));
-    a_pagar = capt_remision(nmdiario, nmdatos, &numarts, &utilidad);
+    //    a_pagar = capt_remision(nmdiario, nmdatos, &numarts, &utilidad);
+    a_pagar = capt_remision(nmdiario, &numarts, &utilidad);
 
     /* esto pretende "despertar" a la impresora para agilizar el proceso, pero en
        realidad no se ha probado aún   */
@@ -1062,13 +1066,13 @@ int main() {
       mvprintw(getmaxy(stdscr)-2,0,"¿Imprimir Remision, Factura o Ticket (R,F,T)? T\b");
       attroff(A_BOLD);
       buffer = toupper(getch());
-      RegistraRem(num_venta+1); /* Genera un archivo de intercambio de datos. eliminarlo */
+      //      RegistraRem(num_venta+1); /* Genera un archivo de intercambio de datos. eliminarlo */
       formadepago = forma_de_pago();
 
       switch (buffer) {
         case 'R':
           attron(A_BOLD);
-          mvprintw(getmaxy(stdscr)-2,0,"¿Días de garantía? : ");
+          mvprintw(getmaxy(stdscr)-1,0,"¿Días de garantía? : ");
           attroff(A_BOLD);
           clrtoeol();
      	  scanw("%d",&dgar);
@@ -1078,7 +1082,6 @@ int main() {
           impr_cmd = popen(buf, "w");
           if (pclose(impr_cmd) != 0)
             fprintf(stderr, "Error al ejecutar %s\n", buf);
-          //formadepago = forma_de_pago();
           if (formadepago >= 20) {
             AbreCajon(tipo_disp_ticket);
             sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
@@ -1153,7 +1156,7 @@ int main() {
   refresh();
 
   free(nm_disp_ticket);
-  free(nmdatos);
+  //  free(nmdatos);
   free(nmdiario);
   free(nm_avisos);
   free(nmfpie);
