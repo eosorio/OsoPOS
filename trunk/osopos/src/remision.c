@@ -45,11 +45,19 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/pos-curses.h"
 #define _pos_curses
 
+#ifndef CTRL
+#define CTRL(x)         ((x) & 0x1f)
+#endif
+
+#define QUIT            CTRL('Q')
+#define ESCAPE          CTRL('[')
+#define ENTER		10
+
 #include "include/print-func.h"
 #define _printfunc
 
-#define vers "1.39"
-#define release "El Punto"
+#define vers "1.41"
+#define release "Medelso"
 
 #ifndef maxdes
 #define maxdes 39
@@ -64,7 +72,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #endif
 
 #ifndef maxitem_busqueda
-#define maxitem_busqueda 20
+#define maxitem_busqueda 100
 #endif
 
 #define blanco_sobre_negro       1
@@ -107,6 +115,7 @@ int lee_articulos(PGconn *, PGconn *);
 void show_item_list(WINDOW *vent, int i, short cr);
 void show_subtotal(double, double, double);
 void mensaje(char *texto);
+void mensaje_v(char *texto, int t);  /* Abre una ventana con mensaje */
 void aviso_existencia(struct articulos art);
 void switch_pu(WINDOW *, struct articulos *, int, double *, double tax[maxtax], int);
 int journal_last_sale(int i, char *last_sale_fname);
@@ -122,8 +131,15 @@ void signal_handler_IO (int status);
 void close_serial(int fd, struct termios *tio);
 int busqueda_articulo(char *);
 void muestra_renglon(WINDOW *,unsigned renglon, unsigned num_items);
+int datos_renta(int *num_cliente, time_t *f_pedido, time_t *f_entrega);
 
 double tipo_cambio(char *);
+int find_mem_code(char *cod, struct articulos *art, int search_2nd);
+int find_db_code(PGconn *con, char *cod, struct articulos *art, int wday);
+int form_virtualize(WINDOW *w, int readchar, int c);
+int busca_art_marcado(char *cod, struct articulos art[maxart], int campo, int ren);
+int imprime_fechas_renta(PGconn *con, PGconn *con_s, time_t *f_pedido, time_t *f_entrega);
+int print_customer_data(PGconn *con, PGconn *con_s, long int id_cliente);
 
 volatile int STOP=FALSE; 
 
@@ -147,13 +163,14 @@ char *home_directory;
 char *log_name;
 char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *lp_disp_ticket,      /* Definición de miniprinter en /etc/printcap */
+  *cmd_lp,              /* Comando usado para imprimir */
   *disp_lector_serie,  /* Ruta al scanner de c. de barras serial */
   *nmfpie,              /* Pie de página de ticket */
   *nmfenc,              /* Archivo de encabezado de ticket */
   *nmtickets,   /* Registro de tickets impresos */
   *tipo_disp_ticket, /* Tipo de miniprinter */
   *nmimprrem,           /* Ubicación de imprrem */
-  *nm_factur,    /* Nombre del progreama de facturación */
+  *nm_factur,    /* Nombre del programa de facturación */
   *nm_avisos,    /* Nombre del archivo de avisos */
   *nm_journal,   /* Nombre actual del archivo del diario de marcaje */
   *nm_orig_journal, /* Nombre del archivo del diario original */
@@ -161,13 +178,13 @@ char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *dir_avisos,   /* email de notificación */
   *asunto_avisos, /* Asunto del correo de avisos */
   *cc_avisos;     /* con copia para */
-char   s_divisa[3];       /* Designación de la divisa que se usa para cobrar en la base de datos */
+char   s_divisa[MX_LON_DIVISA];       /* Designación de la divisa que se usa para cobrar en la base de datos */
 short unsigned search_2nd;  /* ¿Buscar código alternativo al mismo tiempo que el primario ? */ 
-int id_teller = 0;
+int id_teller = 0;              /* Número de cajero */
+int id_vendedor = 0;            /* Número de agente de ventas */
 short unsigned manual_discount; /* Aplicar el descuento manual de precio en la misma línea */
 int iva_incluido;
 int listar_neto;
-
 int lector_serial; /* Cierto si se usa un scanner serial */
 int serial_crlf=1; /* 1 si el scanner envia CRLF, 0 si solamente LF */
 tcflag_t serial_bps=B38400; /* bps por omisión */
@@ -176,6 +193,10 @@ char s_buf[255];    /* Buffer de puerto serie */
 struct termios oldtio,newtio;  /* Parametros anteriores y nuevos de terminal serie */
 struct sigaction saio;              /* definition of signal action */
 int fd;            /* Descriptor de archivo de puerto serie */
+
+int serial_num_enable = 0;
+int catalog_search = 0;
+int lease_mode = 0;
 
 int init_config()
 {
@@ -221,6 +242,9 @@ int init_config()
 
   tipo_disp_ticket = calloc(1, strlen("STAR")+20);
   strcpy(tipo_disp_ticket, "STAR");
+
+  cmd_lp = calloc(1, strlen("lpr -P ")+1);
+  strcpy(cmd_lp, "lpr -P ");
 
   nmfpie = calloc(1, strlen("/pie_pagina.txt")+strlen(home_directory)+20);
   sprintf(nmfpie,   "%s/pie_pagina.txt", home_directory);
@@ -585,11 +609,23 @@ int read_global_config()
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
-      else if (!strcmp(b,"miniimpresora.tipo")) {
+      else if (!strcmp(b,"miniimpresora.tipo") || !strcmp(b,"impresion.tipo_miniprinter")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(tipo_disp_ticket, strlen(buf)+1);
         if (aux != NULL) {
           strcpy(tipo_disp_ticket,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr,
+                  "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"impresion.comando")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(cmd_lp, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(cmd_lp, buf);
           aux = NULL;
         }
         else
@@ -805,6 +841,19 @@ int read_global_config()
        strncpy(buf, strtok(NULL,"="), mxbuff);
        manual_discount = atoi(buf);
      }
+     else if (!strcmp(b, "capturar_serie")) {
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       serial_num_enable = atoi(buf);
+     }
+     else if (!strcmp(b, "consulta_express")) {
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       catalog_search = atoi(buf);
+     }
+      else if (!strcmp(b,"modo_renta")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        lease_mode = atoi(buf);
+      }
+
      if (!feof(config))
        fgets(buff,mxbuff,config);
     }
@@ -1146,7 +1195,7 @@ int lee_articulos(PGconn *base_inventario, PGconn *con_s)
     barra[i].tax_3 = atof(PQgetvalue(res,i,13));
     barra[i].tax_4 = atof(PQgetvalue(res,i,14));
     barra[i].tax_5 = atof(PQgetvalue(res,i,15));
-    strncpy(barra[i].divisa, PQgetvalue(res,i,18), 3);
+    strncpy(barra[i].divisa, PQgetvalue(res,i,18), MX_LON_DIVISA);
 
   }
 
@@ -1217,10 +1266,10 @@ int lee_divisas(PGconn *base_invent)
 
 /***************************************************************************/
 
-int find_code(char *cod, struct articulos *art, int search_2nd) {
+int find_mem_code(char *cod, struct articulos *art, int search_2nd) {
   //int busca_precio(char *cod, struct articulos *art) {
-/* Busca el código de barras en la memoria y devuelve el precio */
-/* del producto. */
+/* Busca el código de barras en la memoria y devuelve la posicion */
+/* del producto en la matriz de productos en memoria. */
 int i;
 int exit=0; /* falso si hay que salirse */
 double tc=1;
@@ -1257,6 +1306,82 @@ double tc=1;
   }
   return(ERROR_DIVERSO);
 }    
+
+/***************************************************************************/
+
+int find_db_code(PGconn *con, char *cod, struct articulos *art, int wday) {
+  char query[1024];
+  PGresult *res;
+
+  /* colocar aquí código para buscar si el artículo está rentado */
+  /* igm if (lease_mode && esta_rentado(con, cod)) {
+    printw(msg, "El producto ya se encuentra rentado");
+    return(ERR_ITEM);
+  }
+  */
+  sprintf(query, "SELECT al.codigo, ar.descripcion, al.codigo2, ");
+  if (!lease_mode)
+    sprintf(query, "%s al.pu, al.pu2, al.pu3, al.pu4, al.pu5, al.cant,  al.c_min, ", query);
+  else {
+    sprintf(query, "%s r.p%d_1 as pu, r.p%d_2 as pu2, r.p%d_3 as pu3, r.p%d_4 as pu4, r.p%d_5 as pu5, al.cant,  al.c_min, ",
+            query, wday, wday, wday, wday, wday);
+  }
+  sprintf(query, "%sal.tax_0, al.tax_1, al.tax_2, al.tax_3, al.tax_4, al.tax_5, ", query);
+  sprintf(query, "%sar.iva_porc, ar.p_costo, al.divisa, s.id ", query);
+  sprintf(query, "%sFROM almacen_%d al, articulos ar, articulos_series s ", query, almacen);
+  if (lease_mode)
+    sprintf(query, "%s, articulos_rentas r ", query );
+  sprintf(query, "%sWHERE al.codigo=ar.codigo ", query);
+
+  if (serial_num_enable) {
+    sprintf(query, "%s AND ar.codigo=s.codigo AND s.id='%s' " , query, cod);
+    if (lease_mode)
+      sprintf(query, "%sAND r.codigo=ar.codigo ", query);
+  }
+  else {
+    sprintf(query, "%s AND al.codigo='%s' ", query, cod);
+  }
+
+  res = PQexec(con, query);
+  if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
+    fprintf(stderr, "ERROR: no puedo obtener datos del producto.\n");
+    PQclear(res);
+    return(ERROR_SQL);
+  }
+
+  if (!PQntuples(res)) {
+    PQclear(res);
+    // igm printw(msg, "El producto no está registrado.");
+    return(ERR_ITEM);
+  }
+
+  strncpy(art->codigo , PQgetvalue(res,0,0), maxcod);
+  strncpy(art->codigo2 , PQgetvalue(res,0,2), maxcod);
+  strncpy(art->desc, PQgetvalue(res,0,1), maxdes);
+
+  art->pu  = atof(PQgetvalue(res,0, 3));
+  art->pu2 = atof(PQgetvalue(res,0, 4));
+  art->pu3 = atof(PQgetvalue(res,0, 5));
+  art->pu4 = atof(PQgetvalue(res,0, 6));
+  art->pu5 = atof(PQgetvalue(res,0, 7));
+  //    barra[i].disc = atof(PQgetvalue(res,0,3));
+  art->disc = 0;
+  art->exist = atof(PQgetvalue(res,0,8));
+  art->exist_min = atof(PQgetvalue(res,0,9));
+  art->p_costo = atof(PQgetvalue(res,0,17));
+  art->iva_porc = atof(PQgetvalue(res,0,16));
+  art->tax_0 = atof(PQgetvalue(res,0,10));
+  art->tax_1 = atof(PQgetvalue(res,0,11));
+  art->tax_2 = atof(PQgetvalue(res,0,12));
+  art->tax_3 = atof(PQgetvalue(res,0,13));
+  art->tax_4 = atof(PQgetvalue(res,0,14));
+  art->tax_5 = atof(PQgetvalue(res,0,15));
+  strncpy(art->divisa, PQgetvalue(res,0,18), MX_LON_DIVISA);
+  strncpy(art->serie, PQgetvalue(res, 0, 19), MX_LON_NUMSERIE);
+
+  PQclear(res);
+  return(TRUE);
+}
 
 /***************************************************************************/
 
@@ -1563,16 +1688,16 @@ double item_capture(PGconn *con, int *numart, double *util,
           }
           break;
         case 11:
-          busqueda_articulo(buff);
+          if (busqueda_articulo(buff) > 0)
+            chbuff = 0;
           update_panels();
           doupdate();
           wrefresh(stdscr);
-          chbuff = 0;
           break;
         case 12:
           if (puede_hacer(con, log_name, "caja_cajon_manual"))
             AbreCajon(tipo_disp_ticket);
-            sprintf(buff2, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+            sprintf(buff2, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
             p_impr = popen(buff2, "w");
             pclose(p_impr);
           break;
@@ -1702,7 +1827,24 @@ double item_capture(PGconn *con, int *numart, double *util,
         continue;
       }
 
-      chbuff = find_code(buff, &articulo[i], search_2nd); /* Reusamos chbuff */
+       /* Reusamos chbuff */
+      if (catalog_search || serial_num_enable) {
+        /***********OJO********* 
+         Colocar aqui una función para revisar que
+         el artículo no se encuentre con status de rentado */
+        /*if (lease_mode && serial_num_enable && esta_rentado(con, buff)) {
+          // El artículo está rentado, mostrar aviso y regresar a captura de codigo
+          }*/
+        if (serial_num_enable && busca_art_marcado(buff, articulo, 1, 1)>=0) {
+          mensaje_v("El articulo ya fué marcado anteriormente", ESC);
+          buff[0] = 0;
+          continue;
+        }
+        chbuff = find_db_code(con, buff, &articulo[i], fecha.tm_wday);
+      }
+      else
+        chbuff = find_mem_code(buff, &articulo[i], search_2nd);
+
       if (chbuff < 0) {
         strncpy(articulo[i].desc, buff, maxdes);
         articulo[i].iva_porc = TAX_PERC_DEF;
@@ -1725,6 +1867,9 @@ double item_capture(PGconn *con, int *numart, double *util,
         wmove(stdscr, getmaxy(stdscr)-3,0);
         if (strlen(buff2) > 6)
           printw("Cantidad muy grande... ");   /* Quantity very big */
+        /******************* OJO ***************************/
+        /* Revisar esta parte, porque cuando se hace un descuento de mas de 6 digitos,
+           tambien entra en esta condición */
         printw("Introduce precio unitario: "); /* Introduce unitary cost */
         clrtoeol();
         if (exist_journal) {
@@ -2018,7 +2163,7 @@ void Cambio() {
 
 void print_ticket_arts(double importe, double cambio) {
   FILE *impr;
-  static int i;
+  int i;
 
   impr = fopen(nm_disp_ticket,"w");
   if (impr == NULL)
@@ -2077,10 +2222,10 @@ void print_ticket_footer(struct tm fecha, unsigned numventa) {
   }
   fprintf(impr,"\n\n\n");
   //  sprintf(s, "      Fanny Nuricumbo Melchor");
-  sprintf(s, "Eduardo Israel Osorio Hernandez");
+  sprintf(s, "Mercantil del Soconusco SA de CV");
   imprime_razon_social(impr, tipo_disp_ticket,
                        //                       "  La  Botana", s );
-                                             "elpuntodeventa", s );
+                                             "Medelso", s );
   free(s);
   fclose(impr);
 }
@@ -2114,12 +2259,39 @@ void print_ticket_header(char *nm_ticket_header) {
     while (!feof(fenc));
     fclose(fenc);
   }
-/*  fprintf(impr,"Tapachula, Chiapas a %u/%u/%u\n",
-               fecha.tm_mday, (fecha.tm_mon)+1, fecha.tm_year); */
   fprintf(impr,"---------------------------------------\n");
   fclose(impr);
   free(s);
 }
+
+int print_customer_data(PGconn *con, PGconn *con_s, long int id_cliente) {
+  FILE *impr;
+  char query[mxbuff];
+  PGresult *db_res;
+  struct datoscliente clt;
+
+  sprintf(query, "SELECT ap_paterno, ap_materno, nombres FROM cliente WHERE id=%ld ",
+          id_cliente);
+
+  db_res = PQexec(con, query);
+  if (PQresultStatus(db_res) !=  PGRES_TUPLES_OK) {
+    fprintf(stderr, "ERROR: no puedo obtener datos del cliente.\n");
+    PQclear(db_res);
+    return(ERROR_SQL);
+  }
+  sprintf(clt.nombre, "%s %s", PQgetvalue(db_res, 0, 2), PQgetvalue(db_res, 0, 0));
+  
+  if (!(impr = popen(cmd_lp, "w"))) {
+    fprintf(stderr, "Error: No puedo imprimir. %s\n", cmd_lp);
+    return(PROCESS_ERROR);
+  }
+  fprintf(impr, "Cliente: %ld\n", id_cliente);
+  pclose(impr);
+  PQclear(db_res);
+  return(OK);
+}
+
+/********************************************************/   
 
 int AbreCajon(char *tipo_miniimp) {
   FILE *impr;
@@ -2218,6 +2390,34 @@ void mensaje(char *texto)
   mvprintw(getmaxy(stdscr)-1,0, texto);
   attrset(COLOR_PAIR(blanco_sobre_negro));
   clrtoeol();
+}
+
+void mensaje_v(char *texto, int tecla)
+{
+  WINDOW *v_mens;
+  PANEL  *pan = 0;
+
+  int vx = 60;
+  int vy = 5; /* Dimensiones horizontal y vertical de la ventana */
+  int t=0;
+
+  pan = mkpanel(COLOR_BLACK, vy, vx, (getmaxy(stdscr)-vy)/2, (getmaxx(stdscr)-vx)/2);
+  set_panel_userptr(pan, "pan");
+
+  v_mens = panel_window(pan);
+  box(v_mens, 0, 0);
+
+  show_panel(pan);
+
+  attrset(COLOR_PAIR(azul_sobre_blanco));
+  mvwprintw(v_mens, 2,1, texto);
+  attrset(COLOR_PAIR(blanco_sobre_negro));
+  clrtoeol();
+  while (tecla!=t)
+    t = wgetch(v_mens);
+
+  wrefresh(v_mens);
+  rmpanel(pan);
 }
 
 long obten_num_venta(PGconn *base)
@@ -2462,15 +2662,15 @@ int busqueda_articulo(char *codigo)
   int vx, vy; /* Dimensiones horizontal y vertical de la ventana */
   int max_v_desc;
   int i,j,k;
-  int num_items;
+  int num_items = 0;
   int ch, finished = 0;
   char descr[mxbuff];
   char *aux, b[255];
   char *cod[maxitem_busqueda];
 
-  vx = 60;
+  vx = 70;
   vy = 15;
-  max_v_desc = vx - maxcod - 3;
+  max_v_desc = vx - maxcod - 15;
   pan = mkpanel(COLOR_BLACK, vy, vx, (getmaxy(stdscr)-vy)/2, (getmaxx(stdscr)-vx)/2);
   set_panel_userptr(pan, "pan");
 
@@ -2499,13 +2699,18 @@ int busqueda_articulo(char *codigo)
       item[j] = calloc(1, getmaxx(v_busq));
       cod[j] = calloc(1, maxcod+1);
       strcpy(cod[j], barra[i].codigo);
+
       if (strlen(barra[i].desc) >= max_v_desc) {
         strncpy(b,  barra[i].desc, max_v_desc);
         b[max_v_desc] = 0;
       }
-      else
+      else {
         strncpy(b,  barra[i].desc, max_v_desc);
-      sprintf(item[j], "%-15s %s", cod[j], b);
+        while (strlen(b) < max_v_desc)
+          strcat(b, " ");
+      }
+
+      sprintf(item[j], "%-15s %s %9.2f", cod[j], b, barra[i].pu);
       mvwprintw(v_busq, v_busq->_cury, 1, "%s\n", item[j]);
       j++;
     }
@@ -2514,59 +2719,68 @@ int busqueda_articulo(char *codigo)
   /* aqui termina código de búsqueda */
 
   num_items = j;
-  i = 0;
-  noecho();
-  keypad(v_busq, TRUE);
-  muestra_renglon(v_busq, 0, num_items);
-  while (!finished)
-  {
-    switch(ch = wgetch(v_busq)) {
-    case KEY_UP:
-      if (i <= 0) {
-        beep();
-        continue;
-      }
-      wattrset(v_busq, COLOR_PAIR(normal));
-      mvwprintw(v_busq, v_busq->_cury, 0, "%s", item[i--]);
-      if (v_busq->_cury == 0) {
-        wscrl(v_busq, -1);
-          wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-          mvwprintw(v_busq, 0, 0, "%s", item[i]);
-      }
-      else {
-        wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-        mvwprintw(v_busq, v_busq->_cury-1, 0, "%s", item[i]);
-      }
-      wrefresh(v_busq);
+  if (num_items) {
+    i = 0;
+    noecho();
+    keypad(v_busq, TRUE);
+    muestra_renglon(v_busq, 0, num_items);
+    while (!finished)
+      {
+        switch(ch = wgetch(v_busq)) {
+        case KEY_UP:
+          if (i <= 0) {
+            beep();
+            continue;
+          }
+          wattrset(v_busq, COLOR_PAIR(normal));
+          mvwprintw(v_busq, v_busq->_cury, 0, "%s", item[i--]);
+          if (v_busq->_cury == 0) {
+            wscrl(v_busq, -1);
+            wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+            mvwprintw(v_busq, 0, 0, "%s", item[i]);
+          }
+          else {
+            wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+            mvwprintw(v_busq, v_busq->_cury-1, 0, "%s", item[i]);
+          }
+          wrefresh(v_busq);
     
-      break;
-    case KEY_DOWN:
-      if (i+1 >= num_items) {
-        beep();
-        continue;
-      }
-      wattrset(v_busq, COLOR_PAIR(normal));
-      mvwprintw(v_busq, v_busq->_cury, 0, "%s", item[i++]);
-        if (v_busq->_cury == v_busq->_maxy) {
-          wscrl(v_busq, +1);
-          wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-          mvwprintw(v_busq, v_busq->_maxy, 0, "%s", item[i]);
-        }
-        else {
-          wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-          mvwprintw(v_busq, v_busq->_cury+1, 0, "%s", item[i]);
+          break;
+        case KEY_DOWN:
+          if (i+1 >= num_items) {
+            beep();
+            continue;
+          }
+          wattrset(v_busq, COLOR_PAIR(normal));
+          mvwprintw(v_busq, v_busq->_cury, 0, "%s", item[i++]);
+          if (v_busq->_cury == v_busq->_maxy) {
+            wscrl(v_busq, +1);
+            wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+            mvwprintw(v_busq, v_busq->_maxy, 0, "%s", item[i]);
+          }
+          else {
+            wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+            mvwprintw(v_busq, v_busq->_cury+1, 0, "%s", item[i]);
         }        
-        wrefresh(v_busq);
+          wrefresh(v_busq);
         break;
-    case 10:
-      finished = TRUE;
+        case ENTER:
+          finished = TRUE;
+        }
+      }
+
+    strcpy(codigo, cod[i]);
+    for (j=0; j<num_items; j++) {
+      free(item[j]);
+      free(cod[j]);
     }
   }
-
-  strcpy(codigo, cod[i]);
-  for (j=0; j<num_items; j++) {
-    free(item[j]);
-    free(cod[j]);
+  else {
+    wattrset(v_busq, COLOR_PAIR(inverso));
+    mvwprintw(v_busq, v_busq->_maxy-1, 1, 
+             "No se encontraron coincidencias. Presione una tecla...");
+    wrefresh(v_busq);
+    wgetch(v_busq);
   }
   wrefresh(v_busq);
   wclear(v_busq);
@@ -2574,7 +2788,7 @@ int busqueda_articulo(char *codigo)
   rmpanel(pan);
   free(aux);
   echo();
-  return(OK);
+  return(num_items);
 }
 
 void muestra_renglon(WINDOW *v_arts, unsigned renglon, unsigned num_items)
@@ -2590,6 +2804,300 @@ void muestra_renglon(WINDOW *v_arts, unsigned renglon, unsigned num_items)
   mvwprintw(v_arts, 0, 0, "%s", item[renglon]);
   refresh();
   wrefresh(v_arts);
+}
+
+int datos_renta(int *num_cliente, time_t *f_pedido, time_t *f_entrega) {
+
+  WINDOW *v, *v_form;
+  FORM   *forma;
+  FIELD *c[15];
+  PANEL  *pan = 0;
+
+  int campo_cliente=2;
+  int campo_e_dia=4;
+  int campo_e_mes=5;
+  int campo_e_anio=6;
+  int campo_e_hora=8;
+  int campo_e_min=9;
+
+  int vx, vy; /* Dimensiones horizontal y vertical de la ventana */
+  int max_v_desc;
+
+  int ch, finished = 0;
+  char nm_cliente[mxbuff];
+  char b[255];
+  struct tm *fecha;
+  time_t tiempo;
+
+  tiempo = time(NULL);
+
+  vx = 60;
+  vy = 15;
+  max_v_desc = vx - maxcod - 3;
+  pan = mkpanel(COLOR_BLACK, vy, vx, (getmaxy(stdscr)-vy)/2, (getmaxx(stdscr)-vx)/2);
+  set_panel_userptr(pan, "pan");
+
+  v = panel_window(pan);
+  box(v, 0, 0);
+
+  /* Forma */
+  strcpy(b, "Introduzca los siguientes datos");
+  c[0] = CreaEtiqueta(2, 30, b);
+  c[1] = CreaEtiqueta(4, 0, "Num. cliente");
+  c[campo_cliente] = CreaCampo(4, 13, 1, 8, amarillo_sobre_azul);
+
+  c[3] = CreaEtiqueta(5, 0, "F. entrega");
+  c[campo_e_dia] = CreaCampo(5, 13, 1, 2, amarillo_sobre_azul);
+  c[10] = CreaEtiqueta(5, 15, "/");
+  c[campo_e_mes] = CreaCampo(5, 16, 1, 2, amarillo_sobre_azul);
+  c[11] = CreaEtiqueta(5, 18, "/");
+  c[campo_e_anio] = CreaCampo(5, 19, 1, 2, amarillo_sobre_azul);
+
+
+  c[7] = CreaEtiqueta(6, 0, "H. entrega");
+  c[campo_e_hora] = CreaCampo(6, 13, 1, 2, amarillo_sobre_azul);
+  c[12] = CreaEtiqueta(5, 15, ":");
+  c[campo_e_min] = CreaCampo(6, 17, 1, 2, amarillo_sobre_azul);
+  c[13] = (FIELD *)0;
+
+  //  set_field_type(c[campo_e_dia], TYPE_NUMERIC, 2, 1, 31);
+  //  set_field_type(c[campo_e_mes], TYPE_NUMERIC, 0, 1, 12);
+  //  set_field_type(c[campo_e_hora], TYPE_NUMERIC, 0, 1, 23);
+  //  set_field_type(c[campo_e_min], TYPE_NUMERIC, 0, 1, 59);
+
+  forma = new_form(c);
+
+  /* Calcula y coloca la etiqueta a la mitad de la forma */
+  scale_form(forma, &vy, &vx);
+  c[0]->fcol = (unsigned) ((vx - strlen(b)) / 2);
+
+  //igm  MuestraForma(forma, vy, vx);
+  //igm  v_form = form_win(forma);
+
+    /*igm*/ finished = TRUE;
+  while (!finished)
+  {
+    switch(form_driver(forma, ch = form_virtualize(v_form, TRUE, 0))) {
+    case E_OK:
+      break;
+    case E_UNKNOWN_COMMAND:
+      /*      if (ch == CTRL('B')) {
+        strcpy(cliente.rfc,campo[1]->buf);
+        if (!BuscaCliente(cliente.rfc, &cliente, con)) {
+          set_field_buffer(campo[CAMPO_NOMBRE], 0, cliente.nombre);
+          set_field_buffer(campo[4], 0, cliente.dom_calle);
+          set_field_buffer(campo[6], 0, cliente.dom_numero);
+          set_field_buffer(campo[8], 0, cliente.dom_inter);
+          set_field_buffer(campo[10], 0, cliente.dom_col);
+          set_field_buffer(campo[12], 0, cliente.dom_ciudad);
+          set_field_buffer(campo[14], 0, cliente.dom_edo);
+          sprintf(scp, "%5u", cliente.cp);
+          set_field_buffer(campo[16], 0, scp);
+
+          set_field_buffer(campo[18], 0, cliente.curp);
+        }
+        else
+          set_field_buffer(campo[CAMPO_NOMBRE], 0, "Nuevo registro");
+      } 
+      else */
+        finished = my_form_driver(forma, ch);
+      break;
+    default:
+
+        beep();
+      break;
+    }
+  }
+
+  // igm  BorraForma(forma);
+
+  fecha = localtime(&tiempo);
+
+  show_panel(pan);
+  mvwprintw(v, 1, 1, "Número de cliente: ");
+  wgetstr(v, b);
+  *num_cliente = atoi(b);
+
+  // busca_cliente(db_con, *num_cliente, nm_cliente);
+  // mvwprintw(v, 1, 10, "%s", nm_cliente);
+
+  mvwprintw(v, 2, 1, "Fecha de entrega");
+
+  mvwprintw(v, 3, 1, "Día: ");
+  wgetstr(v, b);
+  fecha->tm_mday = atoi(b);
+
+  mvwprintw(v, 4, 1, "Mes: ");
+  wgetstr(v, b);
+  fecha->tm_mon = atoi(b)-1;
+
+  mvwprintw(v, 5, 1, "Año: ");
+  wgetstr(v, b);
+  fecha->tm_year = atoi(b);
+  if (fecha->tm_year<2000)
+    (fecha->tm_year)+=100;
+
+  mvwprintw(v, 6, 1, "Horas: ");
+  wgetstr(v, b);
+  fecha->tm_hour = atoi(b);
+
+  mvwprintw(v, 7, 1, "Minutos: ");
+  wgetstr(v, b);
+  fecha->tm_min = atoi(b);
+
+  *f_entrega = mktime(fecha);
+  *f_pedido = time(NULL);
+
+  wrefresh(v);
+  wclear(v);
+  wrefresh(v);
+  rmpanel(pan);
+  echo();
+  return(OK);
+}
+
+/********************************************************/   
+
+int form_virtualize(WINDOW *w, int readchar, int c)
+{
+  int  mode = REQ_INS_MODE;
+
+  if (readchar)
+    c = wgetch(w);
+
+  switch(c) {
+    case QUIT:
+    case ESCAPE:
+        return(MAX_FORM_COMMAND + 1);
+
+    case KEY_NEXT:
+    case CTRL('I'):
+    case CTRL('N'):
+    case CTRL('M'):
+    case KEY_ENTER:
+    case ENTER:
+        return(REQ_NEXT_FIELD);
+    case KEY_PREVIOUS:
+    case CTRL('P'):
+        return(REQ_PREV_FIELD);
+
+    case KEY_HOME:
+        return(REQ_FIRST_FIELD);
+    case KEY_END:
+    case KEY_LL:
+        return(REQ_LAST_FIELD);
+
+    case CTRL('L'):
+        return(REQ_LEFT_FIELD);
+    case CTRL('R'):
+        return(REQ_RIGHT_FIELD);
+    case CTRL('U'):
+        return(REQ_UP_FIELD);
+    case CTRL('D'):
+        return(REQ_DOWN_FIELD);
+
+   case CTRL('W'):
+        return(REQ_NEXT_WORD);
+/*    case CTRL('B'):
+        return(REQ_PREV_WORD);*/
+    case CTRL('B'):
+      return(c);
+      break;
+    case CTRL('S'):
+        return(REQ_BEG_FIELD);
+    case CTRL('E'):
+        return(REQ_END_FIELD);
+
+    case KEY_LEFT:
+        return(REQ_LEFT_CHAR);
+    case KEY_RIGHT:
+        return(REQ_RIGHT_CHAR);
+    case KEY_UP:
+        return(REQ_UP_CHAR);
+    case KEY_DOWN:
+        return(REQ_DOWN_CHAR);
+
+/*    case CTRL('M'):
+        return(REQ_NEW_LINE);*/
+    /* case CTRL('I'):
+        return(REQ_INS_CHAR); */
+    case CTRL('O'):
+        return(REQ_INS_LINE);
+    case CTRL('V'):
+        return(REQ_DEL_CHAR);
+
+    case CTRL('H'):
+    case KEY_BACKSPACE:
+        return(REQ_DEL_PREV);
+    case CTRL('Y'):
+        return(REQ_DEL_LINE);
+    case CTRL('G'):
+        return(REQ_DEL_WORD);
+
+    case CTRL('C'):
+        return(REQ_CLR_EOL);
+    case CTRL('K'):
+        return(REQ_CLR_EOF);
+    case CTRL('X'):
+        return(REQ_CLR_FIELD);
+/*  case CTRL('A'):
+        return(REQ_NEXT_CHOICE); */
+    case CTRL('Z'):
+        return(REQ_PREV_CHOICE);
+
+    case 331: /* Insert en teclado para PC */
+    case CTRL(']'):
+        if (mode == REQ_INS_MODE)
+            return(mode = REQ_OVL_MODE);
+        else
+            return(mode = REQ_INS_MODE);
+
+    default:
+        return(c);
+    }
+}
+
+int busca_art_marcado(char *cod, struct articulos art[maxart], int campo, int ren) {
+  /* Valores posibles de campo:
+     0: Búsqueda en art.codigo
+     1: Búsqueda en art.serie
+  */
+
+  int i;
+  int no_salir=1;
+
+  for (i=0; no_salir && i<ren; i++)
+    no_salir = campo==0 ? strcmp(cod, articulo[i].codigo) : strcmp(cod, articulo[i].serie);
+
+  if (!no_salir)
+    return(i);
+  else 
+    return(-1);
+
+}
+
+/********************************************************/   
+
+int imprime_fechas_renta(PGconn *con, PGconn *con_s, time_t *f_pedido, time_t *f_entrega) {
+  FILE *imp;
+  struct tm *fecha_p, *fecha_e;
+
+
+  if (!(imp = popen(cmd_lp, "w"))) {
+    fprintf(stderr, "Error: No puedo imprimir. %s\n", cmd_lp);
+    return(PROCESS_ERROR);
+  }
+
+  fecha_p = localtime(f_pedido);
+  fecha_e = localtime(f_entrega);
+  fprintf(imp, "Fecha de entrega: %d/%d/%d. Hora: %d:%d.\n", 
+          fecha_e->tm_mday, fecha_e->tm_mon, fecha_e->tm_year+1900,
+          fecha_e->tm_hour, fecha_e->tm_min);
+  fprintf(imp, "Fecha de pedido: %d/%d/%d.\n",
+          fecha_p->tm_mday, fecha_p->tm_mon, fecha_p->tm_year+1900);
+
+  pclose(imp);
+  return(OK);
 }
 
 /********************************************************/   
@@ -2609,8 +3117,11 @@ int main(int argc, char *argv[]) {
   double importe_recibido, cambio;
   struct tm *fecha;     /* Hora y fecha local   */
   int i;
+  time_t f_entrega, f_pedido; /* Para conrol de rentas */
+  int id_cliente;
 
   program_name = argv[0];
+  buf[0] = 0;
 
   tiempo = time(NULL);
   fecha = localtime(&tiempo);
@@ -2655,15 +3166,17 @@ int main(int argc, char *argv[]) {
   //  num_venta = obten_num_venta(nm_num_venta);
   num_venta = obten_num_venta(con);
 
-  numbarras = lee_articulos(con, con_s);
-  if (!numbarras) {
-    mensaje("No hay artículos en la base de datos. Use el programa de inventarios primero");
-    getch();
-  }
-  else if (numbarras == SQL_ERROR) {
-    mensaje("Error al leer base de datos, búsqueda de artículos deshabilitada.");
-    getch();
-    numbarras = 0;
+  if (!serial_num_enable) {
+    numbarras = lee_articulos(con, con_s);
+    if (!numbarras) {
+      mensaje("No hay artículos en la base de datos. Use el programa de inventarios primero");
+      getch();
+    }
+    else if (numbarras == SQL_ERROR) {
+      mensaje("Error al leer base de datos, búsqueda de artículos deshabilitada.");
+      getch();
+      numbarras = 0;
+    }
   }
 
   numdivisas = lee_divisas(con);
@@ -2701,7 +3214,7 @@ int main(int argc, char *argv[]) {
 
     if (numarts && a_pagar) {
       attron(A_BOLD);
-      mvprintw(getmaxy(stdscr)-2,0,"¿Imprimir Nota, Factura o Ticket (N,F,T)? T\b");
+      mvprintw(getmaxy(stdscr)-2,0,"¿Expedir Nota de venta, Factura, Ticket, nota de Renta (N,F,T,R)? T\b");
       attroff(A_BOLD);
       buffer = toupper(getch());
       formadepago = forma_de_pago(&importe_recibido, &cambio);
@@ -2716,7 +3229,8 @@ int main(int argc, char *argv[]) {
           num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
                          _NOTA_MOSTRADOR, *fecha, id_teller, 0, articulo, numarts, almacen);
           if (num_venta<0)
-            aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A', (int)num_venta);
+            aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A',
+                            (int)num_venta);
             
           if (num_venta>0)
             clean_journal(nm_journal);
@@ -2726,7 +3240,7 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Error al ejecutar %s\n", buf);
           if (formadepago >= 20) {
             AbreCajon(tipo_disp_ticket);
-            sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+            sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
             impr_cmd = popen(buf, "w");
             pclose(impr_cmd);
           }
@@ -2736,14 +3250,15 @@ int main(int argc, char *argv[]) {
       case 'F':
         if (formadepago >= 20) {
           AbreCajon(tipo_disp_ticket);
-          sprintf(buf, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+          sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
           impr_cmd = popen(buf, "w");
           pclose(impr_cmd);
         }
         num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
                        _FACTURA, *fecha, id_teller, 0, articulo, numarts, almacen);
         if (num_venta<0)
-          aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A', (int)num_venta);
+          aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A',
+                          (int)num_venta);
             
         if (num_venta>0)
           clean_journal(nm_journal);
@@ -2761,37 +3276,74 @@ int main(int argc, char *argv[]) {
         mensaje("Aprieta una tecla para continuar (t para terminar)...");
         buffer = toupper(getch());
         break;
-      case 'T':
-      default:
+
+      case 'R':
+        datos_renta(&id_cliente, &f_pedido, &f_entrega);
+        registra_renta(con, con_s, "rentas", id_cliente, f_pedido, f_entrega, 
+                       articulo, numarts);
+
+        imprime_fechas_renta(con, con_s, &f_pedido, &f_entrega);
+        print_customer_data(con, con_s, id_cliente);
         print_ticket_arts(importe_recibido, cambio);
-        sprintf(buf, "lpr -l -P %s %s", lp_disp_ticket, nm_disp_ticket);
+        sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
         pclose(impr_cmd);
         unlink(nm_disp_ticket);
         if (formadepago >= 20) {
           AbreCajon(tipo_disp_ticket);
-          sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
+          sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
           impr_cmd = popen(buf, "w");
           pclose(impr_cmd);
           unlink(nm_disp_ticket);
         }
-        num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad,
-                                   formadepago, _TEMPORAL, *fecha,
-                                   id_teller, 0, articulo, numarts, almacen);
-        if (num_venta<0)
-          aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A', (int)num_venta);
-
         print_ticket_footer(*fecha, num_venta);
+        /*igm*/ num_venta=1;
         if (num_venta>0)
           clean_journal(nm_journal);
-        sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
+        sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
         pclose(impr_cmd);
         unlink(nm_disp_ticket);
         mensaje("Corta el papel y aprieta una tecla para continuar (t para terminar)...");
         buffer = toupper(getch());
         print_ticket_header(nmfenc);
-        sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
+        sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
+        impr_cmd = popen(buf, "w");
+        pclose(impr_cmd);
+        break;
+      case 'T':
+      default:
+        print_ticket_arts(importe_recibido, cambio);
+        sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
+        impr_cmd = popen(buf, "w");
+        pclose(impr_cmd);
+        unlink(nm_disp_ticket);
+        if (formadepago >= 20) {
+          AbreCajon(tipo_disp_ticket);
+          sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
+          impr_cmd = popen(buf, "w");
+          pclose(impr_cmd);
+          unlink(nm_disp_ticket);
+        }
+        num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad,
+                                   formadepago, _TEMPORAL, *fecha,
+                                   id_teller, id_vendedor, articulo, numarts, almacen);
+        if (num_venta<0)
+          aborta_remision(con, con_s,
+                          "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A',
+                          (int)num_venta);
+
+        print_ticket_footer(*fecha, num_venta);
+        if (num_venta>0)
+          clean_journal(nm_journal);
+        sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
+        impr_cmd = popen(buf, "w");
+        pclose(impr_cmd);
+        unlink(nm_disp_ticket);
+        mensaje("Corta el papel y aprieta una tecla para continuar (t para terminar)...");
+        buffer = toupper(getch());
+        print_ticket_header(nmfenc);
+        sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
         pclose(impr_cmd);
         break;
