@@ -1,5 +1,5 @@
 /*  -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
-factur.h vers. 0.0.8-1, biblioteca para el uso del módulo de facturación de OsoPOS
+factur.h vers. 0.10, biblioteca para el uso del módulo de facturación de OsoPOS
         Copyright (C) 1999,2000 Eduardo Israel Osorio Hernández
 
         Este programa es un software libre; puede usted redistribuirlo y/o
@@ -34,25 +34,24 @@ struct tm *f;
 
 char /*nmimpre[mxbuff], */
       nmfact[mxbuff],
-      nmdatos[mxbuff],
-  //      nmlog[mxbuff],
       tipoimp[mxbuff],
       lprimp[mxbuff],
       puerto_imp[mxbuff];
+char *home_directory;
 
 unsigned maxrenf;
 unsigned numarticulos;
 short    impresion_directa;
 
-int  LeeConfig();
+int  read_config();
 int  RegistraFactura(unsigned numfact, struct articulos art[maxarts], PGconn *conexion);
 int  CalculaIVA();
 int  BuscaCliente(char *rfc, struct datoscliente *clien, PGconn *con);
 
 /************************************************************************/
 
-int LeeConfig() {
-  //  char nmconfig[] = "factur.config";
+int read_config() {
+
   char *nmconfig;
   FILE *config;
   char *buf;   /* Cadena modificable para busqueda de tokens */
@@ -60,14 +59,19 @@ int LeeConfig() {
   char *linea;
   int i;
 
-  nmconfig = calloc(1, 15);
-  strcpy(nmconfig, "factur.config");
+  home_directory = calloc(1, 255);
+  nmconfig = calloc(1, 255);
+  config = popen("printenv HOME", "r");
+  fgets(home_directory, 255, config);
+  home_directory[strlen(home_directory)-1] = 0;
+  pclose(config);
+
+  strcpy(nmconfig, home_directory);
+  strcat(nmconfig, "/.osopos/factur.config");
+
   strcpy(nmfact,"/tmp/factura");
-/*strcpy(nmimpre,"/dev/lp2"); */
-  //  strcpy(nmdatos,"/home/OsoPOS/cajero1/venta.ultima");
-  //  strcpy(nmlog,"/home/OsoPOS/scaja/log/facturas");
   strcpy(tipoimp,"EPSON");
-  strcpy(lprimp, "lp0");
+  strcpy(lprimp, "facturas");
   iva_porcentaje = 10;
   impresion_directa = 0;
   strcpy(puerto_imp, "/dev/lp");
@@ -100,14 +104,11 @@ int LeeConfig() {
       /*      else if (!strcmp(valor,"registro")) {
         strcpy(nmlog, strtok(NULL,"="));
         }*/
-      else if (!strcmp(valor,"datos")) {
-        strcpy(nmdatos, strtok(NULL,"="));
-      }
       else if (!strcmp(valor,"renglones.articulos")) {
         maxrenf = atoi(strtok(NULL,"="));
       }
       else if (!strcmp(valor,"iva.porcentaje")) {
-        iva_porcentaje = atof(strtok(NULL,"="))/100;
+        iva_porcentaje = atof(strtok(NULL,"="));
       }
       else if (!strcmp(valor,"impresora.tipo")) {
         strcpy(tipoimp, strtok(NULL,"="));
@@ -227,11 +228,11 @@ int RegistraFactura(unsigned numfact, struct articulos art[maxarts],
   if (fecha.mes < 10)
     fecha_iso[5] = '0';
   if (fecha.dia < 10)
-    fecha_iso[7] = '0';
-  strcpy(buff, "INSERT INTO facturas_ingresos (fecha,rfc,dom_calle,dom_numero,");
+    fecha_iso[8] = '0';
+  strcpy(buff, "INSERT INTO facturas_ingresos (id, fecha,rfc,dom_calle,dom_numero,");
   strcat(buff, "dom_inter,dom_col,dom_ciudad,dom_edo,dom_cp,subtotal,iva) VALUES");
-  sprintf(query, "%s ('%s','%s','%s','%s','%s','%s','%s','%s',%u,%.2f,%.2f)",
-          buff, fecha_iso, cliente.rfc, cliente.dom_calle, cliente.dom_numero,
+  sprintf(query, "%s (%d, '%s','%s','%s','%s','%s','%s','%s','%s',%u,%.2f,%.2f)",
+          buff, numfact, fecha_iso, cliente.rfc, cliente.dom_calle, cliente.dom_numero,
           cliente.dom_inter, cliente.dom_col, cliente.dom_ciudad, cliente.dom_edo,
           cliente.cp,subtotal, iva);
   res = PQexec(base, query);
@@ -274,13 +275,14 @@ int RegistraFactura(unsigned numfact, struct articulos art[maxarts],
 int CalculaIVA() {
   int i;
   double sumatoria=0.0;
+  double mult_iva;
 
   iva = 0;
   for (i=0; i<numarticulos; i++) {
-    iva_porcentaje = art[i].iva_porc / 100;
-    art[i].pu =  art[i].pu / (iva_porcentaje+1);
+    mult_iva = art[i].iva_porc / 100;
+    art[i].pu =  art[i].pu / (mult_iva+1);
     sumatoria += (art[i].pu * art[i].cant);
-    iva += art[i].pu * iva_porcentaje * art[i].cant;
+    iva += art[i].pu * mult_iva * art[i].cant;
   }
   subtotal = sumatoria;
   total = subtotal + iva;

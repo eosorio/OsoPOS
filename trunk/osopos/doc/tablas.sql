@@ -9,8 +9,8 @@ CREATE TABLE articulos (
   id_prov       int4 DEFAULT 0,
   id_depto      int4 DEFAULT 0,
   p_costo       real DEFAULT 0,
-  prov_clave    varchar(20) DEFAULT '',
-  iva_porc      real DEFAULT 15 NOT NULL
+  prov_clave	varchar(20) DEFAULT '',
+  iva_porc      int DEFAULT 15 NOT NULL
 );
 REVOKE ALL ON articulos FROM PUBLIC;
 GRANT SELECT,UPDATE ON articulos TO "caja1";

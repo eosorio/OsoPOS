@@ -1,5 +1,4 @@
 #!/bin/bash
 
-cd ~/bin
-remision $1 $2 $3
+remision $1 $2 $3 2>~/errores_remision.log
 

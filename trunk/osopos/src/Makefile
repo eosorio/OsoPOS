@@ -20,7 +20,7 @@ HEADER_REMISION = include/electroh-remis.h
 
 IMPRESIONES_USUARIO = include/electroh.h
 
-DIR_BIN = /home/OsoPOS/bin
+DIR_BIN = /usr/bin
 
 SUPERVISOR_BINDIR = /home/OsoPOS/scaja/bin
 
@@ -67,10 +67,10 @@ install_imprrem:
 	cp ../bin/imprrem.o $(DIR_BIN)/imprrem
 
 install_invent:
-	cp ../bin/invent.o $(SUPERVISOR_BINDIR)/invent
+	cp ../bin/invent.o ${DIR_BIN}/invent
 
 install_corte:
-	cp ../bin/corte.o $(SUPERVISOR_BINDIR)/corte
+	cp ../bin/corte.o ${DIR_BIN}/corte
 
 install_impresor:
 	cp ../bin/impresor.o $(DIR_BIN)/impresor
