@@ -68,13 +68,24 @@ int wgetkeystrokes(WINDOW *w, char *input_str, int str_len) {
 	  raw();
 	  return(ch - KEY_F0);
 	}
-	if (ch >= 48 && ch<127) {
+
+	if ((ch >= '0' && ch <= '9') || (ch>='A' && ch<='z')) {
       input_str[i+1] = 0;
       input_str[i] = ch;
 	  wprintw(w, "%c", ch);
 	}
-	else
+    else
 	  switch(ch) {
+      case 127:
+      case 263: /* Backspace */
+      case '\b':
+        if (i) {
+          input_str[--i] = 0;
+          wmove(w, w->_cury, w->_curx-1);
+          wclrtoeol(w);
+        }
+        i--;
+       break;
       case 32: /* Espacio */
         if (!i) {
           i--;
@@ -88,6 +99,7 @@ int wgetkeystrokes(WINDOW *w, char *input_str, int str_len) {
       case 250: /* u acentuada */
       case 209: /* Ñ mayuscula */
       case 241: /* ñ minuscula */
+      case '.':
         input_str[i+1] = 0;
         input_str[i] = ch;
         wprintw(w, "%c", ch);
@@ -98,14 +110,8 @@ int wgetkeystrokes(WINDOW *w, char *input_str, int str_len) {
         raw();
         return(0);
         break;
-      case 127:
-      case 263:
-        input_str[--i] = 0;
-        wmove(w, w->_cury, w->_curx-1);
-        wclrtoeol(w);
-        i--;
-       break;
       default:
+        wprintw(w, "%c", 9);
 	  }
   }  /* for */
   return(0);
