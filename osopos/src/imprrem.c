@@ -313,7 +313,7 @@ int main(int argc, char *argv[])
     num_venta = atoi(argv[1]);
   }
 
-  conn = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "israel", "");
+  conn = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "scaja", "");
   if (conn == NULL) {
     fprintf(stderr, "FATAL: No puedo accesar la base de datos osopos\n. Abortando...");
     return(ERROR_SQL);

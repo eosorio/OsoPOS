@@ -1040,7 +1040,7 @@ int main() {
   init_pair(azul_sobre_blanco, COLOR_BLUE, COLOR_WHITE);
   init_pair(cyan_sobre_negro, COLOR_CYAN, COLOR_BLACK);
 
-  con = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "israel", ""); /*igm*/
+  con = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "scaja", ""); /*igm*/
   if (con == NULL) {
     aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
             ERROR_SQL);

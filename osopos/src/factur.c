@@ -1,6 +1,6 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
- Facturación 1.0.8-2. Módulo de facturación de OsoPOS.
+ Facturación 1.9-1. Módulo de facturación de OsoPOS.
 
         Copyright (C) 1999,2000 Eduardo Israel Osorio Hernández
 
@@ -34,7 +34,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 #include <form.h>
 
-#define vers "1.0.8-2"
+#define vers "1.9-1"
 /*
 #ifdef maxspc
 #undef maxspc
@@ -92,7 +92,7 @@ void muestra_ayuda_cliente(int ren, int col) {
   addstr("<Fin>     Ultimo campo (RFC)\n");
   addstr("<Intro>   Siguiente campo        \n");
   addstr("<Ctrl-X>  Borra el campo                  ");
-  addstr("<Insert>  Cambia sobreescr./insertar\n");
+  addstr("<Insert>  Sobreescribir/insertar\n");
 }
 
  int form_virtualize(WINDOW *w)
@@ -195,7 +195,7 @@ void muestra_ayuda_cliente(int ren, int col) {
 void captura_cliente(PGconn *con) {
    WINDOW *ven;
    FORM *forma;
-   FIELD *campo[22];
+   FIELD *campo[31];
    char etiqueta[mxbuff];
    int  finished = 0, c, i;
    int tam_ren, tam_col, pos_ren, pos_col;
@@ -206,34 +206,62 @@ void captura_cliente(PGconn *con) {
   strcpy(etiqueta,"Datos del cliente");
 
   /* describe la forma */
-  campo[0] = CreaEtiqueta(0, 30, etiqueta);
-  campo[20] = CreaEtiqueta(2, 0, "Nombre o razon social:");
-  campo[2] = CreaCampo(3, 0, 1, maxspc-1);
-  campo[3] = CreaEtiqueta(4, 0, "Calle:");
-  campo[4] = CreaCampo(5, 0, 1, maxspcalle-1);
-  campo[5] = CreaEtiqueta(4, maxspcalle+1, "Num. Ext");
-  campo[6] = CreaCampo(5, maxspcalle+1, 1, maxspext-1);
-  campo[7] = CreaEtiqueta(4, maxspcalle+maxspext+2, "Int");
-  campo[8] = CreaCampo(5, maxspcalle+maxspext+2, 1, maxspint-1);
-  campo[9] = CreaEtiqueta(6, 0, "Colonia:");
-  campo[10] = CreaCampo(7, 0, 1, maxspcol-1);
-  campo[11] = CreaEtiqueta(6, maxspcol+1, "Ciudad:");
-  campo[12] = CreaCampo(7, maxspcol+1, 1, maxspcd-1);
-  campo[13] = CreaEtiqueta(6, maxspcol+maxspcd+2, "Edo");
-  campo[14] = CreaCampo(7, maxspcol+maxspcd+2, 1, maxspedo-1);
-  campo[15] = CreaEtiqueta(6, maxspcol+maxspcd+maxspedo+3, "C.P.");
-  campo[16] = CreaCampo(7, maxspcol+maxspcd+maxspedo+3, 1, 5);
-  campo[17] = CreaEtiqueta(8, 0, "C.U.R.P.");
-  campo[18] = CreaCampo(9, 0, 1, maxcurp-1);
-  campo[19] = CreaEtiqueta(8, maxcurp+1, "RFC:");
-  campo[1] = CreaCampo(9, maxcurp+1, 1, maxrfc-1);
-  campo[21] = (FIELD *)0;
+  campo[0] = CreaEtiqueta(2, 30, etiqueta);
+  campo[20] = CreaEtiqueta(4, 0, "Nombre o razon social:");
+  campo[2] = CreaCampo(5, 0, 1, maxspc-1);
+  campo[3] = CreaEtiqueta(6, 0, "Calle:");
+  campo[4] = CreaCampo(7, 0, 1, maxspcalle-1);
+  campo[5] = CreaEtiqueta(6, maxspcalle+1, "Num. Ext");
+  campo[6] = CreaCampo(7, maxspcalle+1, 1, maxspext-1);
+  campo[7] = CreaEtiqueta(6, maxspcalle+maxspext+2, "Int");
+  campo[8] = CreaCampo(7, maxspcalle+maxspext+2, 1, maxspint-1);
+  campo[9] = CreaEtiqueta(8, 0, "Colonia:");
+  campo[10] = CreaCampo(9, 0, 1, maxspcol-1);
+  campo[11] = CreaEtiqueta(8, maxspcol+1, "Ciudad:");
+  campo[12] = CreaCampo(9, maxspcol+1, 1, maxspcd-1);
+  campo[13] = CreaEtiqueta(8, maxspcol+maxspcd+2, "Edo");
+  campo[14] = CreaCampo(9, maxspcol+maxspcd+2, 1, maxspedo-1);
+  campo[15] = CreaEtiqueta(8, maxspcol+maxspcd+maxspedo+3, "C.P.");
+  campo[16] = CreaCampo(9, maxspcol+maxspcd+maxspedo+3, 1, 5);
+  campo[17] = CreaEtiqueta(10, 0, "C.U.R.P.");
+  campo[18] = CreaCampo(11, 0, 1, maxcurp-1);
+  campo[19] = CreaEtiqueta(10, maxcurp+1, "R.F.C.:");
+  campo[1] = CreaCampo(11, maxcurp+1, 1, maxrfc-1);
+  campo[21] = CreaEtiqueta(0, 0, "Folio:");
+  campo[22] = CreaCampo(0, 6, 1, 5);
+  campo[23] = CreaEtiqueta(0, 24, "# venta:");
+  campo[24] = CreaCampo(0, 33, 1, 8);
+  campo[25] = CreaEtiqueta(0, 55, "Fecha:");
+  campo[26] = CreaCampo(0, 62, 1, 2);
+  campo[27] = CreaEtiqueta(0, 64, "/");
+  campo[28] = CreaCampo(0, 65, 1, 2);
+  campo[29] = CreaEtiqueta(0, 67, "/");
+  campo[30] = CreaCampo(0, 68, 1, 2);
+  campo[31] = (FIELD *)0;
 
   forma = new_form(campo);
 
   /* Calcula y coloca la etiqueta a la mitad de la forma */
   scale_form(forma, &tam_ren, &tam_col);
   campo[0]->fcol = (unsigned) ((tam_col - strlen(etiqueta)) / 2);
+  campo[23]->fcol = (unsigned) ((tam_col - 17) / 2);
+  campo[24]->fcol = (unsigned) (campo[23]->fcol + 9);
+  campo[25]->fcol = (unsigned) (tam_col - 15); /* Fecha */
+  campo[26]->fcol = (unsigned) (campo[25]->fcol + 7); /* Dia */
+  campo[27]->fcol = (unsigned) (campo[26]->fcol + 2); 
+  campo[28]->fcol = (unsigned) (campo[27]->fcol + 1); /* Mes */
+  campo[29]->fcol = (unsigned) (campo[28]->fcol + 2);
+  campo[30]->fcol = (unsigned) (campo[29]->fcol + 1); /* Año */
+
+  sprintf(scp, "%2d", fecha.dia);
+  if (scp[0] == ' ') scp[0] = '0';
+  set_field_buffer(campo[26], 0, scp);
+  sprintf(scp, "%2d",fecha.mes);
+  if (scp[0] == ' ') scp[0] = '0';
+  set_field_buffer(campo[28], 0, scp);
+  sprintf(scp, "%2d",fecha.anio-2000);
+  if (scp[0] == ' ') scp[0] = '0';
+  set_field_buffer(campo[30], 0, scp);
 
   muestra_ayuda_cliente(tam_ren+pos_ren+3,0);
   refresh();
@@ -375,7 +403,7 @@ int captura_articulos() {
   scale_form(forma, &tam_ren, &tam_col);
   campo[6]->fcol = (unsigned) ((tam_col - strlen(etiqueta)) / 2);
 
-  muestra_ayuda(LINES-1,0);
+  muestra_ayuda(getmaxy(stdscr)-1,0);
   refresh();
 
   MuestraForma(forma, pos_ren, pos_col);
@@ -465,8 +493,8 @@ void Muestra_Factura(char *fecha,
   int centavos;
 
   attrset(COLOR_PAIR(normal));
-  mvprintw(0, (COLS-27)/2, "Vista preliminar de factura");
-  mvprintw(0, COLS-10, "%s", fecha);
+  mvprintw(0, (getmaxx(stdscr)-27)/2, "Vista preliminar de factura");
+  mvprintw(0, getmaxx(stdscr)-10, "%s", fecha);
   muestra_cliente(1,0, cliente);
   /*  mvprintw(1, 0, "%s",cliente.nombre);
   mvprintw(2, 0, "%s",cliente.domicilio);
@@ -492,16 +520,16 @@ void Muestra_Factura(char *fecha,
   if (centavos<10)
     mvprintw(i+10+numarticulos+numobs, 6, "0");
 
-  mvprintw(i+11+numarticulos, COLS-12, "%8.2f", subtotal);
-  mvprintw(i+12+numarticulos, COLS-12, "%8.2f", iva);
-  mvprintw(i+13+numarticulos, COLS-12, "%8.2f", total);
+  mvprintw(i+11+numarticulos, getmaxx(stdscr)-12, "%8.2f", subtotal);
+  mvprintw(i+12+numarticulos, getmaxx(stdscr)-12, "%8.2f", iva);
+  mvprintw(i+13+numarticulos, getmaxx(stdscr)-12, "%8.2f", total);
   refresh();
 }
 
 void imprime_factura() {
   char *comando;
 
-  mvprintw(LINES-1, 0, "¿Imprimir factura (S/N)? S\b");
+  mvprintw(getmaxy(stdscr)-1, 0, "¿Imprimir factura (S/N)? S\b");
   buffer = toupper(getch());
   if ((buffer != 'S') && (buffer != '\n'))
     return;
@@ -511,7 +539,7 @@ void imprime_factura() {
   }
   else {
     comando = calloc(1, mxbuff);
-    sprintf(comando, "lpr -P%s %s",   lprimp, nmfact);
+    sprintf(comando, "lpr -Fb -P%s %s",   lprimp, nmfact);
     system(comando);
     free(comando);
   }
@@ -602,12 +630,14 @@ int main(int argc, char *argv[]) {
   char   *obs[maxobs],
          *garantia;
   int    i;
+  unsigned num_venta;
   PGconn *con;
   time_t tiempo;
 
   initscr();
   start_color();
   LeeConfig();
+
   init_pair(amarillo_sobre_azul, COLOR_YELLOW, COLOR_BLUE);
   init_pair(verde_sobre_negro, COLOR_GREEN, COLOR_BLACK);
   init_pair(normal, COLOR_WHITE, COLOR_BLACK);
@@ -624,14 +654,17 @@ int main(int argc, char *argv[]) {
   fecha.mes = f->tm_mon + 1;
   fecha.anio = f->tm_year + 1900;
   if (argc>1)
-    if (!strcmp(argv[1],"-r"))
-      numarticulos = LeeVenta(nmdatos, art);
+    if (!strcmp(argv[1],"-r")) {
+      num_venta = atoi(argv[2]);      
+      //      numarticulos = LeeVenta(nmdatos, art);
+      numarticulos = lee_venta(con, num_venta, art);
+    }
   clear();
 /*  printw("RFC: ");
-  getstr(cliente.rfc);*/
-  clear();
-  sprintf(sfecha,"%u-%u-%u\n",fecha.dia,fecha.mes,fecha.anio);
-  mvprintw(0,COLS-strlen(sfecha),"%s\n",sfecha);
+  getstr(cliente.rfc);
+  clear(); */
+  /*  sprintf(sfecha,"%u-%u-%u\n",fecha.dia,fecha.mes,fecha.anio);
+      mvprintw(0, getmaxx(stdscr)-strlen(sfecha),"%s\n",sfecha);*/
 
   AjustaModoTerminal();
   captura_cliente(con);

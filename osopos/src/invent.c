@@ -708,7 +708,7 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   char  *auxprov;
   unsigned num_deptos;
   unsigned num_provs;
-  int   finished = 0, c, i;
+  int   finished = 0, c, i, j;
   int   tam_ren, tam_col, pos_ren, pos_col;
   PGresult *res;
   char  *comando;
@@ -865,7 +865,26 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
           i--;
         break;
       case KEY_PPAGE:
-        
+        if (i < 10) {
+          beep();
+          continue;
+        }
+        wattrset(v_arts, COLOR_PAIR(normal));
+        mvwprintw(v_arts, v_arts->_cury, 0, "%s", item[i]);
+        i -= 10;
+        if (v_arts->_cury < 10) {
+          wscrl(v_arts,  v_arts->_cury - 10);
+          for (j=10-v_arts->_cury;  j > 0;  j--)
+            mvwprintw(v_arts, j, 0, "%s", item[i+j]);
+          wattrset(v_arts, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+          mvwprintw(v_arts, j, 0, "%s", item[i]);
+        }
+        else {
+          wattrset(v_arts, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+          mvwprintw(v_arts, v_arts->_cury-10, 0, "%s", item[i]);
+        }
+        wrefresh(v_arts);
+        break;
       case KEY_UP:
         if (field_index(current_field(forma)) == CAMPO_CODPROV  ||
             field_index(current_field(forma)) == CAMPO_DEPTO) {
@@ -892,26 +911,27 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
         }
         break;
       case KEY_NPAGE:
-            /*          if (i+v_arts->_maxy >= *num_items) {
-                        beep();
-                        continue;
-                        }
-                        wattrset(v_arts, COLOR_PAIR(normal));
-                        mvwprintw(v_arts, v_arts->_cury, 0, "%s", item[i]);
-                        i += v_arts->_cury;
-                        CONTINUAR EN LA SIGUIENTE LINEA
-                        if (v_arts->_cury == v_arts->_maxy) {
-                        wscrl(v_arts, +(v_arts->_maxy));
-                        wattrset(v_arts, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-                        mvwprintw(v_arts, v_arts->_maxy, 0, "%s", item[i]);
-                        }
-                        else {
-                        wattrset(v_arts, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-                        mvwprintw(v_arts, v_arts->_cury+1, 0, "%s", item[i]);
-                        }
-                        wrefresh(v_arts);
-                        break; */
-
+        if (i+10 >= *num_items) {
+          beep();
+          continue;
+        }
+        wattrset(v_arts, COLOR_PAIR(normal));
+        mvwprintw(v_arts, v_arts->_cury, 0, "%s", item[i]);
+        i += 10;
+        if (v_arts->_cury+10 > v_arts->_maxy) {
+          c =  10 - v_arts->_maxy+v_arts->_cury; /* lineas a desplazar */
+          wscrl(v_arts,  c);
+          for (j=0; j<c;  j++)
+            mvwprintw(v_arts, v_arts->_maxy-c+j, 0, "%s", item[i-c+j]);
+          wattrset(v_arts, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+          mvwprintw(v_arts, v_arts->_maxy, 0, "%s", item[i]);
+        }
+        else {
+          wattrset(v_arts, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+          mvwprintw(v_arts, v_arts->_cury+10, 0, "%s", item[i]);
+        }
+        wrefresh(v_arts);
+        break;
       case KEY_DOWN:
         if (field_index(current_field(forma)) == CAMPO_CODPROV  ||
             field_index(current_field(forma)) == CAMPO_DEPTO) {
