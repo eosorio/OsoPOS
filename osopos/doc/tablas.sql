@@ -17,12 +17,12 @@ CREATE TABLE articulos (
   pu3           real,
   pu4           real,
   pu5           real,
-  tax_0			real DEFAULT 5,
-  tax_1			real DEFAULT 0,
-  tax_2			real DEFAULT 0,
-  tax_3			real DEFAULT 0,
-  tax_4			real DEFAULT 0,
-  tax_5			real DEFAULT 0
+  tax_0         real DEFAULT 5,
+  tax_1         real DEFAULT 0,
+  tax_2         real DEFAULT 0,
+  tax_3         real DEFAULT 0,
+  tax_4         real DEFAULT 0,
+  tax_5         real DEFAULT 0
 );
 REVOKE ALL ON articulos FROM PUBLIC;
 GRANT SELECT ON articulos TO "cajero1";
@@ -33,9 +33,9 @@ GRANT ALL ON articulos TO "scaja";
 CREATE TABLE check_in_arts (
   code          varchar(20) NOT NULL,
   qt            real NOT NULL,
-  day			date NOT NULL,
-  hour			time NOT NULL,
-  unit_cost 	real NOT NULL
+  day           date NOT NULL,
+  hour          time NOT NULL,
+  unit_cost     real NOT NULL
 );
 REVOKE ALL ON check_in_arts FROM PUBLIC;
 GRANT INSERT,SELECT ON articulos TO "cajero1";
@@ -55,13 +55,13 @@ CREATE TABLE ventas (
   id_cajero         int4 DEFAULT 0 NOT NULL,
   fecha             date NOT NULL,
   hora              time NOT NULL,
-  iva				real NOT NULL,
-  tax_0				real DEFAULT 0 NOT NULL,
-  tax_1				real DEFAULT 0 NOT NULL,
-  tax_2				real DEFAULT 0 NOT NULL,
-  tax_3				real DEFAULT 0 NOT NULL,
-  tax_4				real DEFAULT 0 NOT NULL,
-  tax_5				real DEFAULT 0 NOT NULL,
+  iva               real NOT NULL,
+  tax_0             real DEFAULT 0 NOT NULL,
+  tax_1             real DEFAULT 0 NOT NULL,
+  tax_2             real DEFAULT 0 NOT NULL,
+  tax_3             real DEFAULT 0 NOT NULL,
+  tax_4             real DEFAULT 0 NOT NULL,
+  tax_5             real DEFAULT 0 NOT NULL
 );
 
 REVOKE ALL ON ventas FROM PUBLIC;
@@ -76,7 +76,13 @@ CREATE TABLE ventas_detalle (
   "descrip"         varchar(40) NOT NULL,
   "cantidad"        real,
   "pu"              float NOT NULL DEFAULT 0,
-  "iva_porc"        float not null default 15
+  "iva_porc"        float not null default 15,
+  "tax_0"           real DEFAULT 0 NOT NULL,
+  "tax_1"           real DEFAULT 0 NOT NULL,
+  "tax_2"           real DEFAULT 0 NOT NULL,
+  "tax_3"           real DEFAULT 0 NOT NULL,
+  "tax_4"           real DEFAULT 0 NOT NULL,
+  "tax_5"           real DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE facturas_ingresos (
