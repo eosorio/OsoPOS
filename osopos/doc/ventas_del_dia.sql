@@ -1,0 +1,1 @@
+SELECT DISTINCT ON (v.codigo) v.codigo, SUM(v.cantidad), a.descripcion FROM ventas_detalle v, articulos a WHERE a.codigo=v.codigo GROUP BY v.codigo, a.codigo, a.descripcion
