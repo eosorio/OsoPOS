@@ -122,3 +122,10 @@ char importe_letra[maximport];
   fclose(ffact);
 }
 
+/*void imprime_razon_social(FILE *disp)
+{
+  fprintf(impr,"%c%c%c    Electro Hogar\n",
+              ESC,'P',14);
+  fprintf(impr,"%c%c%c  Francisco Javier Mondrag%cn Villa\n", 15,ESC,'M', 186);
+
+}*/

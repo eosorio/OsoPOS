@@ -35,7 +35,7 @@ struct tm *f;
 char /*nmimpre[mxbuff], */
       nmfact[mxbuff],
       nmdatos[mxbuff],
-      nmlog[mxbuff],
+  //      nmlog[mxbuff],
       tipoimp[mxbuff],
       lprimp[mxbuff],
       puerto_imp[mxbuff];
@@ -62,10 +62,10 @@ int LeeConfig() {
 
   nmconfig = calloc(1, 15);
   strcpy(nmconfig, "factur.config");
-  strcpy(nmfact,"/home/OsoPOS/cajero1/factura");
+  strcpy(nmfact,"/tmp/factura");
 /*strcpy(nmimpre,"/dev/lp2"); */
-  strcpy(nmdatos,"/home/OsoPOS/cajero1/venta.ultima");
-  strcpy(nmlog,"/home/OsoPOS/scaja/log/facturas");
+  //  strcpy(nmdatos,"/home/OsoPOS/cajero1/venta.ultima");
+  //  strcpy(nmlog,"/home/OsoPOS/scaja/log/facturas");
   strcpy(tipoimp,"EPSON");
   strcpy(lprimp, "lp0");
   iva_porcentaje = 10;
@@ -97,9 +97,9 @@ int LeeConfig() {
       if (!strcmp(valor, "factura")) {
         strcpy(nmfact, strtok(NULL,"="));
       }
-      else if (!strcmp(valor,"registro")) {
+      /*      else if (!strcmp(valor,"registro")) {
         strcpy(nmlog, strtok(NULL,"="));
-      }
+        }*/
       else if (!strcmp(valor,"datos")) {
         strcpy(nmdatos, strtok(NULL,"="));
       }
@@ -152,7 +152,7 @@ int BuscaCliente(char *rfc, struct datoscliente *cliente, PGconn *con) {
 
   strcpy(query, "SELECT dom_calle,dom_numero,dom_inter,dom_col,dom_ciudad,dom_edo,dom_cp");
   strcat(query, " FROM facturas_ingresos WHERE rfc=");
-  sprintf(query, "%s'%s' LIMIT 1", query, rfc);
+  sprintf(query, "%s'%s' ORDER BY fecha DESC LIMIT 1", query, rfc);
   resultado = PQexec(con, query);
 
   if (resultado == NULL  || PQresultStatus(resultado) != PGRES_TUPLES_OK) {
@@ -221,7 +221,7 @@ int RegistraFactura(unsigned numfact, struct articulos art[maxarts],
             "(OsoPOS) ADVERTENCIA: El folio %u puede estarse duplicando)",
             numfact);
   }
-  numfact = numfact?numfact:num_max+1;
+  numfact = numfact ? numfact : num_max+1;
 
   sprintf(fecha_iso, "%d-%2d-%2d", fecha.anio, fecha.mes, fecha.dia);
   if (fecha.mes < 10)

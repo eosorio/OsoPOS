@@ -1,7 +1,5 @@
 Alta prioridad
 ---------------
-* Hacer que las ventas se registren en tablas por detalle,
-  conteniendo id_venta, vendedor, articulos.
 * Registrar id_vendedor y id_cajero en tabla ventas
 * Revisar que no se sigan descontando articulos al llegar a cero en
   existencia
@@ -9,7 +7,7 @@ Alta prioridad
 * Arreglar uso de apuntadores en LeeConfig de todos los fuentes
 
 Mediana prioridad
-* Hacer función que haga justificación en impresión (si no se alcanza a
-  imprimir una palabra, la manda a la siguiente línea
-* Optimizar y capturar errores en uso de apuntadores en funciones LeeConfig
+* Importar de OsoPOS Web función que hace justificación de lineas
+
+
 
