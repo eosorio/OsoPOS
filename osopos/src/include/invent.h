@@ -1,3 +1,7 @@
+#ifndef maxbuf
+#define maxbuf 255
+#endif
+
 void imprime_renglon(FILE *disp, char *datos[numdat]);
 
 void imprime_renglon(FILE *disp, char *datos[numdat])
