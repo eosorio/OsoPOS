@@ -151,6 +151,8 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define MX_LON_DIVISA_DES   20
 #endif
 
+double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
+
  /* Códigos de impresora */
 #define ESC 27
 #define FF 12
