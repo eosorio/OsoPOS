@@ -48,7 +48,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/print-func.h"
 #define _printfunc
 
-#define vers "1.38"
+#define vers "1.39"
 #define release "El Punto"
 
 #ifndef maxdes
@@ -63,12 +63,18 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define mxmembarra 100
 #endif
 
-#define blanco_sobre_negro 1
-#define amarillo_sobre_negro 2
-#define verde_sobre_negro 3
-#define azul_sobre_blanco 4
-#define cyan_sobre_negro 5
+#ifndef maxitem_busqueda
+#define maxitem_busqueda 20
+#endif
 
+#define blanco_sobre_negro       1
+#define amarillo_sobre_negro     2
+#define verde_sobre_negro        3
+#define azul_sobre_blanco        4
+#define cyan_sobre_negro         5
+#define normal                   6
+#define amarillo_sobre_azul      7
+#define inverso                  8
 
 /* Códigos de impresora */
 #define abre_cajon_star 7
@@ -114,6 +120,8 @@ int aborta_remision(PGconn *con, PGconn *con_s, char *mensaje, char tecla, int s
 void init_serial(struct sigaction *saio, struct termios *oldtio, struct termios *newtio);
 void signal_handler_IO (int status);
 void close_serial(int fd, struct termios *tio);
+int busqueda_articulo(char *);
+void muestra_renglon(WINDOW *,unsigned renglon, unsigned num_items);
 
 double tipo_cambio(char *);
 
@@ -124,7 +132,7 @@ double a_pagar;
 int numbarras=0;
 int numdivisas=0;
 /* struct barras barra[mxmembarra];  */
-struct articulos articulo[maxart], barra[mxmembarra];
+struct articulos articulo[maxart], barra[mxmembarra]; /* barra se queda siempre en memoria */
 struct divisas divisa[mxmemdivisa];
 int numarts=0;          /* Número de items capturados   */
 short unsigned maxitemr;
@@ -132,6 +140,7 @@ pid_t pid;
 char *program_name;
 unsigned almacen;
 struct db_data db;
+char   *item[maxitem_busqueda]; /* Líneas de caracteres en ventana de búsqueda */
 
   /* Variables de configuración */
 char *home_directory;
@@ -1459,6 +1468,7 @@ double item_capture(PGconn *con, int *numart, double *util,
   char    *buff, *buff2, *last_sale_fname;
   int     chbuff = -1;
   WINDOW  *v_arts;
+  PANEL   *p_arts;
   FILE    *f_last_sale;
   int     exist_journal=0;
   FILE    *f_last_items;
@@ -1467,7 +1477,9 @@ double item_capture(PGconn *con, int *numart, double *util,
   *util = 0;
   iva = 0.0;
 
-  v_arts = newwin(getmaxy(stdscr)-8, getmaxx(stdscr)-1, 4, 0);
+  p_arts = mkpanel(COLOR_BLACK, getmaxy(stdscr)-8, getmaxx(stdscr)-1, 4, 0);
+  v_arts = panel_window(p_arts);
+  //  v_arts = newwin(getmaxy(stdscr)-8, getmaxx(stdscr)-1, 4, 0);
   scrollok(v_arts, TRUE);
   buff = calloc(1,mxbuff);
   buff2 = calloc(1, mxbuff);
@@ -1549,6 +1561,13 @@ double item_capture(PGconn *con, int *numart, double *util,
             switch_pu(v_arts, &articulo[i-1], chbuff-3, &subtotal, tax, i);
             move(getmaxy(stdscr)-2,0);
           }
+          break;
+        case 11:
+          busqueda_articulo(buff);
+          update_panels();
+          doupdate();
+          wrefresh(stdscr);
+          chbuff = 0;
           break;
         case 12:
           if (puede_hacer(con, log_name, "caja_cajon_manual"))
@@ -2435,6 +2454,144 @@ void signal_handler_IO (int status)
 }
 
 
+int busqueda_articulo(char *codigo)
+{
+  WINDOW *v_busq;
+  PANEL  *pan = 0;
+
+  int vx, vy; /* Dimensiones horizontal y vertical de la ventana */
+  int max_v_desc;
+  int i,j,k;
+  int num_items;
+  int ch, finished = 0;
+  char descr[mxbuff];
+  char *aux, b[255];
+  char *cod[maxitem_busqueda];
+
+  vx = 60;
+  vy = 15;
+  max_v_desc = vx - maxcod - 3;
+  pan = mkpanel(COLOR_BLACK, vy, vx, (getmaxy(stdscr)-vy)/2, (getmaxx(stdscr)-vx)/2);
+  set_panel_userptr(pan, "pan");
+
+  v_busq = panel_window(pan);
+
+
+  scrollok(v_busq, TRUE);
+  box(v_busq, 0, 0);
+
+  aux = calloc(1, mxbuff);
+
+  show_panel(pan);
+  mvwprintw(v_busq, 1, 1, "Indique parte de la descripción: ");
+  wgetstr(v_busq,descr);
+  for (i=0; i<strlen(descr); i++)
+    descr[i] = toupper(descr[i]);
+
+  /* Desde aqui comienza búsqueda en memoria */
+  for (i=0, j=0; i<numbarras && j<maxitem_busqueda; i++) {
+    strncpy(aux, barra[i].desc, maxdes-1);
+    aux[mxbuff-1] = 0;
+    for (k=0; k<strlen(aux); k++)
+      aux[k] = toupper(aux[k]);
+    limpiacad(aux, TRUE);
+    if (strstr(aux, descr) != NULL) {
+      item[j] = calloc(1, getmaxx(v_busq));
+      cod[j] = calloc(1, maxcod+1);
+      strcpy(cod[j], barra[i].codigo);
+      if (strlen(barra[i].desc) >= max_v_desc) {
+        strncpy(b,  barra[i].desc, max_v_desc);
+        b[max_v_desc] = 0;
+      }
+      else
+        strncpy(b,  barra[i].desc, max_v_desc);
+      sprintf(item[j], "%-15s %s", cod[j], b);
+      mvwprintw(v_busq, v_busq->_cury, 1, "%s\n", item[j]);
+      j++;
+    }
+  }
+
+  /* aqui termina código de búsqueda */
+
+  num_items = j;
+  i = 0;
+  noecho();
+  keypad(v_busq, TRUE);
+  muestra_renglon(v_busq, 0, num_items);
+  while (!finished)
+  {
+    switch(ch = wgetch(v_busq)) {
+    case KEY_UP:
+      if (i <= 0) {
+        beep();
+        continue;
+      }
+      wattrset(v_busq, COLOR_PAIR(normal));
+      mvwprintw(v_busq, v_busq->_cury, 0, "%s", item[i--]);
+      if (v_busq->_cury == 0) {
+        wscrl(v_busq, -1);
+          wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+          mvwprintw(v_busq, 0, 0, "%s", item[i]);
+      }
+      else {
+        wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+        mvwprintw(v_busq, v_busq->_cury-1, 0, "%s", item[i]);
+      }
+      wrefresh(v_busq);
+    
+      break;
+    case KEY_DOWN:
+      if (i+1 >= num_items) {
+        beep();
+        continue;
+      }
+      wattrset(v_busq, COLOR_PAIR(normal));
+      mvwprintw(v_busq, v_busq->_cury, 0, "%s", item[i++]);
+        if (v_busq->_cury == v_busq->_maxy) {
+          wscrl(v_busq, +1);
+          wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+          mvwprintw(v_busq, v_busq->_maxy, 0, "%s", item[i]);
+        }
+        else {
+          wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+          mvwprintw(v_busq, v_busq->_cury+1, 0, "%s", item[i]);
+        }        
+        wrefresh(v_busq);
+        break;
+    case 10:
+      finished = TRUE;
+    }
+  }
+
+  strcpy(codigo, cod[i]);
+  for (j=0; j<num_items; j++) {
+    free(item[j]);
+    free(cod[j]);
+  }
+  wrefresh(v_busq);
+  wclear(v_busq);
+  wrefresh(v_busq);
+  rmpanel(pan);
+  free(aux);
+  echo();
+  return(OK);
+}
+
+void muestra_renglon(WINDOW *v_arts, unsigned renglon, unsigned num_items)
+{
+  int      i;
+
+  wattrset(v_arts, COLOR_PAIR(normal));
+  wclear(v_arts);
+  for (i=0; i<num_items-1-renglon && i<v_arts->_maxy; i++)
+    mvwprintw(v_arts, i+1, 0, "%s", item[renglon+i+1]);
+
+  wattrset(v_arts, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+  mvwprintw(v_arts, 0, 0, "%s", item[renglon]);
+  refresh();
+  wrefresh(v_arts);
+}
+
 /********************************************************/   
 
 int main(int argc, char *argv[]) {
@@ -2476,6 +2633,9 @@ int main(int argc, char *argv[]) {
   init_pair(verde_sobre_negro, COLOR_GREEN, COLOR_BLACK);
   init_pair(azul_sobre_blanco, COLOR_BLUE, COLOR_WHITE);
   init_pair(cyan_sobre_negro, COLOR_CYAN, COLOR_BLACK);
+  init_pair(amarillo_sobre_azul, COLOR_YELLOW, COLOR_BLUE);
+  init_pair(normal, COLOR_WHITE, COLOR_BLACK);
+  init_pair(inverso, COLOR_BLACK, COLOR_WHITE);
 
   con_s = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.sup_user, db.sup_passwd);
   if (con_s == NULL) {
