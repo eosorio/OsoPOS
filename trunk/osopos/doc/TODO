@@ -1,6 +1,6 @@
 Alta prioridad
 ---------------
-No hay
+* Hacer módulo para dar de alta departamentos y proveedores
 
 Mediana prioridad
 ------------------
@@ -9,4 +9,5 @@ Mediana prioridad
 * Hacer función que haga justificación en impresión (si no se alcanza a
   imprimir una palabra, la manda a la siguiente línea
 * Optimizar y capturar errores en uso de apuntadores en funciones LeeConfig
-
+* En invent: cachar error cuando el usuario modifica o agrega articulo y 
+  quiere colocar un departamento que no esta dado de alta en la tabla
