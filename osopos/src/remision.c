@@ -84,7 +84,7 @@ int actualiza_existencia(PGconn *con);
 /* Esta función reemplaza a leebarras */
 int lee_articulos(PGconn *base_inventario);
 void MuestraArtLista(WINDOW *vent, int i, short cr);
-void muestra_subtotal(double);
+void show_subtotal(double);
 void mensaje(char *texto);
 void aviso_existencia(struct articulos art);
 
@@ -114,7 +114,7 @@ char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *cc_avisos,    /* con copia para */
   *asunto_avisos; /* Asunto del correo de avisos */
 double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
-  
+int search_2nd;  /* ¿Buscar código alternativo al mismo tiempo que el primario ? */  
 
 int read_config()
 {
@@ -133,6 +133,7 @@ int read_config()
   strcpy(nmconfig, home_directory);
   strcat(nmconfig, "/.osopos/remision.config");
 
+  search_2nd = 1;
 
  /* Raw writing to port will not be supported anymore */
   //nm_disp_ticket = calloc(1, strlen("/dev/lpx")+1);
@@ -290,6 +291,10 @@ int read_config()
         realloc(nm_sendmail, strlen(buf)+1);
         strcpy(nm_sendmail,buf);
       }
+      else if (!strcmp(b,"busca_codigo_alternativo")) {
+        strcpy(buf, strtok(NULL,"="));
+        search_2nd = atoi(buf);
+      }
       if (!feof(config))
         fgets(buff,mxbuff,config);
     }
@@ -339,13 +344,19 @@ int lee_articulos(PGconn *base_inventario)
 
   for (i=0; i < PQntuples(res) && i<mxmembarra; i++) {
     strcpy(barra[i].codigo , PQgetvalue(res,i,0));
+    strcpy(barra[i].codigo2 , PQgetvalue(res,i,13));
     strcpy(barra[i].desc, PQgetvalue(res,i,1));
     barra[i].pu = atof(PQgetvalue(res,i,2));
+    barra[i].pu = atof(PQgetvalue(res,i,14));
+    barra[i].pu = atof(PQgetvalue(res,i,15));
+    barra[i].pu = atof(PQgetvalue(res,i,16));
+    barra[i].pu = atof(PQgetvalue(res,i,17));
     barra[i].disc = atof(PQgetvalue(res,i,3));
     barra[i].exist = atoi(PQgetvalue(res,i,4));
     barra[i].exist_min = atoi(PQgetvalue(res,i,5));
     barra[i].p_costo = atof(PQgetvalue(res,i,9));
     barra[i].iva_porc = atof(PQgetvalue(res,i,11));
+    strcpy(barra[i].divisa, PQgetvalue(res,i,12));
   }
 
   if (PQntuples(res) >= mxmembarra)  {
@@ -354,7 +365,7 @@ int lee_articulos(PGconn *base_inventario)
     fprintf(stderr, "ADVERTENCIA: Se ha excedido el máximo de artículos en memoria, no fueron\n");
     fprintf(stderr, "             cargados todos los que existen en la base");
     sprintf(comando,
-            "Se ha excedido el máximo de artículos en memoria, se leyeton los primeros %d",
+            "Se ha excedido el máximo de artículos en memoria, se leyeron los primeros %d",
             mxmembarra);
     mensaje(comando);
     free(comando);
@@ -380,16 +391,19 @@ int lee_articulos(PGconn *base_inventario)
 
 /***************************************************************************/
 
-/*double busca_precio(char *cod, char *descrip, double *p_costo) { */
-int busca_precio(char *cod, struct articulos *art) {
+int find_code(char *cod, struct articulos *art, int search_2nd) {
+  //int busca_precio(char *cod, struct articulos *art) {
 /* Busca el código de barras en la memoria y devuelve el precio */
 /* del producto. */
 int i;
-int salir=0; /* falso si hay que salirse */
+int exit=0; /* falso si hay que salirse */
 
   for (i=0; (i<numbarras); ++i) {
-    salir = strcmp(cod, barra[i].codigo);
-    if (!salir) {
+    exit = strcmp(cod, barra[i].codigo);
+    if (exit && search_2nd)
+      exit = strcmp(cod, barra[i].codigo2);
+
+    if (!exit) {
       strcpy(art->codigo, barra[i].codigo);
       strcpy(art->desc, barra[i].desc);
       art->p_costo = barra[i].p_costo;
@@ -398,7 +412,7 @@ int salir=0; /* falso si hay que salirse */
       return(i);
     }
   }
-  return(-5);
+  return(ERROR_DIVERSO);
 }    
 
 /***************************************************************************/
@@ -458,7 +472,7 @@ void MuestraArtLista(WINDOW *vent, int i, short cr) {
   wrefresh(vent);
 }
 
-void muestra_subtotal(double subtotal) {
+void show_subtotal(double subtotal) {
 
   attrset(COLOR_PAIR(verde_sobre_negro));
   mvprintw(getmaxy(stdscr)-5,0,"Subtotal acumulado: $%8.2f",subtotal);
@@ -468,9 +482,7 @@ void muestra_subtotal(double subtotal) {
 
 /***************************************************************************/
 
-double capt_remision(//char   *nm_reg_diario,
-                     //char   *nm_reg_temp,
-                     int    *numart,
+double capt_remision(int    *numart,
                      double *util) {
   double  subtotal = 0.0;
   double  iva_articulo;
@@ -479,6 +491,7 @@ double capt_remision(//char   *nm_reg_diario,
   int     i=0,
           j,k;
   char    *buff;
+  int     chbuff;
   WINDOW  *v_arts;
   *util = 0;
 
@@ -496,7 +509,24 @@ double capt_remision(//char   *nm_reg_diario,
     articulo[i].pu = 0;
     articulo[i].p_costo = 0;
     mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
-    getstr(buff);
+    do {       
+      buff[0] = 0;
+      switch(chbuff = wgetkeystrokes(stdscr, buff, mxbuff)) {
+        //        case KEY_F(1):
+        case 2: /* F2 */
+          strcpy(buff, "descuento");
+          chbuff = 0;
+          break;
+        case 3: /* F3 */
+          cancela_articulo(v_arts, &i, &subtotal, &iva);
+          show_subtotal(subtotal);
+          continue;
+          break;
+      default:
+      }
+    }
+    while (chbuff);
+    //    getstr(buff);
     move(getmaxy(stdscr)-2,0);
     deleteln();
 
@@ -527,7 +557,7 @@ double capt_remision(//char   *nm_reg_diario,
         wmove(v_arts, v_arts->_cury-1, v_arts->_curx);
         MuestraArtLista(v_arts, i-1, TRUE);
       }
-      muestra_subtotal(subtotal);
+      show_subtotal(subtotal);
 
       articulo[i].desc[0] = 0;
       articulo[i].cant = 1;
@@ -546,13 +576,11 @@ double capt_remision(//char   *nm_reg_diario,
         iva += iva_articulo;
         wmove(v_arts, v_arts->_cury-1, v_arts->_curx);
         MuestraArtLista(v_arts, i-1, TRUE);
-        muestra_subtotal(subtotal);
+        show_subtotal(subtotal);
         continue;
       }
 
-      if (busca_precio(buff, &articulo[i]) >= 0)
-        strncpy(articulo[i].codigo, buff, maxcod);
-      else {
+      if (find_code(buff, &articulo[i], search_2nd) == 0) {
         strncpy(articulo[i].desc, buff, maxdes);
         articulo[i].iva_porc = TAX_PERC_DEF;
       }
@@ -567,7 +595,7 @@ double capt_remision(//char   *nm_reg_diario,
       }
       if (strstr(articulo[i].desc,"ancela") && i) {
         cancela_articulo(v_arts, &i, &subtotal, &iva);
-        muestra_subtotal(subtotal);
+        show_subtotal(subtotal);
         continue;
       }
       strcpy(articulo[i].codigo,"Sin codigo");
@@ -585,7 +613,7 @@ double capt_remision(//char   *nm_reg_diario,
         iva += (iva_articulo * articulo[i-1].cant);
         wmove(v_arts, v_arts->_cury-1, 0);
         MuestraArtLista(v_arts, i-1, TRUE);
-        muestra_subtotal(subtotal);
+        show_subtotal(subtotal);
         continue;
       }
       /* Artículo no registrado */
@@ -597,7 +625,7 @@ double capt_remision(//char   *nm_reg_diario,
       iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
       subtotal += (articulo[i].pu * articulo[i].cant);
       iva += (iva_articulo * articulo[i].cant);
-      muestra_subtotal(subtotal);
+      show_subtotal(subtotal);
       articulo[++i].cant = 1;
     }
     else {  /* Articulo registrado */
@@ -605,7 +633,7 @@ double capt_remision(//char   *nm_reg_diario,
       iva_articulo =  articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
       subtotal += (articulo[i].pu * articulo[i].cant);
       iva += (iva_articulo * articulo[i].cant);
-      muestra_subtotal(subtotal);
+      show_subtotal(subtotal);
       articulo[++i].cant = 1;
     }
   }
@@ -1158,7 +1186,5 @@ int main() {
 
 - Optimizar la funcion busca_precio para que solo devuelva el indice del código buscado y
   posteriormente se haga una copia de registro a registro
-- Revisar manejo de articulos exentos de IVA, y sumatoria de IVA
-- Hacer que se imprima el IVA en tickets
 
   */
