@@ -24,6 +24,10 @@
 #define maxdes 39
 #endif
 
+#ifndef maxdisclong
+#define maxdisclong 4
+#endif
+
 #ifndef maxpreciolong
 #define maxpreciolong 10 /* Máxima longitud de precio */
 #endif
@@ -127,6 +131,7 @@ struct articulos {
   unsigned id_depto;
   int      exist_min, exist_max;
   double   iva_porc;          /*  Gravamen de IVA del artículo */
+  char     prov_clave[maxcod]; /* Clave del articulo con proveedor */
 };
 
 struct proveedor {

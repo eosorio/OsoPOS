@@ -1,5 +1,5 @@
 /*
- pos-func.h 0.18-1 Biblioteca de funciones de OsoPOS.
+ pos-func.h 0.19-1 Biblioteca de funciones de OsoPOS.
         Copyright (C) 1999,2000 Eduardo Israel Osorio Hernández
 
         Este programa es un software libre; puede usted redistribuirlo y/o
@@ -473,9 +473,10 @@ PGresult *Agrega_en_Inventario(PGconn *base, char *tabla, struct articulos art)
 
   comando_sql = calloc(1,mxbuff);
   sprintf(comando_sql,
-          "INSERT INTO %s VALUES('%s', '%s', %.2f, %.2f, %u, %u, %u, '%u', '%u', %.2f)",
-            tabla, art.codigo, art.desc, art.pu, art.disc, art.exist,
-            art.exist_min, art.exist_max, art.id_prov, art.id_depto, art.p_costo);
+          "INSERT INTO %s VALUES ('%s', '%s', %.2f, %.2f, %u, %u, %u, '%u', '%u', %.2f, '%s', %.2f)",
+		  tabla, art.codigo, art.desc, art.pu, art.disc, art.exist,
+		  art.exist_min, art.exist_max, art.id_prov, art.id_depto,
+		  art.p_costo, art.prov_clave, art.iva_porc);
   free(comando_sql);
   return(resultado);
 }
@@ -489,10 +490,11 @@ PGresult *Modifica_en_Inventario(PGconn *base, char *tabla, struct articulos art
 
   comando_sql = calloc(1,mxbuff);
   sprintf(comando_sql,
-         "UPDATE %s SET descripcion='%s', pu=%.2f, descuento=%.2f, cant=%u, min=%u, max=%u, id_prov='%u', id_depto='%u', p_costo=%.2f WHERE codigo='%s'",
-                        tabla, art.desc, art.pu, art.disc, art.exist,
-                        art.exist_min, art.exist_max, art.id_prov,
-                        art.id_depto, art.p_costo, art.codigo);
+         "UPDATE %s SET descripcion='%s', pu=%.2f, descuento=%.2f, cant=%u, min=%u, max=%u, id_prov='%u', id_depto='%u', p_costo=%.2f, prov_clave='%s', iva_porc=%.2f WHERE codigo='%s'",
+		  tabla, art.desc, art.pu, art.disc, art.exist,
+		  art.exist_min, art.exist_max, art.id_prov,
+		  art.id_depto, art.p_costo, art.prov_clave,
+		  art.iva_porc, art.codigo);
   res = PQexec(base, comando_sql);
   if (PQresultStatus(res) != PGRES_COMMAND_OK)
     fprintf(stderr, "Error: %s\n", PQerrorMessage(base));
@@ -590,6 +592,9 @@ PGresult *Busca_en_Inventario(PGconn *base,
     art->id_prov = atoi(PQgetvalue(res,0,7));
     art->id_depto = atoi(PQgetvalue(res,0,8));
     art->p_costo = atof(PQgetvalue(res,0,9));
+	strncpy(art->prov_clave, PQgetvalue(res, 0, 10), maxcod);
+    art->iva_porc = atof(PQgetvalue(res, 0, 11));
+
   }
   PQclear(res);
 
