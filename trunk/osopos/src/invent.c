@@ -52,13 +52,14 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define CAMPO_COD             1
 #define CAMPO_DESCR           3
 #define CAMPO_PU              5
-#define CAMPO_EXIS            7
-#define CAMPO_DISC           10
+#define CAMPO_EXIS           10
+#define CAMPO_DISC            7
 #define CAMPO_EXMIN          12
 #define CAMPO_EXMAX          14
 #define CAMPO_CODPROV        16
 #define CAMPO_DEPTO          18
 #define CAMPO_PCOSTO         20
+#define CAMPO_IVA            22
 
 #define version "0.30-1"
 
@@ -460,7 +461,7 @@ int form_virtualize(WINDOW *w)
     }
 }
 
-int llena_campos(FIELD *campo[22], unsigned i, PGconn *base)
+int llena_campos(FIELD *campo[25], unsigned i, PGconn *base)
 {
   PGresult           *res;
   char               codigo[maxcod];
@@ -525,6 +526,9 @@ int llena_campos(FIELD *campo[22], unsigned i, PGconn *base)
     strncpy(aux, PQgetvalue(res, 0, 0), maxdeptolen);
     set_field_buffer(campo[CAMPO_DEPTO], 0, aux);
 
+    sprintf(aux, "%.2f", art.iva_porc);
+    set_field_buffer(campo[CAMPO_IVA], 0, aux);
+
     free(aux);
     free(comando);
     return(OK);
@@ -555,7 +559,7 @@ int busca_item(char *codigo, unsigned num_items)
   return(-1);
 }
 
-int interpreta_campos(struct articulos *art, FIELD *campo[22])
+int interpreta_campos(struct articulos *art, FIELD *campo[25])
 {
   strncpy(art->codigo, campo[CAMPO_COD]->buf, maxcod-1);
   art->codigo[maxcod-1] = 0;
@@ -573,11 +577,12 @@ int interpreta_campos(struct articulos *art, FIELD *campo[22])
   art->id_prov = atoi(campo[CAMPO_CODPROV]->buf);
   art->id_depto = atoi(campo[18]->buf);
   art->p_costo = atof(campo[CAMPO_PCOSTO]->buf);
+  art->iva_porc = atof(campo[CAMPO_IVA]->buf);
   return(OK);
 }
 
 
-void modifica_articulo(FIELD *campo[22], PGconn *base, unsigned num_items)
+void modifica_articulo(FIELD *campo[25], PGconn *base, unsigned num_items)
 {
   int    item;
   char   codigo[mxbuff];
@@ -598,7 +603,7 @@ void modifica_articulo(FIELD *campo[22], PGconn *base, unsigned num_items)
   }
 
 
-void agrega_articulo(FIELD *campo[22], PGconn *base, unsigned *num_items)
+void agrega_articulo(FIELD *campo[25], PGconn *base, unsigned *num_items)
 {
   int    i;
   char   codigo[mxbuff];
@@ -698,7 +703,7 @@ int busca_articulo(FIELD *campo, unsigned num_items)
 int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
 {
   FORM  *forma;
-  FIELD *campo[22];
+  FIELD *campo[25];
   char  *etiqueta;
   char  *depto[maxdepto];
   char  **deptos = depto;
@@ -772,25 +777,29 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   campo [CAMPO_DESCR] = CreaCampo(2, maxcod+1, 1, maxdes);
   campo [4] = CreaEtiqueta(1, maxcod+maxdes+2, "P. U.");
   campo [CAMPO_PU] = CreaCampo(2, maxcod+maxdes+2, 1, maxpreciolong);
-  campo [6] = CreaEtiqueta(1, maxcod+maxdes+maxpreciolong+3, "Exis");
-  campo [CAMPO_EXIS] = CreaCampo(2, maxcod+maxdes+maxpreciolong+3, 1, maxexistlong);
+  campo [6] = CreaEtiqueta(1, maxcod+maxdes+maxpreciolong+3, "Dscto");
+  campo [CAMPO_DISC] = CreaCampo(2, maxcod+maxdes+maxpreciolong+3, 1, maxdisclong);
   campo [8] = CreaEtiqueta(0, 6, etiqueta);
-  campo [9] = CreaEtiqueta(3, 0, "Descuento");
-  campo[CAMPO_DISC] = CreaCampo(4, 0, 1, maxpreciolong);
-  campo[11] = CreaEtiqueta(3, maxpreciolong+1, "Ex min");
-  campo[CAMPO_EXMIN] = CreaCampo(4, maxpreciolong+2, 1, maxexistlong);
-  campo[13] = CreaEtiqueta(3, maxexistlong+maxpreciolong+4, "Ex max");
-  campo[CAMPO_EXMAX] = CreaCampo(4, maxexistlong+maxpreciolong+5, 1, maxexistlong);
-  campo[15] = CreaEtiqueta(3, maxexistlong*2+maxpreciolong+7, "Codigo proveedor");
-  campo[CAMPO_CODPROV] = CreaCampo(4, maxexistlong*2+maxpreciolong+7, 1, maxcod);
-  campo[19] = CreaEtiqueta(3, maxexistlong*2+maxpreciolong+maxcod*2+9,
-              "P. Costo");
-  campo[CAMPO_PCOSTO] = CreaCampo(4, maxexistlong*2+maxpreciolong+maxcod*2+9,
-                        1, maxpreciolong);
-  campo[17] = CreaEtiqueta(3, maxexistlong*2+maxpreciolong+maxcod+8,
+  campo [9] = CreaEtiqueta(3, 0, "Exis");
+  campo[CAMPO_EXIS] = CreaCampo(4, 0, 1, maxexistlong);
+  campo[11] = CreaEtiqueta(3, maxexistlong+1, "Ex min");
+  campo[CAMPO_EXMIN] = CreaCampo(4, maxexistlong+2, 1, maxexistlong);
+  campo[13] = CreaEtiqueta(3, maxexistlong+maxexistlong+4, "Ex max");
+  campo[CAMPO_EXMAX] = CreaCampo(4, maxexistlong+maxexistlong+5, 1, maxexistlong);
+  campo[15] = CreaEtiqueta(3, maxexistlong*2+maxexistlong+7, "Codigo proveedor");
+  campo[CAMPO_CODPROV] = CreaCampo(4, maxexistlong*2+maxexistlong+7, 1, maxcod);
+  campo[17] = CreaEtiqueta(3, maxexistlong*2+maxexistlong+maxcod+8,
               "Departamento");
-  campo[CAMPO_DEPTO] = CreaCampo(4, maxexistlong*2+maxpreciolong+maxcod+8, 1, maxcod);
-  campo[21] = (FIELD *)0;
+  campo[CAMPO_DEPTO] = CreaCampo(4, maxexistlong*2+maxexistlong+maxcod+8, 1, maxcod);
+  campo[19] = CreaEtiqueta(3, maxexistlong*2+maxexistlong+maxcod*2+9,
+              "P. Costo");
+  campo[CAMPO_PCOSTO] = CreaCampo(4, maxexistlong*2+maxexistlong+maxcod*2+9,
+                                  1, maxpreciolong);
+  campo[21] = CreaEtiqueta(3, maxexistlong*2+maxexistlong+maxcod*2+maxpreciolong+10, "IVA");
+  campo[CAMPO_IVA] = CreaCampo(4, maxexistlong*2+maxexistlong+maxcod*2+maxpreciolong+10,
+                               1, maxdisclong);
+  campo[23] = CreaEtiqueta(4, maxexistlong*2+maxexistlong+maxcod*2+maxpreciolong+maxdisclong+10, "%");
+  campo[24] = (FIELD *)0;
 
   set_field_pad(campo[CAMPO_COD], 0);
   set_field_pad(campo[CAMPO_DESCR], 0);
@@ -803,6 +812,7 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   set_field_type(campo[CAMPO_PCOSTO], TYPE_NUMERIC, 0, 0, MAXDOUBLE);
   set_field_type(campo[CAMPO_CODPROV], TYPE_ENUM, provs, TRUE, FALSE);
   set_field_type(campo[CAMPO_DEPTO], TYPE_ENUM, deptos, TRUE, FALSE);
+  set_field_type(campo[CAMPO_IVA], TYPE_NUMERIC, 2, 0, MAXDOUBLE);
   forma = new_form(campo);
 
   scale_form(forma, &tam_ren, &tam_col);
