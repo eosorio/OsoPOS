@@ -67,6 +67,15 @@ int sale_register(PGconn *base, PGconn *base_sup,
                   unsigned num_arts,
                   unsigned almacen);
 
+long int registra_renta(PGconn *base, PGconn *base_sup,
+                   char *tabla,
+                   long id_cliente,
+                   time_t f_pedido,
+                   time_t f_entrega,
+                   struct articulos art[maxart],
+                   unsigned num_arts);
+
+
 
 PGresult *Agrega_en_Inventario(PGconn *base, char *tabla, struct articulos art);
 
@@ -457,6 +466,127 @@ int sale_register(PGconn *base, PGconn *base_sup,
   return(num_venta);
 }
  
+/*********************************************************************/
+long int registra_renta(PGconn *base, PGconn *base_sup,
+                   char *tabla,
+                   long id_cliente,
+                   time_t f_pedido,
+                   time_t f_entrega,
+                   struct articulos art[maxart],
+                   unsigned num_arts)
+{
+  char *query;
+  char *s_pedido, *s_entrega;
+  int i;
+  long int id_renta;
+  struct tm *tm_entrega;
+
+  PGresult *db_res;
+
+  query = calloc(1, mxbuff);
+  s_pedido = calloc(1, mxbuff*2);
+  s_entrega = calloc(1, mxbuff*2);
+
+  strcpy(s_pedido, ctime(&f_pedido));
+  s_pedido[strlen(s_pedido)-1] = 0;
+
+  sprintf(query, "INSERT INTO %s (pedido, cliente, status) ", tabla);
+  sprintf(query, "%s VALUES ('%s', %ld, B'00000000') ", query, s_pedido, id_cliente);
+
+  db_res = PQexec(base, query);
+  if (PQresultStatus(db_res) != PGRES_COMMAND_OK) {
+    fprintf(stderr,"Error al insertar datos de rentas\n");
+    PQclear(db_res);
+    free(query);
+    free(s_pedido);
+    free(s_entrega);
+    return(ERROR_SQL);
+  }
+  PQclear(db_res);
+
+  sprintf(query, "SELECT id FROM %s WHERE pedido='%s' AND ", tabla, s_pedido);
+  sprintf(query, "%s cliente=%ld AND status=B'00000000' ", query, id_cliente);
+
+  db_res = PQexec(base, query);
+  if (PQresultStatus(db_res) != PGRES_TUPLES_OK) {
+    fprintf(stderr,"ERROR: No encuentro registro de la renta\n");
+    PQclear(db_res);
+    free(query);
+    free(s_pedido);
+    free(s_entrega);
+    return(ERROR_SQL);
+  }
+  id_renta = atol(PQgetvalue(db_res, 0, 0));
+  PQclear(db_res);
+
+
+  sprintf(query, "UPDATE cliente SET status = status|B'10000000' WHERE id=%ld ", id_cliente);
+
+  db_res = PQexec(base, query);
+  if (PQresultStatus(db_res) != PGRES_COMMAND_OK) {
+    fprintf(stderr,"Error al actualizar datos de cliente\n");
+    PQclear(db_res);
+    free(query);
+    free(s_pedido);
+    free(s_entrega);
+    return(ERROR_SQL);
+  }
+  PQclear(db_res);
+
+  for (i=0; i<num_arts; i++) {
+
+    if (f_entrega == 0) {
+      tm_entrega = localtime(&f_pedido);
+
+      switch (art[i].unidad_t) {
+      case 0: 
+        tm_entrega->tm_min += (art[i].t_renta);
+        break;
+      case 1:
+        tm_entrega->tm_hour+= (art[i].t_renta);
+        break;
+      case 2:
+        tm_entrega->tm_mday+= (art[i].t_renta);
+        break;
+      case 3:
+        tm_entrega->tm_mday += (art[i].t_renta * 7);
+        break;
+      case 4:
+        tm_entrega->tm_mon+= (art[i].t_renta);
+        break;
+      case 5:
+        tm_entrega->tm_year+= (art[i].t_renta);
+        break;
+      }
+      f_entrega = mktime(tm_entrega);
+    }
+
+    strcpy(s_entrega, ctime(&f_entrega));
+    s_entrega[strlen(s_entrega)-1] = 0;
+
+    sprintf(query, "INSERT INTO rentas_detalle (id, serie, f_entrega, costo, status) VALUES ");
+    sprintf(query, "%s (%ld, '%s', '%s', %f, B'00000000') ", query,
+            id_renta, art[i].serie, s_entrega, art[i].pu);
+
+    db_res = PQexec(base, query);
+    if (PQresultStatus(db_res) != PGRES_COMMAND_OK) {
+      fprintf(stderr,"ERROR: Al agregar articulos rentados.\n");
+      PQclear(db_res);
+      free(query);
+      free(s_pedido);
+      free(s_entrega);
+      return(ERROR_SQL);
+    }
+  }
+
+
+  PQclear(db_res);
+  free(query);
+  free(s_pedido);
+  free(s_entrega);
+  return (id_renta);
+}
+
 /*********************************************************************/
 
 PGresult *Agrega_en_Inventario(PGconn *base, char *tabla, struct articulos art)
