@@ -1,3 +1,22 @@
+/*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+ pos-func.h 0.20-1 Biblioteca de funciones de OsoPOS.
+        Copyright (C) 1999,2000 Eduardo Israel Osorio Hernández
+
+        Este programa es un software libre; puede usted redistribuirlo y/o
+modificarlo de acuerdo con los términos de la Licencia Pública General GNU
+publicada por la Free Software Foundation: ya sea en la versión 2 de la
+Licencia, o (a su elección) en una versión posterior.
+
+        Este programa es distribuido con la esperanza de que sea útil, pero 
+SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
+DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
+GNU para mayores detalles.
+
+        Debería usted haber recibido una copia de la Licencia Pública General
+GNU junto con este programa; de no ser así, escriba a Free Software
+Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
+ */
+
 #include <ncurses.h>
 
 #include "pos-func.h"
@@ -5,6 +24,9 @@
 
 int ErrorArchivo(char *nmarch);
 /* Reporta errores en apertura de archivo y termina el programa */
+
+int wgetkeystrokes(WINDOW *, char *, int);
+/* Captura una secuencia de teclas o teclas de función */
 
 /*********************************************************************/
 
@@ -25,4 +47,42 @@ void aborta(char *mensaje, int cod)
   getch();
   endwin();
   exit(cod);
+}
+
+int wgetkeystrokes(WINDOW *w, char *input_str, int str_len) {
+  int ch = 0;
+  short finished = 0;
+  int i;
+
+  noraw();
+  cbreak();
+  noecho();
+  //  scrollok(w, TRUE);
+  idlok(w, TRUE);
+  keypad(w, TRUE);
+
+  for (i=0; finished==0 && i<str_len; i++) {
+	ch = wgetch(w);
+	if (ch>KEY_F0 && ch<KEY_F(13)) {
+	  echo();
+	  raw();
+	  return(ch - KEY_F0);
+	}
+	if (ch >= 64 && ch<200) {
+      input_str[i+1] = 0;
+      input_str[i] = ch;
+	  wprintw(w, "%c", ch);
+	}
+	else
+	  switch(ch) {
+        case '\n':
+		  finished = 1;
+		  echo();
+		  raw();
+  		  return(0);
+		  break;
+        default:
+	  }
+  }
+  return(0);
 }

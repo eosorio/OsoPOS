@@ -1,4 +1,28 @@
-#if	!defined(OK) || ((OK) != 0)
+/*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+
+   OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
+   Programa OsoPOS (C) 1999-2001 E. Israel Osorio H.
+   desarrollo@elpuntodeventa.com
+   Lea el archivo README, COPYING y LEAME que contienen información
+   sobre la licencia de uso de este programa
+
+     Este programa es un software libre; puede usted redistribuirlo y/o
+modificarlo de acuerdo con los términos de la Licencia Pública General GNU
+publicada por la Free Software Foundation: ya sea en la versión 2 de la
+Licencia, o (a su elección) en una versión posterior.
+
+     Este programa es distribuido con la esperanza de que sea útil, pero
+SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
+DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
+GNU para mayores detalles.
+
+     Debería usted haber recibido una copia de la Licencia Pública General
+GNU junto con este programa; de no ser así, escriba a Free Software
+Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
+
+*/
+
+#if !defined(OK) || ((OK) != 0)
 #define OK      (0)
 #endif
 
@@ -7,6 +31,7 @@
 
 #define ERROR_SQL      -1
 #define ERROR_MEMORIA  -2
+#define ERROR_DIVERSO  -5
 
 #ifndef mxchcant
 #define mxchcant 50
@@ -41,7 +66,7 @@
 #endif
 
 #ifndef maxart
-#define maxart  30	/* Máximo de artículos */
+#define maxart  30  /* Máximo de artículos */
 #endif
 
 #ifndef maxrfc
@@ -107,10 +132,6 @@ struct datoscliente {
   char rfc[maxrfc];
   char curp[maxcurp];
   char nombre[maxspc];
-  /* Se dejan para compatibilidad a domicilio, ciudad y edo, pero se deben quitar eventualmente */
-  char domicilio[maxspc];
-  char ciudad[maxspc-17];
-  char estado[maxspc-20];
   char dom_calle[maxspcalle];
   char dom_numero[maxspext];
   char dom_inter[maxspint];
@@ -123,9 +144,14 @@ struct datoscliente {
 struct articulos {
   int      cant, exist;
   char     desc[maxdes];
-  char     codigo[maxcod];
-  double   pu,                 /* Precio Unitario      */
-           p_costo;            /* Precio de cosro      */
+  char     codigo[maxcod], codigo2[maxcod];
+  double   pu,                 /* Precios unitarios */
+           pu2,
+           pu3,
+           pu4,
+           pu5,
+           p_costo;            /* Precio de costo      */
+  char     divisa[3];          /* Divisa de los precios */
   double   disc;               /* Discuento   .=)      */
   unsigned id_prov;            /* Id del proveedor */
   unsigned id_depto;

@@ -1,4 +1,4 @@
-/*
+/*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  pos-func.h 0.20-1 Biblioteca de funciones de OsoPOS.
         Copyright (C) 1999,2000 Eduardo Israel Osorio Hernández
 
@@ -247,9 +247,11 @@ char *str_cant(double total,int *centavos) {
   s = strchr(buffer,'.')+1;
   *centavos = atoi(s);
 
+  buffer[ strcspn(buffer, ".") ] = 0; /* Dejamos la parte entera sin decimal */
+  num1 = atoi(buffer);               /* Le damos la vuelta al bug de punto flotante */
+  //  num1 = (int) total;
   buffer[0] = 0;
 
-  num1 = (int) total;
 
   /* Obtención de millones */
   divis = div(num1,1000000);
@@ -298,7 +300,9 @@ char *str_cant(double total,int *centavos) {
   else
     miles[0]=0;
   if (unidad || decena || centena)
-    strcpy(unidades,interp_cant(unidad,decena,centena));
+	/* Ignoro porque se mete basura a unidades cuando se manda como parámetro de función
+	   total=1  */
+	strncpy(unidades,interp_cant(unidad,decena,centena), mxchcant);
   else
     unidades[0]=0;
   strcat(buffer,unidades);

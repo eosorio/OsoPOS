@@ -9,8 +9,14 @@ CREATE TABLE articulos (
   id_prov       int4 DEFAULT 0,
   id_depto      int4 DEFAULT 0,
   p_costo       real DEFAULT 0,
-  prov_clave	varchar(20) DEFAULT '',
-  iva_porc      int DEFAULT 15 NOT NULL
+  prov_clave    varchar(20) DEFAULT '',
+  iva_porc      int DEFAULT 15 NOT NULL,
+  divisa        character(3) NOT NULL DEFAULT 'MXP',
+  codigo2       varchar(20),
+  pu2           real,
+  pu3           real,
+  pu4           real,
+  pu5           real
 );
 REVOKE ALL ON articulos FROM PUBLIC;
 GRANT SELECT,UPDATE ON articulos TO "caja1";
@@ -45,19 +51,21 @@ CREATE TABLE ventas_detalle (
 );
 
 CREATE TABLE facturas_ingresos (
-  id                SERIAL PRIMARY KEY,
-  fecha             DATE,
-  rfc               VARCHAR(13),
-  dom_calle         VARCHAR(30),
-  dom_numero        VARCHAR(15),
-  dom_inter         VARCHAR(3),
-  dom_col           VARCHAR(20),
-  dom_ciudad        VARCHAR(30),
-  dom_edo           VARCHAR(3),
-  dom_cp            int4,
-  subtotal          real not null,
-  iva               real
+  "id"              SERIAL PRIMARY KEY,
+  "fecha"           DATE,
+  "rfc"             character varying(13),
+  "dom_calle"       character varying(30),
+  "dom_numero"      character varying(15),
+  "dom_inter"       character varying(3),
+  "dom_col"         character varying(20),
+  "dom_ciudad"      character varying(30),
+  "dom_edo"         character varying(20),
+  "dom_cp"          int4,
+  "subtotal"        real not null,
+  "iva"             real
 );
+REVOKE ALL ON facturas_ingresos TO PUBLIC;
+GRANT INSERT, SELECT ON facturas_ingresos TO "cajero1";
 
 CREATE TABLE fact_ingresos_detalle (
   id_factura        int4 not null,
@@ -66,12 +74,16 @@ CREATE TABLE fact_ingresos_detalle (
   cant              int,
   precio            real
 );
+REVOKE ALL ON fact_ingresos_detalle TO PUBLIC;
+GRANT INSERT, SELECT ON fact_ingresos_detalle TO "cajero1";
 
 CREATE TABLE clientes_fiscales (
   rfc               varchar(13) PRIMARY KEY NOT NULL,
   curp              varchar(18),
   nombre            varchar(70) NOT NULL
 );
+REVOKE ALL ON clientes_fiscales TO PUBLIC;
+GRANT INSERT, SELECT ON clientes_fiscales TO "cajero1";
 
 CREATE TABLE departamento (
   id                SERIAL PRIMARY KEY,
@@ -88,7 +100,7 @@ CREATE TABLE proveedores (
   "ciudad"      varchar(30),
   "estado"      varchar(30),
   "contacto"    varchar(40),
-  "email"	varchar(40),
+  "email"       varchar(40),
   "url"         varchar(80)
 );
 INSERT INTO proveedores (id, nick) VALUES (0, 'Sin proveedor');
@@ -101,7 +113,15 @@ CREATE TABLE telefonos_proveedor (
   "fax"          bool DEFAULT 'f'
 );
 
-CREATE TABLE password (
-  "usuario"      varchar(10),
-  "passwd"       varchar(32) DEFAULT ''
+CREATE TABLE users (
+  "id"           SERIAL NOT NULL,
+  "user"         varchar(10),
+  "passwd"       varchar(32) DEFAULT '',
+  "level"        int NOT NULL DEFAULT 0
+);
+
+CREATE TABLE divisas (
+  "id"           char(3) NOT NULL,
+  "nombre"       varchar(20),
+  "tipo_cambio"  real
 );
