@@ -1,0 +1,58 @@
+#!/bin/bash
+
+db_name=osopos
+PAGER="less -rf"
+
+p_ven=$1
+u_ven=$2
+
+impresora="ticket"
+arch_tmp="/tmp/desplazamiento"
+cmd_impresion="lpr -b -P $impresora "
+
+clear
+
+if [[ "$1" == "-h" ]]; then
+  echo "Detalle de ventas por rango."
+  echo "Uso: detalle primera_venta ultima_venta"
+  echo
+  echo "muestra el detalle de las ventas desde primera_venta hasta ultima_venta"
+  exit
+fi
+
+if [[ "$p_ven" == "" ]]; then
+    echo -n "Indica el número de la primera venta a mostrar: "
+    read p_ven
+    echo
+    echo
+fi
+
+if [[ "$u_ven" == "" ]]; then
+    echo -n "Indica el número de la última venta a mostrar: "
+    read u_ven
+    echo
+    echo
+fi
+
+query="SELECT id_venta AS venta, substring(descrip,0,16) AS descripcion, cantidad AS ct, pu*cantidad AS impor FROM ventas_detalle WHERE id_venta>=$p_ven AND id_venta<=$u_ven ORDER BY id_venta"
+
+psql -c "$query" osopos > $arch_tmp
+
+less -rf $arch_tmp
+
+if [[ $2 == "" ]]; then
+  echo -n "¿Imprimir? "
+  read si_no
+  if [[ $si_no == "S" || $si_no == "s" ]]; then
+    echo "Imprimiendo..."
+    echo "     DETALLE DE VENTAS" > $arch_tmp
+    echo " DE $p_ven A $u_ven" >> $arch_tmp
+    echo >> $arch_tmp
+    echo >> $arch_tmp
+    echo >> $arch_tmp
+    psql -q -c "$query" $db_name >> $arch_tmp
+    $cmd_impresion $arch_tmp
+    rm -f $arch_tmp
+    echo "Enviado a impresión en la cola $impresora"
+  fi
+fi

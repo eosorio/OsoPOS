@@ -90,7 +90,7 @@ void Crea_Factura( struct datoscliente cliente,
   fprintf(ffact,"%s\n\n\n\n\r",cliente.rfc);
   for (i=0; i<num_articulos; ++i) {
     Espacios(ffact, margen);
-    fprintf(ffact,"%3.0u",art[i].cant);
+    fprintf(ffact,"%3.0f",art[i].cant);
     fprintf(ffact,"   %s",art[i].desc);
     buff = strlen(art[i].desc);
     Espacios(ffact, 40-buff);

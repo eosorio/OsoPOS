@@ -260,7 +260,7 @@ int RegistraFactura(unsigned numfact, struct articulos art[maxarts],
   i = 0;
   while (strlen(art[i].desc)) {
     strcpy(query, "INSERT INTO fact_ingresos_detalle (id_factura, codigo, concepto, cant, precio)");
-    sprintf(buff, " VALUES (%u, '%s', '%s', %u, %f)",
+    sprintf(buff, " VALUES (%u, '%s', '%s', %f, %f)",
             numfact, art[i].codigo, art[i].desc, art[i].cant, art[i].pu);
     strcat(query, buff);
     res = PQexec(base, query);

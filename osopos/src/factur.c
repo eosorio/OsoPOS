@@ -1,8 +1,8 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
- Facturación 1.14. Módulo de facturación de OsoPOS.
+ Facturación 1.16. Módulo de facturación de OsoPOS.
 
-        Copyright (C) 1999-2001 Eduardo Israel Osorio Hernández
+        Copyright (C) 1999-2002 Eduardo Israel Osorio Hernández
 
         Este programa es un software libre; puede usted redistribuirlo y/o
 modificarlo de acuerdo con los términos de la Licencia Pública General GNU
@@ -25,16 +25,20 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <stdio.h>
 #include "include/pos-curses.h"
 #define _pos_curses
+#include <panel.h>
 #include <time.h>
 #include <values.h>
-
+#include "include/print-func.h"
 
 //#include "include/linucs.h"
 #include "include/electroh.h"
 
+#ifndef _form
 #include <form.h>
+#define _form
+#endif
 
-#define vers "1.14"
+#define vers "1.16"
 /*
 #ifdef maxspc
 #undef maxspc
@@ -43,8 +47,12 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 #define mxchcant 50
 
+#define CAMPO_RFC      1
 #define CAMPO_NOMBRE   2
 #define CAMPO_CALLE    4
+#define CAMPO_NEXT     6
+#define CAMPO_EDO     14
+#define CAMPO_CP      16
 #define CAMPO_FOLIO   22
 #define CAMPO_NUMVEN  24
 #define CAMPO_DIA     26
@@ -67,7 +75,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 
 int   EsEspaniol(char c);
-void  captura_cliente();
+void  captura_cliente(PGconn *con, unsigned* num_venta, unsigned *folio_fact);
 int   captura_articulos();
 int   CaptObserv();
 void  imprime_factura();
@@ -77,12 +85,12 @@ void  muestra_cliente(int renglon, int columna, struct datoscliente cliente);
 
 /* Funciones que usan form.h */
 void  AjustaModoTerminal(void);
-FIELD *CreaEtiqueta(int frow, int fcol, NCURSES_CONST char *label);
-FIELD *CreaCampo(int pren, int pcol, int ren, int cols);
+/* FIELD *CreaEtiqueta(int frow, int fcol, NCURSES_CONST char *label); */
+//FIELD *CreaCampo(int pren, int pcol, int ren, int cols);
 void  MuestraForma(FORM *f, unsigned ren, unsigned col);
 void  BorraForma(FORM *f);
 int   form_virtualize(WINDOW *w);
-int   my_form_driver(FORM *form, int c);
+//int   my_form_driver(FORM *form, int c);
 
 
 
@@ -103,7 +111,7 @@ void muestra_ayuda_cliente(int ren, int col) {
   addstr("<Insert>  Sobreescribir/insertar\n");
 }
 
- int form_virtualize(WINDOW *w)
+int form_virtualize(WINDOW *w)
 {
   int  mode = REQ_INS_MODE;
   int         c = wgetch(w);
@@ -216,35 +224,35 @@ void captura_cliente(PGconn *con, unsigned* num_venta, unsigned *folio_fact) {
   /* describe la forma */
   campo[0] = CreaEtiqueta(2, 30, etiqueta);
   campo[20] = CreaEtiqueta(4, 0, "Nombre o razon social:");
-  campo[CAMPO_NOMBRE] = CreaCampo(5, 0, 1, maxspc-1);
+  campo[CAMPO_NOMBRE] = CreaCampo(5, 0, 1, maxspc-1, amarillo_sobre_azul);
   campo[3] = CreaEtiqueta(6, 0, "Calle:");
-  campo[CAMPO_CALLE] = CreaCampo(7, 0, 1, maxspcalle-1);
+  campo[CAMPO_CALLE] = CreaCampo(7, 0, 1, maxspcalle-1, amarillo_sobre_azul);
   campo[5] = CreaEtiqueta(6, maxspcalle, "Num. Ext.:");
-  campo[6] = CreaCampo(7, maxspcalle, 1, maxspext-1);
+  campo[CAMPO_NEXT] = CreaCampo(7, maxspcalle, 1, maxspext-1, amarillo_sobre_azul);
   campo[7] = CreaEtiqueta(6, maxspcalle+maxspext+1, "Int");
-  campo[8] = CreaCampo(7, maxspcalle+maxspext+1, 1, maxspint-1);
+  campo[8] = CreaCampo(7, maxspcalle+maxspext+1, 1, maxspint-1, amarillo_sobre_azul);
   campo[9] = CreaEtiqueta(8, 0, "Colonia:");
-  campo[10] = CreaCampo(9, 0, 1, maxspcol-1);
+  campo[10] = CreaCampo(9, 0, 1, maxspcol-1, amarillo_sobre_azul);
   campo[11] = CreaEtiqueta(10, 0, "Ciudad:");
-  campo[12] = CreaCampo(11, 0, 1, maxspcd-1);
+  campo[12] = CreaCampo(11, 0, 1, maxspcd-1, amarillo_sobre_azul);
   campo[13] = CreaEtiqueta(10, maxspcd+1, "Estado:");
-  campo[14] = CreaCampo(11, maxspcd+1, 1, maxspedo-1);
+  campo[CAMPO_EDO] = CreaCampo(11, maxspcd+1, 1, maxspedo-1, amarillo_sobre_azul);
   campo[15] = CreaEtiqueta(10, maxspcd+maxspedo+2, "C.P.:");
-  campo[16] = CreaCampo(11, maxspcd+maxspedo+2, 1, 5);
+  campo[CAMPO_CP] = CreaCampo(11, maxspcd+maxspedo+2, 1, 5, amarillo_sobre_azul);
   campo[17] = CreaEtiqueta(12, 0, "C.U.R.P.");
-  campo[18] = CreaCampo(13, 0, 1, maxcurp-1);
+  campo[18] = CreaCampo(13, 0, 1, maxcurp-1, amarillo_sobre_azul);
   campo[19] = CreaEtiqueta(12, maxcurp+1, "R.F.C.:");
-  campo[1] = CreaCampo(13, maxcurp+1, 1, maxrfc-1);
+  campo[CAMPO_RFC] = CreaCampo(13, maxcurp+1, 1, maxrfc-1, amarillo_sobre_azul);
   campo[21] = CreaEtiqueta(0, 0, "Folio:");
-  campo[CAMPO_FOLIO] = CreaCampo(0, 6, 1, 5);
+  campo[CAMPO_FOLIO] = CreaCampo(0, 6, 1, 5, amarillo_sobre_azul);
   campo[23] = CreaEtiqueta(0, 24, "# venta:");
-  campo[CAMPO_NUMVEN] = CreaCampo(0, 33, 1, 8);
+  campo[CAMPO_NUMVEN] = CreaCampo(0, 33, 1, 8, amarillo_sobre_azul);
   campo[25] = CreaEtiqueta(0, 55, "Fecha:");
-  campo[CAMPO_DIA] = CreaCampo(0, 62, 1, 2);
+  campo[CAMPO_DIA] = CreaCampo(0, 62, 1, 2, amarillo_sobre_azul);
   campo[27] = CreaEtiqueta(0, 64, "/");
-  campo[CAMPO_MES] = CreaCampo(0, 65, 1, 2);
+  campo[CAMPO_MES] = CreaCampo(0, 65, 1, 2, amarillo_sobre_azul);
   campo[29] = CreaEtiqueta(0, 67, "/");
-  campo[CAMPO_ANIO] = CreaCampo(0, 68, 1, 2);
+  campo[CAMPO_ANIO] = CreaCampo(0, 68, 1, 2, amarillo_sobre_azul);
   campo[31] = (FIELD *)0;
 
   set_field_type(campo[CAMPO_DIA], TYPE_NUMERIC, 0, 1, 31);
@@ -413,14 +421,14 @@ int captura_articulos() {
 
   /* describe la forma */
   campo[0] = CreaEtiqueta(1, 0, "Cant");
-  campo[1] = CreaCampo(2, 0, 1, maxexistlong);
+  campo[1] = CreaCampo(2, 0, 1, maxexistlong, amarillo_sobre_azul);
   campo[2] = CreaEtiqueta(1, maxexistlong+1, "Descripcion:");
-  campo[3] = CreaCampo(2, maxexistlong+1, 1, maxdes);
+  campo[3] = CreaCampo(2, maxexistlong+1, 1, maxdes, amarillo_sobre_azul);
   campo[4] = CreaEtiqueta(1, maxexistlong+maxdes+2, "P.U.:");
-  campo[5] = CreaCampo(2, maxexistlong+maxdes+2, 1, maxpreciolong);
+  campo[5] = CreaCampo(2, maxexistlong+maxdes+2, 1, maxpreciolong, amarillo_sobre_azul);
   campo[6] = CreaEtiqueta(1, maxexistlong+maxdes+maxpreciolong+3,
                           "IVA");
-  campo[7] = CreaCampo(2,maxexistlong+maxdes+maxpreciolong+3, 1, 3);
+  campo[7] = CreaCampo(2,maxexistlong+maxdes+maxpreciolong+3, 1, 3, amarillo_sobre_azul);
   campo[8] = CreaEtiqueta(0, 6, etiqueta);
   campo[9] = CreaEtiqueta(1, maxexistlong+maxdes+maxpreciolong+7,
                           "%");
@@ -506,23 +514,90 @@ int captura_articulos() {
 
 int CaptObserv(char *obs[maxobs], char *garantia) {
   int  i,
-       salir = 0;
+       c,
+       finished = 0;
+  WINDOW *w_obs;
+  PANEL  *pan_obs;
+  FORM   *f_obs;
+  FIELD  *fld_obs[maxobs+1];
+  int    num_rows,num_cols;
 
-  mvprintw(numarticulos+9, 0, "Observaciones:\n");
-  for (i=0; (i<maxobs && !salir); ++i) {
-    obs[i] = malloc(maxdes);
-    printw("%i: ",i+1);
-    getstr(obs[i]);
-    salir = !strlen(obs[i]);
+  for (i=0; i<=maxobs; i++)
+    fld_obs[i] = CreaCampo(i, 1, 1, maxdes, amarillo_sobre_azul);
+
+  fld_obs[maxobs] = (FIELD *)0;
+
+  f_obs = new_form(fld_obs);
+
+  scale_form(f_obs, &num_rows, &num_cols);
+
+  w_obs = newwin(maxobs+2, getmaxx(stdscr), 6, 0);
+
+  if ( w_obs  !=  0  ) {
+    if ((pan_obs = new_panel(w_obs)) == 0) {
+      free_form(f_obs);
+    }
+    else {
+      set_form_win(f_obs, w_obs);
+      set_form_sub(f_obs, derwin(w_obs, num_rows, num_cols, 1, 1));
+      box(w_obs, 0, 0);
+      wattrset(w_obs, COLOR_PAIR(verde_sobre_negro));
+      mvwprintw(w_obs, 0, 2, "Observaciones:");
+      wattrset(w_obs, COLOR_PAIR(normal));
+
+      if (post_form(f_obs) != E_OK)
+        wrefresh(w_obs);
+      noecho();
+      raw();
+
+      while (!finished)  {
+        switch(form_driver(f_obs, c = form_virtualize(w_obs))) {
+        case E_OK:
+          break;
+        case E_UNKNOWN_COMMAND:
+          finished = my_form_driver(f_obs, c);
+          break;
+        default:
+          beep();
+          break;
+        }
+      }
+
+      unpost_form(f_obs);
+      echo();
+      for (i=0; i<maxobs; i++) {
+        strncpy(obs[i], fld_obs[i]->buf, maxdes);
+        limpiacad(obs[i], TRUE);
+      }
+      /*
+      for (i=0; (i<maxobs && !finished); ++i) {
+        obs[i] = malloc(maxdes);
+        mvwprintw(panel_window(pan_obs), i+1, 1, "%i: ",i+1);
+        wgetstr(panel_window(pan_obs), obs[i]);
+        finished = !strlen(obs[i]);
+      }
+      if (finished)
+      i--;
+      */
+      werase(w_obs);
+      box(w_obs, 0, 0);
+      wattrset(w_obs, COLOR_PAIR(verde_sobre_negro));
+      mvwprintw(w_obs, 0, 2, "Garantía:");
+      wattrset(w_obs, COLOR_PAIR(normal));
+      wmove(w_obs, 2, 1);
+      wgetstr(panel_window(pan_obs), garantia);
+      clear();
+      del_panel(pan_obs);
+      werase(w_obs);
+      delwin(w_obs);
+      refresh();
+
+      Crea_Factura(cliente, fecha, art, numarticulos, subtotal, iva, total,
+                   garantia, obs, nmfact, tipoimp);
+      return(i);
+    }
   }
-  if (salir)
-    i--;
-  printw("Garantía: ");
-  getstr(garantia);
-  Crea_Factura(cliente, fecha, art, numarticulos, subtotal, iva, total,
-               garantia, obs, nmfact, tipoimp);
-  clear();
-  return(i);
+  return(ERROR_DIVERSO);
 }
 
 
@@ -598,6 +673,7 @@ void AjustaModoTerminal(void)
   keypad(stdscr, TRUE);
 }
 
+/* Se incluye esta función en pos-curses.h 
 FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta)
 {
     FIELD *f = new_field(1, strlen(etiqueta), pren, pcol, 0, 0);
@@ -610,6 +686,7 @@ FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta)
     return(f);
 }
 
+
 FIELD *CreaCampo(int frow, int fcol, int ren, int cols)
 {
     FIELD *f = new_field(ren, cols, frow, fcol, 0, 0);
@@ -617,7 +694,7 @@ FIELD *CreaCampo(int frow, int fcol, int ren, int cols)
     if (f)
         set_field_back(f,COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
     return(f);
-}
+}*/
 
 void MuestraForma(FORM *f, unsigned pos_ren, unsigned pos_col)
 {
@@ -650,7 +727,7 @@ void BorraForma(FORM *f)
     delwin(w);
 }
 
-int my_form_driver(FORM *form, int c)
+/*int my_form_driver(FORM *form, int c)
 {
     if (c == (MAX_FORM_COMMAND + 1)
                 && form_driver(form, REQ_VALIDATION) == E_OK)
@@ -660,7 +737,7 @@ int my_form_driver(FORM *form, int c)
         beep();
         return(FALSE);
     }
-}
+}*/
 
 
 /***************************************************************************

@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# Este script es de licencia GPL.
+# Se permite su libre copia y distribución respetando los términos de la licencia.
+# Copyright (C) 2003 E. Israel Osorio H. elpuntodeventa.com
+# desarrollo@elpuntodeventa.com
+
+echo -n "Indica el almacen: "
+read almacen
+clear
+
+psql -c "SELECT * FROM departamento ORDER BY id asc" osopos
+echo -n "Indica el departamento (0 para mostrar todos): "
+read depto
+
+query="SELECT DISTINCT ON (l.codigo) substring(l.codigo, 0, 12) as codigo, substring(l.descripcion, 0, 20) as descripcion, l.pu, l.pu2, l.pu3, l.p_costo, l.cant as ct FROM (SELECT ar.codigo, ar.descripcion, al.pu, al.pu2, al.pu3, al.pu4, al.pu5, ar.p_costo, al.cant FROM articulos ar, almacen_$almacen al WHERE ar.codigo=al.codigo "
+
+if [[ "$depto" != "0" ]]; then
+    echo "$query" > /tmp/query
+    query="$query AND id_depto=$depto "
+    echo "$query" >> /tmp/query
+fi
+
+query="$query ORDER BY id_depto,descripcion) as l "
+echo "                     LISTA DE PRECIOS Y EXISTENCIAS DE ALMACEN $almacen" > ~/lista_precios.txt
+echo "                                   `date +%d-%m-%y`" >> ~/lista_precios.txt
+echo "" >> ~/lista_precios.txt
+
+psql -c "$query" osopos >> ~/lista_precios.txt
+
+less -rf ~/lista_precios.txt
+
+echo -n "¿Imprimir en papel? "
+read sino
+
+if [[ $sino == "s"  || $sino == "S" ]]; then
+    echo "LISTA DE PRECIOS Y EXISTENCIAS" > ~/lista_precios.txt
+    echo "     ALMACEN $almacen" >> ~/lista_precios.txt
+    echo "         `date +%d-%m-%y`" >> ~/lista_precios.txt
+    echo "" >> ~/lista_precios.txt
+    psql -c "$query" -P expanded osopos >> ~/lista_precios.txt
+    lpr -P ticket ~/lista_precios.txt
+fi

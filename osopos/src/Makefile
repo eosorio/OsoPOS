@@ -1,7 +1,7 @@
 all: invent remision factur corte impresor imprrem osopos
 install: install_invent install_remision install_factur install_corte install_impresor install_imprrem install_osopos
 
-CC = gcc -g -Wall -m486
+CC = gcc -g -Wall -march=i486
 
 PGLIBS = -lpq -lcrypt
 
@@ -13,33 +13,38 @@ GTKLIBS = `gtk-config --cflags` `gtk-config --libs`
 
 FORMSLIBS = -lform
 
-C_REMISION = -Dmxmembarra=1000
+C_REMISION = -Dmxmembarra=3000 -Dmxmemdivisa=5
 
-C_OSOPOS = -Dmaxspc=70 -Dmaxart=30 -Dmaxarts=1000 -Dmaxdepto=100
+C_OSOPOS = -Dmaxspc=70 -Dmaxart=30 -Dmaxarts=3000 -Dmaxdepto=100
 
 HEADER_FACTUR = include/factur.h
-HEADER_REMISION = include/electroh-remis.h
+HEADER_REMISION = include/labotana-remis.h
 
-IMPRESIONES_USUARIO = include/electroh.h
+IMPRESIONES_USUARIO = include/labotana.h
 
 DIR_BIN = /usr/bin
 
 SUPERVISOR_BINDIR = /home/OsoPOS/scaja/bin
 
 remision: remision.c
-	${CC} -o ../bin/remision.o remision.c ${PGLIBS} ${CURSESLIBS} ${C_REMISION} \
-	${C_OSOPOS} -include ${HEADER_REMISION} -ggdb
+	${CC} -o ../bin/remision.o remision.c ${PGLIBS} ${FORMSLIBS} \
+    ${CURSESLIBS} ${C_REMISION} ${C_OSOPOS} -ggdb
 
 factur: factur.c
-	${CC} -o ../bin/factur.o factur.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
-	-D_MOD_FACTUR -ggdb
+	${CC} -o ../bin/factur.o factur.c ${PGLIBS} ${FORMSLIBS} ${PANELLIBS} \
+	${CURSESLIBS} -D_MOD_FACTUR -ggdb
 
 invent: invent.c
 	${CC} -o ../bin/invent.o invent.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
-	${PANELLIBS} ${C_OSOPOS} -ggdb
+	${C_OSOPOS} -ggdb
+
+movinvent: mov_invent.c
+	${CC} -o ../bin/movinvent.o mov_invent.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
+	${C_OSOPOS} -ggdb
 
 corte: corte.c
-	${CC} -o ../bin/corte.o corte.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS}
+	${CC} -o ../bin/corte.o corte.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
+	-ggdb
 
 impresor: impresor.c
 	${CC} -o ../bin/impresor.o impresor.c ${CURSESLIBS} ${PGLIBS}

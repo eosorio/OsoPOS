@@ -1,4 +1,32 @@
 Tabla articulos
+codigo
+Código del producto. Generalmente es el código de barras
+descripcion
+Nombre del producto
+descuento
+Porcentaje de descuento con el que cuenta el producto. Sólo para
+referencia.
+cant
+Existencia actual
+min
+Existencia mínima
+max
+Existencia máxima
+id_prov
+I.D. del proveedor según el catálogo de proveedores
+id_depto
+I.D. del departamento según el catálogo de departamentos
+p_costo
+Precio de costo
+prov_clave
+Clav que le asigna el proveedor a su producto
+iva_porc
+Porcentaje de I.V.A. que causa el producto
+divisa
+Divisa en la que se cotiza l producto
+pu2 a pu5
+Precios al público (generalmente menores que pu, ya que se ofrece
+descuento por mayoreo y medio mayoreo)
 tax_0 hasta tax_5
 Porcentaje de impuesto (impuesto 0 se considera el Impuesto Especial
 sobre Producción y servicios, mejor conocido como el impuesto suntuoso).

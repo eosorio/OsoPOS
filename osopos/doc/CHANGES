@@ -1,3 +1,16 @@
+Remision:
+1.34
+Se agrega soporte inicial a lectores de puerto serie. Corrijo bug de divisas. Se incluye opción de
+IVA incluido
+1.25
+Se agrega modo de autorecuperación en base a los PID del programa, permitiendo
+que se opere en modo multicaja.
+1.24
+Se cambia el modo de regitro de venta para agregar función de autorecuperación.
+1.23
+Se registran los movimientos para que el cajero pueda recuperar su venta en
+modo manual.
+
 Invent:
 0.31
 Se corrige bug que impedía modificar departamento y proveedor de un 

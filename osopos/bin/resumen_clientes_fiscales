@@ -1,0 +1,3 @@
+#!/bin/bash
+
+psql -f resumen_clientes_fiscales.sql osopos
