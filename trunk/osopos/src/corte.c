@@ -28,7 +28,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <time.h>
 #include <unistd.h>
 
-#define VERSION "0.10"
+#define VERSION "0.11"
 #define blanco_sobre_negro 1
 #define amarillo_sobre_negro 2
 #define verde_sobre_negro 3
@@ -110,17 +110,17 @@ double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad, d
 
   comando = calloc(1,mxbuff*2);
 
+  sprintf(comando,
+          "DECLARE cursor_v CURSOR FOR SELECT sum(v.monto), sum(v.utilidad), sum(v.iva), ");
 
   if (f_sale) {
-    sprintf(comando,
-            "DECLARE cursor_v CURSOR FOR SELECT sum(v.monto), sum(v.utilidad), sum(v.iva), sum(v.tax_0), sum(v.tax_1), sum(v.tax_2), sum(v.tax_3), sum(v.tax_4), sum(v.tax_5) FROM ventas v, corte c WHERE v.tipo_pago=%d AND v.numero>=%u" ,
-            tipo_pago, f_sale);
+    sprintf(comando, "%ssum(v.tax_0), sum(v.tax_1), sum(v.tax_2), sum(v.tax_3), sum(v.tax_4), sum(v.tax_5) FROM ventas v, corte c WHERE v.numero=c.numero AND v.tipo_pago=%d AND v.numero>=%u" ,
+            comando, tipo_pago, f_sale);
     if (l_sale)
       sprintf(comando+strlen(comando), " AND v.numero<=%u", l_sale);
   }
   else {
-    sprintf(comando, "DECLARE cursor_v CURSOR FOR SELECT sum(v.monto), sum(v.utilidad), sum(v.iva), ");
-    strcat(comando, "sum(v.tax_0), sum(v.tax_1), sum(v.tax_2), sum(v.tax_3), ");
+    sprintf(comando, "%s sum(v.tax_0), sum(v.tax_1), sum(v.tax_2), sum(v.tax_3), ", comando);
     strcat(comando, "sum(v.tax_4), sum(v.tax_5) FROM ventas v, corte c ");
 
     if (cashier_id)
