@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.22 (C) 1999-2001 E. Israel Osorio H.
+   Programa Remision 1.27 (C) 1999-2001 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -25,11 +25,14 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 #define MALLOC_CHECK_ 2
 
+//#include <linux/kbd_kern.h>
+#include <unistd.h>
+#include <dirent.h>
 #include <stdio.h>
 #include "include/pos-curses.h"
 #define _pos_curses
 
-#define vers "1.22"
+#define vers "1.27"
 #define release "La Botana"
 
 #ifndef maxdes
@@ -62,16 +65,18 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define _PAGO_EFECTIVO  20
 #define _PAGO_CHEQUE    21
 
-#define _NOTA_MOSTRADOR   1
+#define _NOTA_MOSTRADOR  1
 #define _FACTURA         2
 #define _TEMPORAL        5
+
+#include "include/minegocio-remis.h"
 
 int forma_de_pago();
 void Termina(PGconn *con, int error);
 //int LeeConfig(char*, char*);
 double item_capture(int *numart, double *util, struct tm fecha);
-void imp_ticket_arts();
-void ImpTicketPie(struct tm fecha, unsigned numvents);
+void print_ticket_arts();
+void print_ticket_footer(struct tm fecha, unsigned numvents);
 /* Función que reemplaza a ActualizaEx */
 int actualiza_existencia(PGconn *con);
 /* Esta función reemplaza a leebarras */
@@ -82,6 +87,9 @@ void mensaje(char *texto);
 void aviso_existencia(struct articulos art);
 void switch_pu(WINDOW *, struct articulos *, int, double *, int);
 int journal_last_sale(int i, char *last_sale_fname);
+int journal_marked_items(char *marked_items_fname, char *code, int exist_previous); 
+int clean_journal(char *marked_items_fname);
+int check_for_journal(char *dir_name);
 
 FILE *impresora;
 double a_pagar; 
@@ -90,6 +98,7 @@ int numbarras=0;
 struct articulos articulo[maxart], barra[mxmembarra];
 int numarts=0;          /* Número de items capturados   */
 short unsigned maxitemr;
+pid_t pid;
 
   /* Variables de configuración */
 char *home_directory;
@@ -103,6 +112,8 @@ char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *nmimprrem,           /* Ubicación de imprrem */
   *nm_factur,    /* Nombre del progreama de facturación */
   *nm_avisos,    /* Nombre del archivo de avisos */
+  *nm_journal,   /* Nombre actual del archivo del diario de marcaje */
+  *nm_orig_journal, /* Nombre del archivo del diario original */
   *nm_sendmail,  /* Ruta completa de sendmail */
   *dir_avisos,   /* email de notificación */
   *db_hostname,  /* Nombre host con base de datos */
@@ -118,10 +129,14 @@ int read_config()
 {
   char *nmconfig;
   FILE *config;
-  static char buff[mxbuff],buf[mxbuff];
-  static char *b;
+  char buff[mxbuff],buf[mxbuff];
+  char *b;
   char *aux = NULL;
- 
+  //  struct kbd_struct teclado;
+  // int modo_tec;
+
+  
+  //  setledstate(teclado, VC_NUMLOCK); 
   home_directory = calloc(1, 255);
   log_name = calloc(1, 255);
   nmconfig = calloc(1, 255);
@@ -138,6 +153,10 @@ int read_config()
   strncpy(nmconfig, home_directory, 255);
   strcat(nmconfig, "/.osopos/remision.config");
 
+  nm_journal = calloc(1, mxbuff);
+  nm_orig_journal = calloc(1, strlen(home_directory) + strlen("/.last_items.") + 10);
+  /* Dejamos 10 caracteres extras para el PID */
+  sprintf(nm_orig_journal, "%s/.last_items.%d", home_directory, pid);
   search_2nd = 1;
 
   nm_disp_ticket = calloc(1, strlen("/tmp/ticket_")+strlen(log_name)+1);
@@ -496,10 +515,17 @@ int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
   char codigo[maxcod];
   double iva_articulo;
   FILE *f_last_sale;
+  FILE *f_last_items;
 
   mvprintw(getmaxy(stdscr)-3,0,"Código del(los) artículo(s) a cancelar: ");
   clrtoeol();
   getstr(codigo);
+
+  f_last_items = fopen(nm_journal, "a");
+  if (f_last_items != NULL) {
+    fprintf(f_last_items, "%s\n", codigo);
+    fclose(f_last_items);
+  }
   move(getmaxy(stdscr)-3,0);
   clrtoeol();
 
@@ -611,6 +637,8 @@ double item_capture(int    *numart,
   int     chbuff = -1;
   WINDOW  *v_arts;
   FILE    *f_last_sale;
+  int     exist_journal=0;
+  FILE    *f_last_items;
 
   *util = 0;
   iva = 0.0;
@@ -621,9 +649,9 @@ double item_capture(int    *numart,
   buff2 = calloc(1, mxbuff);
   last_sale_fname = calloc(1, strlen(home_directory) + strlen("/ultima_venta.tmp")+1);
   if (buff == NULL  || buff2 == NULL || last_sale_fname == NULL) {
-    fprintf(stderr, "remision. FATAL: no puedo alocar %d bytes de memoria\n", mxbuff);
-    /* can't allocat %d memory bytes */
-    return(ERROR_MEMORIA);
+    fprintf(stderr, "remision. FATAL: no puedo apartar %d bytes de memoria\n", mxbuff);
+    /* can't allocate %d memory bytes */
+    return(MEMORY_ERROR);
   }
   
   sprintf(last_sale_fname, "%s/ultima_venta.tmp", home_directory);
@@ -637,6 +665,14 @@ double item_capture(int    *numart,
     fclose(f_last_sale);
   }
 
+  exist_journal = check_for_journal(home_directory);
+  if (exist_journal) {
+    sprintf(nm_journal, "%s/.last_items.%d", home_directory, exist_journal);
+    f_last_items = fopen(nm_journal, "r");
+  }
+  else
+    strcpy(nm_journal, nm_orig_journal);
+
   mvprintw(3,0,
            "Cant.       Clave                Descripción                 P. Unitario");
             /* qt.       code                description                 unit cost */
@@ -644,21 +680,31 @@ double item_capture(int    *numart,
 
   do {
     for (j=0; j<mxbuff; buff[j++] = 0);
+    buff2[0] = 0;
     iva_articulo = 0.0;
     articulo[i].pu = 0;
     articulo[i].p_costo = 0;
     mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
-    /* barcode, decription or qty. */
-    do {       
-
-      switch(chbuff = wgetkeystrokes(stdscr, buff, mxbuff)) {
-        //        case KEY_F(1):
+    /* barcode, description or qty. */
+    if (exist_journal) {
+      if (feof(f_last_items)) {
+        articulo[i].cant = 0;
+        continue;
+      }
+      fgets(buff, mxbuff, f_last_items);
+      buff[strlen(buff)-1] = 0;
+    }
+    else {
+      do {       
+        switch(chbuff = wgetkeystrokes(stdscr, buff, mxbuff)) {
+          //        case KEY_F(1):
         case 2: /* F2 */
           strcpy(buff, "descuento");
           strcpy(articulo[i].desc, "descuento");
           chbuff = 0;
           break;
         case 3: /* F3 */
+          journal_marked_items(nm_journal, "cancela", 0);
           cancela_articulo(v_arts, &i, &subtotal, &iva, last_sale_fname);
           show_subtotal(subtotal);
           mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
@@ -675,19 +721,27 @@ double item_capture(int    *numart,
             move(getmaxy(stdscr)-2,0);
           }
           break;
-      default:
+        default:
+        }
       }
+      while (chbuff);
     }
-    while (chbuff);
     //    getstr(buff);
 
     chbuff = -1; /* Limpiamos para usar despues */
+
+    if (strstr(articulo[i].desc,"ancela") == NULL)
+      journal_marked_items(nm_journal, buff, exist_journal);
 
     move(getmaxy(stdscr)-2,0);
     deleteln();
 
     /* Sección de multiplicador */
     if ( ((toupper(buff[0])=='X') || (buff[0]=='*')) && i) {
+      if (!isdigit(buff[1])) {
+        mensaje("Error en multiplicador. Intente de nuevo");
+        continue;
+      }
       for (j=0; !isdigit(buff[j]); j++);
       for (k=0; isdigit(buff[j]) && j<strlen(buff); j++,k++)
         articulo[i].desc[k] = buff[j];
@@ -776,17 +830,25 @@ double item_capture(int    *numart,
           printw("Cantidad muy grande... ");   /* Quantity very big */
         printw("Introduce precio unitario: "); /* Introduce unitary cost */
         clrtoeol();
-        getnstr(buff2, mxbuff);
+        if (exist_journal) {
+          fgets(buff2, mxbuff, f_last_items);
+          buff2[strlen(buff2)-1] = 0;
+        }
+        else
+          getnstr(buff2, mxbuff);
         if (strlen(buff2) > 6)
           continue;
-        articulo[i].pu = atof(buff2);
-        buff2[0] = 0;
         //        scanw("%f",&articulo[i].pu);
         deleteln();
       }
       while (strlen(buff2) > 6);
+
+      articulo[i].pu = atof(buff2);
+
+
       if ( strstr(articulo[i].desc,"escuento") && i && !manual_discount) {
         journal_last_sale(i, last_sale_fname);
+        journal_marked_items(nm_journal, buff2, exist_journal);
 
         articulo[i-1].pu += articulo[i].pu;
         articulo[i].codigo[0] = 0;
@@ -806,11 +868,38 @@ double item_capture(int    *numart,
       /* Artículo no registrado */
       strncpy(articulo[i].desc, buff, maxdes);
       strcpy(articulo[i].codigo,"Sin codigo"); /* No code */
-      mvprintw(getmaxy(stdscr)-3,0,"Introduce porcentaje de I.V.A.: "); /* Introd. tax % */
-      clrtoeol();
-      scanw("%lf",&articulo[i].iva_porc);
-      deleteln();
+      buff[0] = 0;
+
+      if (!strstr(articulo[i].desc, "escuento")) {
+        journal_marked_items(nm_journal, buff2, exist_journal);
+        buff2[0] = 0;
+        do {
+          wmove(stdscr, getmaxy(stdscr)-3,0);
+          if (strlen(buff2) > 6)
+            printw("Cantidad muy grande... ");   /* Quantity very big */
+          mvprintw(getmaxy(stdscr)-3,0,"Introduce porcentaje de I.V.A.: "); /* Introd. tax % */
+          clrtoeol();
+          if (exist_journal) {
+            fgets(buff2, mxbuff, f_last_items);
+            buff2[strlen(buff2)-1] = 0;
+          }
+          else
+            getnstr(buff2, mxbuff);
+          if (strlen(buff2) > 6)
+            continue;
+          articulo[i].iva_porc = atof(buff2);
+          //        scanw("%f",&articulo[i].pu);
+          deleteln();
+        }
+        while (strlen(buff2) > 6);
+
+        clrtoeol();
+        deleteln();
+      }
+
       journal_last_sale(i, last_sale_fname);
+      journal_marked_items(nm_journal, buff2, exist_journal);
+
       show_item_list(v_arts, i, TRUE);
       iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
       subtotal += (articulo[i].pu * articulo[i].cant);
@@ -962,7 +1051,7 @@ void Cambio() {
   mvprintw(getmaxy(stdscr)-2,getmaxx(stdscr)/2,"Cambio de: %.2f\n",dar);
 }
 
-void imp_ticket_arts() {
+void print_ticket_arts() {
   FILE *impr;
   static int i;
 
@@ -989,7 +1078,7 @@ void imp_ticket_arts() {
   fclose(impr);
 }
 
-void ImpTicketPie(struct tm fecha, unsigned numventa) {
+void print_ticket_footer(struct tm fecha, unsigned numventa) {
   FILE *impr,*fpie;
   static char *s;
 
@@ -1021,7 +1110,8 @@ void ImpTicketPie(struct tm fecha, unsigned numventa) {
     fclose(fpie);
   }
   fprintf(impr,"\n\n\n");
-  imprime_razon_social(impr, tipo_disp_ticket);
+  imprime_razon_social(impr, tipo_disp_ticket,
+                       "     La Botana", "          Fanny Nuricumbo Melchor" );
   free(s);
   fclose(impr);
 }
@@ -1157,20 +1247,6 @@ void mensaje(char *texto)
         clrtoeol();
 }
 
-/*  unsigned obten_num_venta(char *nm_archivo) */
-/*  { */
-/*    FILE *archivo; */
-/*    char buff[50]; */
-
-/*    archivo = fopen(nm_archivo, "r"); */
-/*    if (archivo == NULL) { */
-/*      ErrorArchivo(nm_archivo); */
-/*      return(0); */
-/*    } */
-/*    fgets(buff,(sizeof(buff)), archivo); */
-/*    fclose(archivo); */
-/*    return(atoi(buff)); */
-/*  } */
 
 unsigned obten_num_venta(PGconn *base)
 {
@@ -1191,6 +1267,7 @@ unsigned obten_num_venta(PGconn *base)
 
 /********************************************************/
 
+/* Rutinas de recuperación de ventas */
 int journal_last_sale(int i, char *last_sale_fname) {
 
   FILE *f_last_sale;
@@ -1214,11 +1291,97 @@ int journal_last_sale(int i, char *last_sale_fname) {
     return(ERROR_ARCHIVO_1);
 }
 
+int journal_marked_items(char *marked_items_fname, char *code, int exist_previous) {
+  FILE *f_last_items;
+
+  if (exist_previous)
+    return(OK);
+  f_last_items = fopen(marked_items_fname, "a");
+  if (f_last_items != NULL) {
+    fprintf(f_last_items, "%s\n", code);
+    fclose(f_last_items);
+    return(OK);
+  }
+  else
+    return(FILE_1_ERROR);
+}
+
+int clean_journal(char *marked_items_fname) {
+  /*  FILE *f_last_items;
+  f_last_items = fopen(marked_items_fname, "r");
+  if (f_last_items == NULL)
+    return(FILE_1_ERROR);
+  else
+    fclose(f_last_items);
+  return(OK);
+  */
+  if (unlink(marked_items_fname))
+    return(FILE_1_ERROR);
+  else
+    return(OK);
+}
+
+int  check_for_journal(char *dirname) {
+  DIR *dir;
+  struct dirent *dir_ent;
+  FILE *p_cmd;
+  char *pid[255]; /* IGM We need to make a double pointer */
+  char buf[mxbuff];
+  char *buff2;
+  int i=0, orphan=0;
+
+  buff2 = calloc(1, mxbuff);
+  dir = opendir(dirname);
+  if (dir == NULL)
+    return(FILE_1_ERROR);
+
+  /* IGM We need to change de hardcode in the near future */
+  p_cmd = popen("/sbin/pidof remision", "r");
+
+  if (!feof(p_cmd))
+    fgets(buf, mxbuff, p_cmd);
+  else {
+    closedir(dir);
+    pclose(p_cmd);
+    return(FILE_2_ERROR);
+  }
+
+  pclose(p_cmd);
+  buf[strlen(buf)-1] = 0;
+  pid[0] = strtok(buf, " ");
+
+  /* Fetch the pids */
+  while ((pid[++i] = strtok(NULL, " ")) != NULL) {
+  }
+
+  /* We could use scandir() for this */
+  while ((dir_ent = readdir(dir)) != NULL) {
+    if (strstr(dir_ent->d_name, ".last_items.")!=NULL) {
+      strcpy(buff2, dir_ent->d_name+12);
+      i = 0;
+      orphan = 1;
+      while (pid[i] != NULL) {
+        if (strcmp(buff2, pid[i++]) == 0)
+          continue;
+      }
+      /* If we get here, there was a process lost and an orphan sale */
+      closedir(dir);
+      free(buff2);
+      return(atoi(buff2));
+    }
+  }
+  closedir(dir);
+  free(buff2);
+  return(OK);
+}
+
+ /********************************************************/
+   
 
 int main() {
   static char buffer, buf[255];
   static char encabezado1[mxbuff],
-      encabezado2[mxbuff] = "E. Israel Osorio H., 1999-2001 linucs@elpuntodeventa.com";
+      encabezado2[mxbuff] = "E. Israel Osorio H., 1999-2001 soporte@elpuntodeventa.com";
   FILE *impr_cmd;
   time_t tiempo;        
   static int dgar;
@@ -1233,6 +1396,7 @@ int main() {
   tiempo = time(NULL);
   fecha = localtime(&tiempo);
   fecha->tm_year += 1900;
+  pid = getpid();
 
   read_config();
   initscr();
@@ -1261,7 +1425,7 @@ int main() {
     mensaje("No hay artículos en la base de datos. Use el programa de inventarios primero");
     getch();
   }
-  else if (numbarras == ERROR_SQL) {
+  else if (numbarras == SQL_ERROR) {
     mensaje("Error al leer base de datos, búsqueda de artículos deshabilitada.");
     getch();
     numbarras = 0;
@@ -1298,8 +1462,10 @@ int main() {
           attroff(A_BOLD);
           clrtoeol();
           scanw("%d",&dgar);
-          num_venta = registra_venta(con, "ventas", a_pagar, utilidad, formadepago,
+          num_venta = sale_register(con, "ventas", a_pagar, utilidad, formadepago,
                          _NOTA_MOSTRADOR, FALSE, *fecha, id_teller, 0, articulo, numarts);
+          if (num_venta>0)
+            clean_journal(nm_journal);
           sprintf(buf,"%s %d %d",nmimprrem, num_venta, dgar);
           impr_cmd = popen(buf, "w");
           if (pclose(impr_cmd) != 0)
@@ -1320,8 +1486,10 @@ int main() {
           impr_cmd = popen(buf, "w");
           pclose(impr_cmd);
         }
-        num_venta = registra_venta(con, "ventas", a_pagar, utilidad, formadepago,
+        num_venta = sale_register(con, "ventas", a_pagar, utilidad, formadepago,
                        _FACTURA, FALSE, *fecha, id_teller, 0, articulo, numarts);
+        if (num_venta>0)
+          clean_journal(nm_journal);
         sprintf(buf, "Venta %d. Aprieta una tecla para capturar, c para cancelar...", num_venta);
         mensaje(buf);
         buffer = toupper(getch());
@@ -1338,32 +1506,28 @@ int main() {
         break;
       case 'T':
       default:
-        imp_ticket_arts();
+        print_ticket_arts();
         sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
         pclose(impr_cmd);
-        sprintf(buf, "rm -rf %s", nm_disp_ticket);
-        impr_cmd = popen(buf, "r");
-        pclose(impr_cmd);
+        unlink(nm_disp_ticket);
         if (formadepago >= 20) {
           AbreCajon(tipo_disp_ticket);
           sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
           impr_cmd = popen(buf, "w");
           pclose(impr_cmd);
-          sprintf(buf, "rm -rf %s", nm_disp_ticket);
-          impr_cmd = popen(buf, "r");
-          pclose(impr_cmd);
+          unlink(nm_disp_ticket);
         }
-        num_venta = registra_venta(con, "ventas", a_pagar, utilidad,
+        num_venta = sale_register(con, "ventas", a_pagar, utilidad,
                                    formadepago, _TEMPORAL, FALSE, *fecha,
                                    id_teller, 0, articulo, numarts);
-        ImpTicketPie(*fecha, num_venta);
+        print_ticket_footer(*fecha, num_venta);
+        if (num_venta>0)
+          clean_journal(nm_journal);
         sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
         pclose(impr_cmd);
-        sprintf(buf, "rm -rf %s", nm_disp_ticket);
-        impr_cmd = popen(buf, "r");
-        pclose(impr_cmd);
+        unlink(nm_disp_ticket);
         mensaje("Corta el papel y aprieta una tecla para continuar (t para terminar)...");
         buffer = toupper(getch());
         print_ticket_header(nmfenc);
@@ -1388,6 +1552,7 @@ int main() {
   refresh();
 
   PQfinish(con);
+  unlink(nm_journal);
   endwin();
 
   free(nmfpie);
@@ -1427,6 +1592,8 @@ int main() {
   log_name = NULL;
   free(home_directory);
   free(nm_disp_ticket);
+  free(nm_journal);
+  free(nm_orig_journal);
 
   return(OK);
 }
