@@ -1,5 +1,5 @@
 /*
- pos-func.h 0.19-1 Biblioteca de funciones de OsoPOS.
+ pos-func.h 0.20-1 Biblioteca de funciones de OsoPOS.
         Copyright (C) 1999,2000 Eduardo Israel Osorio Hernández
 
         Este programa es un software libre; puede usted redistribuirlo y/o
@@ -96,6 +96,12 @@ PGresult *Busca_en_Inventario(PGconn *base,
 
 short imprime_doc(char *ruta_doc, char *nm_disp);
 /* Copia el archivo ruta_doc hacia nm_disp */
+
+short busca_proveedor(PGconn *base, char *proveedor);
+/* Busca el id del proveedor */
+
+short busca_depto(PGconn *base, char *depto);
+/* Busca el id del departamento */
 
 /*********************************************************************/
 
@@ -496,7 +502,7 @@ PGresult *Modifica_en_Inventario(PGconn *base, char *tabla, struct articulos art
 
   comando_sql = calloc(1,mxbuff);
   sprintf(comando_sql,
-         "UPDATE %s SET descripcion='%s', pu=%.2f, descuento=%.2f, cant=%u, min=%u, max=%u, id_prov='%u', id_depto='%u', p_costo=%.2f, prov_clave='%s', iva_porc=%.2f WHERE codigo='%s'",
+         "UPDATE %s SET descripcion='%s', pu=%.2f, descuento=%.2f, cant=%u, min=%u, max=%u, id_prov=%u, id_depto=%u, p_costo=%.2f, prov_clave='%s', iva_porc=%.2f WHERE codigo='%s'",
 		  tabla, art.desc, art.pu, art.disc, art.exist,
 		  art.exist_min, art.exist_max, art.id_prov,
 		  art.id_depto, art.p_costo, art.prov_clave,
@@ -675,5 +681,51 @@ char *buff;
   fclose(disp);
   fclose(arch);
   return(OK);
+}
+
+/*********************************************************************/
+
+short busca_proveedor(PGconn *base, char *proveedor) {
+  char query[255];
+  PGresult* res;
+
+
+  sprintf(query, "SELECT id from proveedores WHERE nick~'%s'", proveedor);
+  
+  res = PQexec(base, query);
+  if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
+    fprintf(stderr,"Falló comando %s\n", query);
+    fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
+	PQclear(res);
+    return(ERROR_SQL);
+  }
+
+  if (PQntuples(res))
+	return(atoi(PQgetvalue(res, 0, 0)));
+  else
+	return(0);
+}
+
+/*********************************************************************/
+
+short busca_depto(PGconn *base, char *depto) {
+  char query[255];
+  PGresult* res;
+
+
+  sprintf(query, "SELECT id from departamento WHERE nombre~'%s'", depto);
+  
+  res = PQexec(base, query);
+  if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
+    fprintf(stderr,"Falló comando %s\n", query);
+    fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
+	PQclear(res);
+    return(ERROR_SQL);
+  }
+
+  if (PQntuples(res))
+	return(atoi(PQgetvalue(res, 0, 0)));
+  else
+	return(0);
 }
 
