@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <string.h>
+
+#ifndef _printfunc
 #include "print-func.h"
+#define _printfunc
+#endif
 
 #ifndef ESC
 #define ESC 27

@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.27 (C) 1999-2001 E. Israel Osorio H.
+   Programa Remision 1.34 (C) 1999-2003 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -29,10 +29,26 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <unistd.h>
 #include <dirent.h>
 #include <stdio.h>
+#include <termios.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/signal.h>
+#include <sys/types.h>
+
+
+#define _POSIX_SOURCE 1 /* POSIX compliant source */
+#define FALSE 0
+#define TRUE 1
+
+#define _SERIAL_COMM   /* Se usarán rutinas de comunicación serial */
+
 #include "include/pos-curses.h"
 #define _pos_curses
 
-#define vers "1.27"
+#include "include/print-func.h"
+#define _printfunc
+
+#define vers "1.34"
 #define release "La Botana"
 
 #ifndef maxdes
@@ -72,40 +88,58 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/minegocio-remis.h"
 
 int forma_de_pago();
-void Termina(PGconn *con, int error);
+void Termina(PGconn *con, PGconn *con_s, int error);
 //int LeeConfig(char*, char*);
-double item_capture(int *numart, double *util, struct tm fecha);
+double item_capture(PGconn *, int *numart, double *util, double tax[maxtax], struct tm fecha);
 void print_ticket_arts();
 void print_ticket_footer(struct tm fecha, unsigned numvents);
+int AbreCajon(char *tipo_miniimp);
 /* Función que reemplaza a ActualizaEx */
-int actualiza_existencia(PGconn *con);
+int actualiza_existencia(PGconn *con, struct tm *fecha);
 /* Esta función reemplaza a leebarras */
-int lee_articulos(PGconn *base_inventario);
+int lee_articulos(PGconn *, PGconn *);
 void show_item_list(WINDOW *vent, int i, short cr);
 void show_subtotal(double);
 void mensaje(char *texto);
 void aviso_existencia(struct articulos art);
-void switch_pu(WINDOW *, struct articulos *, int, double *, int);
+void switch_pu(WINDOW *, struct articulos *, int, double *, double tax[maxtax], int);
 int journal_last_sale(int i, char *last_sale_fname);
 int journal_marked_items(char *marked_items_fname, char *code, int exist_previous); 
 int clean_journal(char *marked_items_fname);
 int check_for_journal(char *dir_name);
+int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
+                     double tax[maxtax], char *last_sale_fname);
+int aborta_remision(PGconn *con, PGconn *con_s, char *mensaje, char tecla, int senial);
+void signal_handler_IO (int status);
+void captura_serial(char *);
+void init_serial(struct sigaction *saio, struct termios *oldtio, struct termios *newtio);
+void signal_handler_IO (int status);
+void close_serial(int fd, struct termios *tio);
+
+double tipo_cambio(char *);
+
+volatile int STOP=FALSE; 
 
 FILE *impresora;
 double a_pagar; 
 int numbarras=0;
+int numdivisas=0;
 /* struct barras barra[mxmembarra];  */
 struct articulos articulo[maxart], barra[mxmembarra];
+struct divisas divisa[mxmemdivisa];
 int numarts=0;          /* Número de items capturados   */
 short unsigned maxitemr;
 pid_t pid;
 char *program_name;
+unsigned almacen;
+struct db_data db;
 
   /* Variables de configuración */
 char *home_directory;
 char *log_name;
 char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *lp_disp_ticket,      /* Definición de miniprinter en /etc/printcap */
+  *disp_lector_serie,  /* Ruta al scanner de c. de barras serial */
   *nmfpie,              /* Pie de página de ticket */
   *nmfenc,              /* Archivo de encabezado de ticket */
   *nmtickets,   /* Registro de tickets impresos */
@@ -117,42 +151,49 @@ char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *nm_orig_journal, /* Nombre del archivo del diario original */
   *nm_sendmail,  /* Ruta completa de sendmail */
   *dir_avisos,   /* email de notificación */
-  *db_hostname,  /* Nombre host con base de datos */
-  *db_hostport,  /* Puerto en el que acepta conexiones */
-  *cc_avisos,    /* con copia para */
-  *asunto_avisos; /* Asunto del correo de avisos */
+  *asunto_avisos, /* Asunto del correo de avisos */
+  *cc_avisos;     /* con copia para */
+char   s_divisa[3];       /* Designación de la divisa que se usa para cobrar en la base de datos */
 double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
 short unsigned search_2nd;  /* ¿Buscar código alternativo al mismo tiempo que el primario ? */ 
 int id_teller = 0;
 short unsigned manual_discount; /* Aplicar el descuento manual de precio en la misma línea */
+int iva_incluido;
+int listar_neto;
 
-int read_config()
+int lector_serial; /* Cierto si se usa un scanner serial */
+int serial_crlf=1; /* 1 si el scanner envia CRLF, 0 si solamente LF */
+tcflag_t serial_bps=B38400; /* bps por omisión */
+int wait_flag=TRUE;                    /* TRUE while no signal received */
+char s_buf[255];    /* Buffer de puerto serie */
+struct termios oldtio,newtio;  /* Parametros anteriores y nuevos de terminal serie */
+struct sigaction saio;              /* definition of signal action */
+int fd;            /* Descriptor de archivo de puerto serie */
+
+int init_config()
 {
-  char *nmconfig;
-  FILE *config;
-  char buff[mxbuff],buf[mxbuff];
-  char *b;
-  char *aux = NULL;
-  //  struct kbd_struct teclado;
-  // int modo_tec;
+  FILE *env_process;
 
-  
-  //  setledstate(teclado, VC_NUMLOCK); 
   home_directory = calloc(1, 255);
   log_name = calloc(1, 255);
-  nmconfig = calloc(1, 255);
-  config = popen("printenv HOME", "r");
-  fgets(home_directory, 255, config);
+
+  if (!(env_process = popen("printenv HOME", "r"))) {
+    free(log_name);
+    free(home_directory);
+    return(PROCESS_ERROR);
+  }
+  fgets(home_directory, 255, env_process);
   home_directory[strlen(home_directory)-1] = 0;
-  pclose(config);
+  pclose(env_process);
 
-  config = popen("printenv LOGNAME", "r");
-  fgets(log_name, 255, config);
+  if (!(env_process = popen("printenv LOGNAME", "r"))) {
+    free(log_name);
+    free(home_directory);
+    return(PROCESS_ERROR);
+  }
+  fgets(log_name, 255, env_process);
   log_name[strlen(log_name)-1] = 0;
-  pclose(config);
-
-  strncpy(nmconfig, home_directory, 255);
-  strcat(nmconfig, "/.osopos/remision.config");
+  pclose(env_process);
 
   nm_journal = calloc(1, mxbuff);
   nm_orig_journal = calloc(1, strlen(home_directory) + strlen("/.last_items.") + 10);
@@ -164,51 +205,317 @@ int read_config()
   strcpy(nm_disp_ticket, "/tmp/ticket_");
   strcat(nm_disp_ticket, log_name);
 
-  lp_disp_ticket = calloc(1, strlen("ticket")+1);
+  lp_disp_ticket = calloc(1, strlen("ticket")+20);
   strcpy(lp_disp_ticket, "ticket");
 
-  tipo_disp_ticket = calloc(1, strlen("STAR")+1);
+  disp_lector_serie = calloc(1, strlen("/dev/barcode")+1);
+  strcpy(disp_lector_serie, "/dev/barcode");
+  lector_serial = 0;
+
+  tipo_disp_ticket = calloc(1, strlen("STAR")+20);
   strcpy(tipo_disp_ticket, "STAR");
 
-  nmfpie = calloc(1, strlen("/pie_pagina.txt")+strlen(home_directory)+1);
+  nmfpie = calloc(1, strlen("/pie_pagina.txt")+strlen(home_directory)+20);
   sprintf(nmfpie,   "%s/pie_pagina.txt", home_directory);
 
-  nmfenc = calloc(1, strlen("/encabezado.txt")+strlen(home_directory)+1);
+  nmfenc = calloc(1, strlen("/etc/osopos/encabezado.txt")+strlen(home_directory)+20);
   sprintf(nmfenc,  "%s/encabezado.txt", home_directory);
   
-  nmimprrem = calloc(1, strlen("/usr/bin/imprem")+1);
+  nmimprrem = calloc(1, strlen("/usr/local/bin/imprem")+20);
   strcpy(nmimprrem,"/usr/bin/imprem");
 
-  nm_avisos = calloc(1, strlen("/var/log/osopos/avisos.txt")+1);
+  nm_avisos = calloc(1, strlen("/var/log/osopos/avisos.txt")+20);
   strcpy(nm_avisos, "/var/log/osopos/avisos.txt");
   
-  dir_avisos = calloc(1, strlen("scaja@")+1);
-  strcpy(dir_avisos, "scaja@");
+  dir_avisos = calloc(1, strlen("scaja@localhost.localdomain")+20);
+  strcpy(dir_avisos, "scaja@localhost");
   
-  cc_avisos = calloc(1, 1);
-  cc_avisos[0] = 0;
+  cc_avisos = calloc(1, strlen("scaja@localhost.localdomain")+20);
+  strcpy(cc_avisos, "scaja@localhost");
 
-  asunto_avisos = calloc(1, strlen("Aviso de baja existencia")+1);
+  asunto_avisos = calloc(1, strlen("Aviso de baja existencia")+20);
   strcpy(asunto_avisos, "Aviso de baja existencia");
   
-  nm_sendmail = calloc(1, strlen("/usr/sbin/sendmail -t")+1);
+  nm_sendmail = calloc(1, strlen("/usr/sbin/sendmail -t")+20);
   strcpy(nm_sendmail, "/usr/sbin/sendmail -t");
 
-//  nm_factur = calloc(1, strlen("kfmbrowser http://localhost/osopos-web/factur_web.php"));
-//  strcpy(nm_factur, "kfmbrowser http://localhost/osopos-web/factur_web.php");
-
-  nm_factur = calloc(1, strlen("/usr/bin/factur"));
+  nm_factur = calloc(1, strlen("/usr/local/bin/factur"));
   strcpy(nm_factur, "/usr/bin/factur");
 
-  db_hostport = NULL;
-  db_hostname = NULL;
-  db_hostname = calloc(1, strlen("255.255.255.255"));
+  db.name= NULL;
+  db.user = NULL;
+  db.passwd = NULL;
+  db.sup_user = NULL;
+  db.sup_passwd = NULL;
+  db.hostport = NULL;
+  db.hostname = NULL;
+
+  db.hostname = calloc(1, strlen("255.255.255.255"));
+  db.name = calloc(1, strlen("elpuntodeventa.com"));
+  db.user = calloc(1, strlen(log_name)+1);
+  strcpy(db.user, log_name);
+  db.passwd = calloc(1, mxbuff);
+  db.sup_user = calloc(1, strlen("scaja")+1);
 
   maxitemr = 6;
 
+  iva_incluido = 0;
   TAX_PERC_DEF = 15;
+  strcpy(s_divisa, "MXP");
 
   manual_discount = 1;
+
+  almacen = 1;
+
+  return(OK);
+}
+
+int read_config()
+{
+  char *nmconfig;
+  FILE *config;
+  char buff[mxbuff],buf[mxbuff];
+  char *b;
+  char *aux = NULL;
+  //  struct kbd_struct teclado;
+
+  int i_buf;
+  
+  //  setledstate(teclado, VC_NUMLOCK); 
+
+  nmconfig = calloc(1, 255);
+ 
+  strncpy(nmconfig, home_directory, 255);
+  strcat(nmconfig, "/.osopos/remision.config");
+
+
+ config = fopen(nmconfig,"r");
+  if (config) {         /* Si existe archivo de configuración */
+    b = buff;
+    fgets(buff,mxbuff,config);
+    while (!feof(config)) {
+      buff [ strlen(buff) - 1 ] = 0;
+      if (!strlen(buff) || buff[0] == '#') {
+        if (!feof(config))
+          fgets(buff,mxbuff,config);
+        continue;
+      }
+      strncpy(buf, strtok(buff,"="), mxbuff);
+        /* La función strtok modifica el contenido de la cadena buff    */
+        /* remplazando con NULL el argumento divisor (en este caso "=") */
+        /* por lo que b queda apuntando al primer token                 */
+
+        /* Definición de impresora de ticket */
+      if (!strcmp(b,"ticket")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_disp_ticket, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_disp_ticket, buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n", b);
+      }
+      else if (!strcmp(b,"ticket.pie")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nmfpie, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nmfpie, buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr,
+                  "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+   /*      else if (!strcmp(b,"programa.factur")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_factur, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_factur, buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr,
+                 "remision. Error de memoria en argumento de configuracion %s\n", b);
+      }
+      else if (!strcmp(b,"programa.imprem")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nmimprrem, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nmimprrem,buf);
+          aux = NULL;
+          }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+                  } */
+      else if (!strcmp(b,"db.host")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.hostname, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.hostname,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.port")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.hostport, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.hostport,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.passwd")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        db.passwd = calloc(1, strlen(buf)+1);
+        if (db.passwd != NULL) {
+          strcpy(db.passwd,buf);
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+     else if (!strcmp(b,"renglones.articulos")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        maxitemr = atoi(buf);
+      }
+      else if (!strcmp(b,"avisos")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_avisos, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_avisos,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"email.avisos")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(dir_avisos, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(dir_avisos,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"asunto.email")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(asunto_avisos, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(asunto_avisos,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"programa.sendmail")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_sendmail, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_sendmail,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"busca_codigo_alternativo")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        search_2nd = atoi(buf);
+      }
+     else if (!strcmp(b,"cajero.numero")) {
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       id_teller = atoi(buf);
+     }
+     else if (!strcmp(b,"almacen.numero")) {
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       almacen = atoi(buf);
+     }
+     else if(!strcmp(b, "scanner_serie")) {
+       lector_serial = 1;
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       aux = realloc(disp_lector_serie, strlen(buf)+1);
+       if (aux != NULL) {
+         strcpy(disp_lector_serie, buf);
+         aux = NULL;
+       }
+       else
+         fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                 b);
+     }
+     else if(!strcmp(b, "scanner_velocidad")) {
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       i_buf = atoi(buf);
+       switch (i_buf) {
+       case 2400:
+         serial_bps = B2400;
+         break;
+       case 4800:
+         serial_bps = B4800;
+         break;
+       case 9600:
+         serial_bps = B9600;
+         break;
+       case 19200:
+         serial_bps = B19200;
+       case 38400:
+       default:
+         serial_bps = B38400;
+       }
+     }
+     else if (!strcmp(b,"scanner_terminador")) {
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       scan_terminator = atoi(buf);
+     }
+     else if (!strcmp(b,"iva_incluido")) {
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       iva_incluido = atoi(buf);
+     }
+      else if (!strcmp(b, "listar_precio_neto")) {
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       listar_neto = atoi(buf);
+     }
+     if (!feof(config))
+       fgets(buff,mxbuff,config);
+    }
+    fclose(config);
+    if (aux != NULL)
+      aux = NULL;
+    free(nmconfig);
+    b = NULL;
+    return(0);
+  }
+  if (aux != NULL)
+    aux = NULL;
+  free(nmconfig);
+  b = NULL;
+  return(1);
+}
+
+/***************************************************************************/
+
+int read_global_config()
+{
+  char *nmconfig;
+  FILE *config;
+  char buff[mxbuff],buf[mxbuff];
+  char *b;
+  char *aux = NULL;
+  int i_buf;
+  
+  nmconfig = calloc(1, 255);
+  strncpy(nmconfig, "/etc/osopos/remision.config", 255);
 
   config = fopen(nmconfig,"r");
   if (config) {         /* Si existe archivo de configuración */
@@ -308,9 +615,9 @@ int read_config()
       } 
       else if (!strcmp(b,"db.host")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db_hostname, strlen(buf)+1);
+        aux = realloc(db.hostname, strlen(buf)+1);
         if (aux != NULL) {
-          strcpy(db_hostname,buf);
+          strcpy(db.hostname,buf);
           aux = NULL;
         }
         else
@@ -319,16 +626,60 @@ int read_config()
       }
       else if (!strcmp(b,"db.port")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db_hostport, strlen(buf)+1);
+        aux = realloc(db.hostport, strlen(buf)+1);
         if (aux != NULL) {
-          strcpy(db_hostport,buf);
+          strcpy(db.hostport,buf);
           aux = NULL;
         }
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
-     else if (!strcmp(b,"renglones.articulos")) {
+      else if (!strcmp(b,"db.nombre")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.name, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.name,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      /*      else if (!strcmp(b,"db.usuario")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.user, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.user,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+                  }*/
+      else if (!strcmp(b,"db.sup_usuario")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.sup_user, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.sup_user,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.sup_passwd")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        db.sup_passwd = calloc(1, strlen(buf)+1);
+        if (db.sup_passwd  != NULL) {
+          strcpy(db.sup_passwd,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"renglones.articulos")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         maxitemr = atoi(buf);
       }
@@ -371,10 +722,11 @@ int read_config()
       }
       else if (!strcmp(b,"cc.avisos")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(cc_avisos, strlen(buf)+1);
-        if (aux != NULL) {
+        free(cc_avisos);
+        cc_avisos = NULL;
+        cc_avisos = calloc(1, strlen(buf)+1);
+        if (cc_avisos != NULL) {
           strcpy(cc_avisos, buf);
-          aux = NULL;
         }
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
@@ -395,9 +747,53 @@ int read_config()
         strncpy(buf, strtok(NULL,"="), mxbuff);
         search_2nd = atoi(buf);
       }
-     else if (!strcmp(b,"cajero.numero")) {
+      else if (!strcmp(b,"almacen.numero")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        id_teller = atoi(buf);
+        almacen = atoi(buf);
+      }
+      else if(!strcmp(b, "scanner_serie")) {
+        lector_serial = 1;
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(disp_lector_serie, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(disp_lector_serie, buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if(!strcmp(b, "scanner_velocidad")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        i_buf = atoi(buf);
+        switch (i_buf) {
+        case 2400:
+          serial_bps = B2400;
+          break;
+        case 4800:
+          serial_bps = B4800;
+          break;
+        case 9600:
+          serial_bps = B9600;
+          break;
+        case 19200:
+          serial_bps = B19200;
+          case 38400:
+        default:
+          serial_bps = B38400;
+        }
+      }
+      else if(!strcmp(b, "divisa")) {
+        strncpy(buf, strtok(NULL,"="), MX_LON_DIVISA);
+        strcpy(s_divisa, buf);
+      }
+     else if (!strcmp(b,"iva_incluido")) {
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       iva_incluido = atoi(buf);
+     }
+      else if (!strcmp(b, "listar_precio_neto")) {
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       listar_neto = atoi(buf);
       }
       if (!feof(config))
         fgets(buff,mxbuff,config);
@@ -418,9 +814,268 @@ int read_config()
 
 /***************************************************************************/
 
-int lee_articulos(PGconn *base_inventario)
+int read_general_config()
 {
-  char *comando;
+  char *nmconfig;
+  FILE *config;
+  char buff[mxbuff],buf[mxbuff];
+  char *b;
+  char *aux = NULL;
+  int i_buf;
+  
+  nmconfig = calloc(1, 255);
+  strncpy(nmconfig, "/etc/osopos/general.config", 255);
+
+  config = fopen(nmconfig,"r");
+  if (config) {         /* Si existe archivo de configuración */
+    b = buff;
+    fgets(buff,mxbuff,config);
+    while (!feof(config)) {
+      buff [ strlen(buff) - 1 ] = 0;
+      if (!strlen(buff) || buff[0] == '#') {
+        if (!feof(config))
+          fgets(buff,mxbuff,config);
+        continue;
+      }
+      strncpy(buf, strtok(buff,"="), mxbuff);
+        /* La función strtok modifica el contenido de la cadena buff    */
+        /* remplazando con NULL el argumento divisor (en este caso "=") */
+        /* por lo que b queda apuntando al primer token                 */
+
+        /* Definición de impresora de ticket */
+      if (!strcmp(b,"ticket")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_disp_ticket, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_disp_ticket, buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n", b);
+      }
+      else if (!strcmp(b, "lp_ticket")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(lp_disp_ticket, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(lp_disp_ticket, buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr,
+                  "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+       }
+      else if (!strcmp(b,"miniimpresora.tipo")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(tipo_disp_ticket, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(tipo_disp_ticket,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr,
+                  "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"programa.factur")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_factur, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_factur, buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr,
+                 "remision. Error de memoria en argumento de configuracion %s\n", b);
+      }
+      else if (!strcmp(b,"programa.imprem")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nmimprrem, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nmimprrem,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      } 
+      else if (!strcmp(b,"db.host")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.hostname, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.hostname,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.port")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.hostport, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.hostport,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.nombre")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.name, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.name,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.sup_usuario")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.sup_user, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.sup_user,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.sup_passwd")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        db.sup_passwd = calloc(1, strlen(buf)+1);
+        if (db.sup_passwd  != NULL) {
+          strcpy(db.sup_passwd,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"porcentaje_iva")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        TAX_PERC_DEF = atoi(buf);
+      }
+      else if (!strcmp(b,"avisos")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_avisos, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_avisos,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"email.avisos")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(dir_avisos, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(dir_avisos,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"asunto.email")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(asunto_avisos, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(asunto_avisos,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"cc.avisos")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        free(cc_avisos);
+        cc_avisos = NULL;
+        cc_avisos = calloc(1, strlen(buf)+1);
+        if (cc_avisos != NULL) {
+          strcpy(cc_avisos, buf);
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"programa.sendmail")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_sendmail, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_sendmail,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if(!strcmp(b, "scanner_serie")) {
+        lector_serial = 1;
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(disp_lector_serie, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(disp_lector_serie, buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if(!strcmp(b, "scanner_velocidad")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        i_buf = atoi(buf);
+        switch (i_buf) {
+        case 2400:
+          serial_bps = B2400;
+          break;
+        case 4800:
+          serial_bps = B4800;
+          break;
+        case 9600:
+          serial_bps = B9600;
+          break;
+        case 19200:
+          serial_bps = B19200;
+          case 38400:
+        default:
+          serial_bps = B38400;
+        }
+      }
+      else if(!strcmp(b, "divisa")) {
+        strncpy(buf, strtok(NULL,"="), MX_LON_DIVISA);
+        strcpy(s_divisa, buf);
+      }
+     else if (!strcmp(b,"iva_incluido")) {
+       strncpy(buf, strtok(NULL,"="), mxbuff);
+       iva_incluido = atoi(buf);
+     }
+      if (!feof(config))
+        fgets(buff,mxbuff,config);
+    }
+    fclose(config);
+    if (aux != NULL)
+      aux = NULL;
+    free(nmconfig);
+    b = NULL;
+    return(0);
+  }
+  if (aux != NULL)
+    aux = NULL;
+  free(nmconfig);
+  b = NULL;
+  return(1);
+}
+
+/***************************************************************************/
+
+int lee_articulos(PGconn *base_inventario, PGconn *con_s)
+{
+  char comando[1024];
 /*  char *datos[7]; */
   int  i;
   int   nCampos;
@@ -434,7 +1089,12 @@ int lee_articulos(PGconn *base_inventario)
   }
   PQclear(res);
 
-  comando = "DECLARE cursor_arts CURSOR FOR SELECT * FROM articulos";
+  sprintf(comando, "DECLARE cursor_arts CURSOR FOR SELECT ");
+  sprintf(comando, "%s al.codigo, ar.descripcion, al.codigo2, al.pu, ", comando);
+  sprintf(comando, "%s al.pu2, al.pu3, al.pu4, al.pu5, al.cant,  al.c_min, ", comando);
+  sprintf(comando, "%s al.tax_0, al.tax_1, al.tax_2, al.tax_3, al.tax_4, al.tax_5, ", comando);
+  sprintf(comando, "%s ar.iva_porc, ar.p_costo, al.divisa ", comando);
+  sprintf(comando, "%s FROM almacen_%d al, articulos ar WHERE al.codigo=ar.codigo;", comando, almacen);
   res = PQexec(base_inventario, comando);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     fprintf(stderr,"Comando DECLARE CURSOR falló\n");
@@ -444,7 +1104,7 @@ int lee_articulos(PGconn *base_inventario)
   }
   PQclear(res);
 
-  comando = "FETCH ALL in cursor_arts";
+  sprintf(comando, "FETCH ALL in cursor_arts");
   res = PQexec(base_inventario, comando);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
     fprintf(stderr,"comando FETCH ALL no regresó registros apropiadamente\n");
@@ -456,32 +1116,37 @@ int lee_articulos(PGconn *base_inventario)
 
   for (i=0; i < PQntuples(res) && i<mxmembarra; i++) {
     strncpy(barra[i].codigo , PQgetvalue(res,i,0), maxcod);
-    strncpy(barra[i].codigo2 , PQgetvalue(res,i,13), maxcod);
+    strncpy(barra[i].codigo2 , PQgetvalue(res,i,2), maxcod);
     strncpy(barra[i].desc, PQgetvalue(res,i,1), maxdes);
-    barra[i].pu = atof(PQgetvalue(res,i,2));
-    barra[i].pu2 = atof(PQgetvalue(res,i,14));
-    barra[i].pu3 = atof(PQgetvalue(res,i,15));
-    barra[i].pu4 = atof(PQgetvalue(res,i,16));
-    barra[i].pu5 = atof(PQgetvalue(res,i,17));
-    barra[i].disc = atof(PQgetvalue(res,i,3));
-    barra[i].exist = atoi(PQgetvalue(res,i,4));
-    barra[i].exist_min = atoi(PQgetvalue(res,i,5));
-    barra[i].p_costo = atof(PQgetvalue(res,i,9));
-    barra[i].iva_porc = atof(PQgetvalue(res,i,11));
-    strncpy(barra[i].divisa, PQgetvalue(res,i,12), 3);
+
+    barra[i].pu  = atof(PQgetvalue(res,i, 3));
+    barra[i].pu2 = atof(PQgetvalue(res,i, 4));
+    barra[i].pu3 = atof(PQgetvalue(res,i, 5));
+    barra[i].pu4 = atof(PQgetvalue(res,i, 6));
+    barra[i].pu5 = atof(PQgetvalue(res,i, 7));
+    //    barra[i].disc = atof(PQgetvalue(res,i,3));
+    barra[i].disc = 0;
+    barra[i].exist = atof(PQgetvalue(res,i,8));
+    barra[i].exist_min = atof(PQgetvalue(res,i,9));
+    barra[i].p_costo = atof(PQgetvalue(res,i,17));
+    barra[i].iva_porc = atof(PQgetvalue(res,i,16));
+    barra[i].tax_0 = atof(PQgetvalue(res,i,10));
+    barra[i].tax_1 = atof(PQgetvalue(res,i,11));
+    barra[i].tax_2 = atof(PQgetvalue(res,i,12));
+    barra[i].tax_3 = atof(PQgetvalue(res,i,13));
+    barra[i].tax_4 = atof(PQgetvalue(res,i,14));
+    barra[i].tax_5 = atof(PQgetvalue(res,i,15));
+    strncpy(barra[i].divisa, PQgetvalue(res,i,18), 3);
+
   }
 
   if (PQntuples(res) >= mxmembarra)  {
-    comando = NULL;
-    comando = calloc(1, mxbuff);
     fprintf(stderr, "ADVERTENCIA: Se ha excedido el máximo de artículos en memoria, no fueron\n");
     fprintf(stderr, "             cargados todos los que existen en la base");
     sprintf(comando,
             "Se ha excedido el máximo de artículos en memoria, se leyeron los primeros %d",
             mxmembarra);
     mensaje(comando);
-    free(comando);
-    comando = NULL;
   }
   PQclear(res);
 
@@ -491,12 +1156,51 @@ int lee_articulos(PGconn *base_inventario)
     fprintf(stderr,"Comando CLOSE falló\n");
     fprintf(stderr,"Error: %s\n",PQerrorMessage(base_inventario));
     PQclear(res);
-    Termina(base_inventario,-1);
+    Termina(base_inventario, con_s, ERROR_SQL);
   }
   PQclear(res);
 
   /* finaliza la transacción */
   res = PQexec(base_inventario, "END");
+  PQclear(res);
+  return(i);
+}
+
+/***************************************************************************/
+
+int lee_divisas(PGconn *base_invent)
+{
+  char comando[256];
+
+  int i;
+  int nCampos;
+  PGresult* res;
+  int div_mxbuff=255;
+  char buf[255];
+
+  res = PQexec(base_invent, "SELECT * FROM divisas ");
+  if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+    fprintf(stderr,"Falló comando al tratar de leer divisas para colocar en memoria\n");
+    PQclear(res);
+    return(ERROR_SQL);
+  }
+
+  nCampos = PQnfields(res);
+
+  for (i=0; i < PQntuples(res) && i<mxmemdivisa; i++) {
+    strncpy(divisa[i].id, PQgetvalue(res,i,0), MX_LON_DIVISA);
+    strncpy(buf, PQgetvalue(res,i,2), div_mxbuff);
+    divisa[i].tc = atof(buf);
+  }
+
+  if (PQntuples(res) >= mxmemdivisa)  {
+    fprintf(stderr, "ADVERTENCIA: Se ha excedido el máximo de divisas en memoria, no fueron\n");
+    fprintf(stderr, "             cargadas todas las que existen en la base");
+    sprintf(comando,
+            "Se ha excedido el máximo de divisas en memoria, se leyeron las primeras %d",
+            mxmembarra);
+    mensaje(comando);
+  }
   PQclear(res);
   return(i);
 }
@@ -509,6 +1213,7 @@ int find_code(char *cod, struct articulos *art, int search_2nd) {
 /* del producto. */
 int i;
 int exit=0; /* falso si hay que salirse */
+double tc=1;
 
   for (i=0; (i<numbarras); ++i) {
     exit = strcmp(cod, barra[i].codigo);
@@ -518,15 +1223,25 @@ int exit=0; /* falso si hay que salirse */
     if (!exit) {
       strncpy(art->codigo, barra[i].codigo, maxcod);
       strncpy(art->desc, barra[i].desc, maxdes);
+
+      tc = tipo_cambio(barra[i].divisa);
+
       art->p_costo = barra[i].p_costo;
-      art->pu = barra[i].pu;
-      art->pu2= barra[i].pu2;
-      art->pu3= barra[i].pu3;
-      art->pu4= barra[i].pu4;
-      art->pu5= barra[i].pu5;
+      art->pu = barra[i].pu * tc;
+      art->pu2= barra[i].pu2 * tc;
+      art->pu3= barra[i].pu3 * tc;
+      art->pu4= barra[i].pu4 * tc;
+      art->pu5= barra[i].pu5 * tc;
       art->id_prov = barra[i].id_prov;
       art->id_depto = barra[i].id_depto;
       art->iva_porc = barra[i].iva_porc;
+      strcpy(art->divisa, barra[i].divisa);
+      art->tax_0 = barra[i].tax_0;
+      art->tax_1 = barra[i].tax_1;
+      art->tax_2 = barra[i].tax_2;
+      art->tax_3 = barra[i].tax_3;
+      art->tax_4 = barra[i].tax_4;
+      art->tax_5 = barra[i].tax_5;
       return(i);
     }
   }
@@ -535,13 +1250,31 @@ int exit=0; /* falso si hay que salirse */
 
 /***************************************************************************/
 
+double tipo_cambio(char *s_divisa) {
+
+int i;
+int exit=0; /* falso si hay que salirse */
+
+  for (i=0; (i<numdivisas); ++i) {
+    exit = strcmp(s_divisa, divisa[i].id);
+
+    if (!exit) {
+      return(divisa[i].tc);
+    }
+  }
+  return(ERROR_DIVERSO);
+
+}    
+
+/***************************************************************************/
+
 int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
-                     char *last_sale_fname)
+                     double tax[maxtax], char *last_sale_fname)
 {
   int i,j;
   int num_item;
   char codigo[maxcod];
-  double iva_articulo;
+  double iva_articulo, tax_item[6];
   FILE *f_last_sale;
   FILE *f_last_items;
 
@@ -570,8 +1303,23 @@ int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
     return(-1);
   }
 
-  iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+  tax_item[0] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_0/100 + 1);
+  tax_item[1] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_1/100 + 1);
+  tax_item[2] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_2/100 + 1);
+  tax_item[3] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_3/100 + 1);
+  tax_item[4] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_4/100 + 1);
+  tax_item[5] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_5/100 + 1);
+
+  if (iva_incluido)
+    iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+  else
+    iva_articulo = articulo[i].pu * (articulo[i].iva_porc/100);
+
   (*iva)  -=  (articulo[i].cant * iva_articulo);
+
+  for (j=0; j<maxtax; j++)
+    tax[j]  -=  (articulo[i].cant * tax_item[j]);
+
   (*subtotal) -= (articulo[i].cant * articulo[i].pu);
   /* Desplaza los artículos a una posición inferior */
   for (; i<*reng; i++) {
@@ -600,9 +1348,21 @@ int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
 
 
 void show_item_list(WINDOW *vent, int i, short cr) {
-  mvwprintw(vent, vent->_cury,  0, "%3d %15s", articulo[i].cant, articulo[i].codigo);
+  double iva_articulo;
+
+  if (iva_incluido)
+    iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+  else
+    iva_articulo = articulo[i].pu * (articulo[i].iva_porc/100);
+
+  mvwprintw(vent, vent->_cury,  0, "%2.2f %-15s", articulo[i].cant, articulo[i].codigo);
   mvwprintw(vent, vent->_cury, 22, "%-39s", articulo[i].desc);
-  mvwprintw(vent, vent->_cury, 62, "$%8.2f", articulo[i].pu);
+
+  if (listar_neto && !iva_incluido)
+    mvwprintw(vent, vent->_cury, 62, "$%8.2f", articulo[i].pu + iva_articulo);
+  else
+    mvwprintw(vent, vent->_cury, 62, "$%8.2f", articulo[i].pu);
+
   if (!articulo[i].iva_porc)
         wprintw(vent, "E");
   if (cr)
@@ -622,10 +1382,13 @@ void switch_pu(WINDOW *v_arts,
                struct articulos *art,
                int which_pu,
                double *subtotal,
+               double tax[maxtax],
                int i) 
 {
   double iva_articulo;
+  double tax_item[maxtax];
   double new_pu;
+  int j;
 
   switch (which_pu) {
   case 2:
@@ -642,9 +1405,22 @@ void switch_pu(WINDOW *v_arts,
     new_pu = art->pu5;
   }
 
-  iva_articulo = new_pu - new_pu / (art->iva_porc/100 + 1);
-  *subtotal += (art->cant * (new_pu - art->pu));
+  if (iva_incluido)
+    iva_articulo = new_pu - new_pu / (art->iva_porc/100 + 1);
+  else
+    iva_articulo = new_pu * (art->iva_porc/100);
   iva += (iva_articulo * art->cant);
+
+  tax_item[0] =  new_pu - new_pu / (art->tax_0/100 + 1);
+  tax_item[1] =  new_pu - new_pu / (art->tax_1/100 + 1);
+  tax_item[2] =  new_pu - new_pu / (art->tax_2/100 + 1);
+  tax_item[3] =  new_pu - new_pu / (art->tax_3/100 + 1);
+  tax_item[4] =  new_pu - new_pu / (art->tax_4/100 + 1);
+  tax_item[5] =  new_pu - new_pu / (art->tax_5/100 + 1);
+  for (j=0; j<maxtax; j++)
+    tax[j] += (tax_item[j] * art->cant);
+
+  *subtotal += (art->cant * (new_pu - art->pu));
   art->pu = new_pu;
   wmove(v_arts, v_arts->_cury-1, 0);
   show_item_list(v_arts, i-1, TRUE);
@@ -655,10 +1431,13 @@ void switch_pu(WINDOW *v_arts,
 
 /***************************************************************************/
 
-double item_capture(int    *numart,
-                     double *util, struct tm fecha) {
+double item_capture(PGconn *con, int *numart, double *util, 
+                    double tax[maxtax],
+                    struct tm fecha)
+{
   double  subtotal = 0.0;
   double  iva_articulo;
+  double  tax_item[maxtax];
   int     i=0,
           j,k;
   char    *buff, *buff2, *last_sale_fname;
@@ -667,6 +1446,7 @@ double item_capture(int    *numart,
   FILE    *f_last_sale;
   int     exist_journal=0;
   FILE    *f_last_items;
+  FILE    *p_impr;
 
   *util = 0;
   iva = 0.0;
@@ -693,6 +1473,9 @@ double item_capture(int    *numart,
     fclose(f_last_sale);
   }
 
+  if (lector_serial)
+    init_serial(&saio, &oldtio, &newtio);
+
   exist_journal = check_for_journal(home_directory);
   if (exist_journal) {
     sprintf(nm_journal, "%s/.last_items.%d", home_directory, exist_journal);
@@ -707,9 +1490,11 @@ double item_capture(int    *numart,
   articulo[0].cant = 1;
 
   do {
-    for (j=0; j<mxbuff; buff[j++] = 0);
+    memset(buff, 0, mxbuff);
     buff2[0] = 0;
     iva_articulo = 0.0;
+    for (j=0; j<maxtax; j++)
+      tax_item[j] = 0.0;
     articulo[i].pu = 0;
     articulo[i].p_costo = 0;
     mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
@@ -723,7 +1508,7 @@ double item_capture(int    *numart,
       buff[strlen(buff)-1] = 0;
     }
     else {
-      do {       
+      do {
         switch(chbuff = wgetkeystrokes(stdscr, buff, mxbuff)) {
           //        case KEY_F(1):
         case 2: /* F2 */
@@ -733,7 +1518,7 @@ double item_capture(int    *numart,
           break;
         case 3: /* F3 */
           journal_marked_items(nm_journal, "cancela", 0);
-          cancela_articulo(v_arts, &i, &subtotal, &iva, last_sale_fname);
+          cancela_articulo(v_arts, &i, &subtotal, tax, &iva, last_sale_fname);
           show_subtotal(subtotal);
           mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
           continue;
@@ -745,17 +1530,28 @@ double item_capture(int    *numart,
           if (i) {
             articulo[i].codigo[0] = 0;
             articulo[i].desc[0] = 0;
-            switch_pu(v_arts, &articulo[i-1], chbuff-3, &subtotal, i);
+            switch_pu(v_arts, &articulo[i-1], chbuff-3, &subtotal, tax, i);
             move(getmaxy(stdscr)-2,0);
           }
           break;
-        default:
+        case 12:
+          if (puede_hacer(con, log_name, "caja_cajon_manual"))
+            AbreCajon(tipo_disp_ticket);
+            sprintf(buff2, "lpr -P %s %s", lp_disp_ticket, nm_disp_ticket);
+            p_impr = popen(buff2, "w");
+            pclose(p_impr);
+          break;
         }
       }
-      while (chbuff);
-    }
-    //    getstr(buff);
+      while (chbuff  && !(lector_serial && wait_flag == FALSE));
+      if (lector_serial && wait_flag == FALSE) {
+        strcpy(buff, s_buf);
+        //        printw("%s", buff);
+        wait_flag = TRUE;
+      }
 
+      //    getstr(buff);
+    }
     chbuff = -1; /* Limpiamos para usar despues */
 
     if (strstr(articulo[i].desc,"ancela") == NULL)
@@ -774,7 +1570,7 @@ double item_capture(int    *numart,
       for (k=0; isdigit(buff[j]) && j<strlen(buff); j++,k++)
         articulo[i].desc[k] = buff[j];
       articulo[i].desc[k]=0;
-      articulo[i].cant = atoi(articulo[i].desc);
+      articulo[i].cant = atof(articulo[i].desc);
 
       if (!articulo[i].cant) {
         f_last_sale = fopen(last_sale_fname, "a");
@@ -786,19 +1582,44 @@ double item_capture(int    *numart,
         wmove(v_arts, v_arts->_cury-1,0);
         wclrtoeol(v_arts);
         wrefresh(v_arts);
-        subtotal -= (articulo[--i].pu * articulo[i].cant);
-        iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+        --i;
+        subtotal -= (articulo[i].pu * articulo[i].cant);
+        if (iva_incluido)
+          iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+        else
+          iva_articulo = articulo[i].pu * (articulo[i].iva_porc/100);
         iva  -= (iva_articulo * articulo[i].cant);
+
+        tax_item[0] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_0/100 + 1);
+        tax_item[1] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_1/100 + 1);
+        tax_item[2] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_2/100 + 1);
+        tax_item[3] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_3/100 + 1);
+        tax_item[4] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_4/100 + 1);
+        tax_item[5] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_5/100 + 1);
+        for (j=0; j<maxtax; j++)
+          tax[j] -= (tax_item[j] * articulo[i].cant);
       }
       else {
         f_last_sale = fopen(last_sale_fname, "a");
         if (f_last_sale != NULL) {
-          fprintf(f_last_sale, "Nueva cantidad: %d\n", articulo[i].cant);
+          fprintf(f_last_sale, "Nueva cantidad: %.2f\n", articulo[i].cant);
           fclose(f_last_sale);
         }
-        iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
+        if (iva_incluido)
+          iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
+        else
+          iva_articulo = articulo[i-1].pu - articulo[i-1].iva_porc/100;
+        tax_item[0] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_0/100 + 1);
+        tax_item[1] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_1/100 + 1);
+        tax_item[2] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_2/100 + 1);
+        tax_item[3] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_3/100 + 1);
+        tax_item[4] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_4/100 + 1);
+        tax_item[5] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_5/100 + 1);
+
         subtotal += ((articulo[i].cant-articulo[i-1].cant) * articulo[i-1].pu);
         iva  += (iva_articulo * (articulo[i].cant-articulo[i-1].cant));
+        for (j=0; j<maxtax; j++)
+          tax[j]  += (tax_item[j] * (articulo[i].cant-articulo[i-1].cant));
         articulo[i-1].cant = articulo[i].cant;
       }
       if (i) {
@@ -825,8 +1646,21 @@ double item_capture(int    *numart,
         }
         (articulo[i-1].cant)++;
         subtotal += articulo[i-1].pu;
-        iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
+        if (iva_incluido)
+          iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
+        else
+          iva_articulo = articulo[i-1].pu * (articulo[i-1].iva_porc/100);
         iva += iva_articulo;
+
+        tax_item[0] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_0/100 + 1);
+        tax_item[1] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_1/100 + 1);
+        tax_item[2] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_2/100 + 1);
+        tax_item[3] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_3/100 + 1);
+        tax_item[4] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_4/100 + 1);
+        tax_item[5] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_5/100 + 1);
+        for (j=0; j<maxtax; j++)
+          tax[j] += tax_item[j];
+
         wmove(v_arts, v_arts->_cury-1, v_arts->_curx);
         show_item_list(v_arts, i-1, TRUE);
         show_subtotal(subtotal);
@@ -848,7 +1682,7 @@ double item_capture(int    *numart,
         continue;
       }
       if (strstr(articulo[i].desc,"ancela") && i) {
-        cancela_articulo(v_arts, &i, &subtotal, &iva, last_sale_fname);
+        cancela_articulo(v_arts, &i, &subtotal, &iva, tax, last_sale_fname);
         show_subtotal(subtotal);
         continue;
       }
@@ -882,12 +1716,44 @@ double item_capture(int    *numart,
         articulo[i].codigo[0] = 0;
         articulo[i].desc[0] = 0;
 
-        if (articulo[i-1].iva_porc)
-          iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+        if (articulo[i-1].iva_porc) {
+          if (iva_incluido)
+            iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+          else
+            iva_articulo = articulo[i].pu * (articulo[i].iva_porc/100);
+        }
         else
           iva_articulo = 0;
+
+        if (articulo[i-1].tax_0)
+          tax_item[0] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_0/100 + 1);
+        else
+          tax_item[0] = 0;
+        if (articulo[i-1].tax_1)
+          tax_item[1] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_1/100 + 1);
+        else
+          tax_item[1] = 0;
+        if (articulo[i-1].tax_2)
+          tax_item[2] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_2/100 + 1);
+        else
+          tax_item[2] = 0;
+        if (articulo[i-1].tax_3)
+          tax_item[3] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_3/100 + 1);
+        else
+          tax_item[3] = 0;
+        if (articulo[i-1].tax_4)
+          tax_item[4] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_4/100 + 1);
+        else
+          tax_item[4] = 0;
+        if (articulo[i-1].tax_5)
+          tax_item[5] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_5/100 + 1);
+        else
+          tax_item[5] = 0;
+
         subtotal += (articulo[i-1].cant * articulo[i].pu);
         iva += (iva_articulo * articulo[i-1].cant);
+        for (j=0; j<maxtax; j++)
+          tax[j] += (tax_item[j] * articulo[i-1].cant);
         wmove(v_arts, v_arts->_cury-1, 0);
         show_item_list(v_arts, i-1, TRUE);
         show_subtotal(subtotal);
@@ -929,18 +1795,46 @@ double item_capture(int    *numart,
       journal_marked_items(nm_journal, buff2, exist_journal);
 
       show_item_list(v_arts, i, TRUE);
-      iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
-      subtotal += (articulo[i].pu * articulo[i].cant);
+
+      if (iva_incluido)
+        iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+      else
+        iva_articulo = articulo[i].pu * (articulo[i].iva_porc/100);
       iva += (iva_articulo * articulo[i].cant);
+
+      tax_item[0] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_0/100 + 1);
+      tax_item[1] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_1/100 + 1);
+      tax_item[2] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_2/100 + 1);
+      tax_item[3] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_3/100 + 1);
+      tax_item[4] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_4/100 + 1);
+      tax_item[5] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_5/100 + 1);
+      for (j=0; j<maxtax; j++)
+        tax[j] += (tax_item[j] * articulo[i].cant);
+
+      subtotal += (articulo[i].pu * articulo[i].cant);
       show_subtotal(subtotal);
       articulo[++i].cant = 1;
     }
     else {  /* Articulo registrado */
       journal_last_sale(i, last_sale_fname);
       show_item_list(v_arts, i, TRUE);
-      iva_articulo =  articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
       subtotal += (articulo[i].pu * articulo[i].cant);
+
+      if (iva_incluido)
+        iva_articulo =  articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+      else
+        iva_articulo = articulo[i].pu * (articulo[i].iva_porc/100);
       iva += (iva_articulo * articulo[i].cant);
+
+      tax_item[0] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_0/100 + 1);
+      tax_item[1] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_1/100 + 1);
+      tax_item[2] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_2/100 + 1);
+      tax_item[3] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_3/100 + 1);
+      tax_item[4] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_4/100 + 1);
+      tax_item[5] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_5/100 + 1);
+      for (j=0; j<maxtax; j++)
+        tax[j] += (tax_item[j] * articulo[i].cant);
+
       show_subtotal(subtotal);
       articulo[++i].cant = 1;
     }
@@ -953,8 +1847,16 @@ double item_capture(int    *numart,
   *numart = i;
   for (j=0; j<(*numart); j++) {
     *util += ((articulo[j].pu - articulo[j].p_costo) * articulo[j].cant);
-        iva_articulo = articulo[j].pu - articulo[j].pu / (articulo[j].iva_porc/100 + 1);
-
+    if (iva_incluido)
+      iva_articulo = articulo[j].pu - articulo[j].pu / (articulo[j].iva_porc/100 + 1);
+    else
+      iva_articulo = articulo[j].pu * (articulo[j].iva_porc/100);
+    tax_item[0] = articulo[j].pu - articulo[j].pu / (articulo[j].tax_0/100 + 1);
+    tax_item[1] = articulo[j].pu - articulo[j].pu / (articulo[j].tax_1/100 + 1);
+    tax_item[2] = articulo[j].pu - articulo[j].pu / (articulo[j].tax_2/100 + 1);
+    tax_item[3] = articulo[j].pu - articulo[j].pu / (articulo[j].tax_3/100 + 1);
+    tax_item[4] = articulo[j].pu - articulo[j].pu / (articulo[j].tax_4/100 + 1);
+    tax_item[5] = articulo[j].pu - articulo[j].pu / (articulo[j].tax_5/100 + 1);
   }
 
   if (i) {
@@ -968,6 +1870,8 @@ double item_capture(int    *numart,
 
   free(buff);
   free(buff2);
+  if (lector_serial)
+    close_serial(fd, &oldtio);
   return(subtotal);
 }
 
@@ -1089,7 +1993,7 @@ void print_ticket_arts() {
 
   for (i=0; i<numarts; i++) {
     fprintf(impr," -> %s\n",articulo[i].desc);
-    fprintf(impr," %5d x %10.2f = %10.2f",
+    fprintf(impr," %3.2f x %10.2f = %10.2f",
        articulo[i].cant,articulo[i].pu,articulo[i].pu*articulo[i].cant);
         if (!articulo[i].iva_porc)
           fputs(" E", impr);
@@ -1126,7 +2030,7 @@ void print_ticket_footer(struct tm fecha, unsigned numventa) {
       "OsoPOS(Remision): No se puede leer el pie de ticket\n\r");
     fprintf(stderr,"del archivo %s\n",nmfpie);
     fprintf(impr,"\nInformes y ventas de este sistema:\n");
-    fprintf(impr,"e-mail: linucs@elpuntodeventa.com\n");
+    fprintf(impr,"e-mail: ventas@elpuntodeventa.com\n");
   }
   else {
     do { 
@@ -1139,7 +2043,7 @@ void print_ticket_footer(struct tm fecha, unsigned numventa) {
   }
   fprintf(impr,"\n\n\n");
   imprime_razon_social(impr, tipo_disp_ticket,
-                       "     La Botana", "          Fanny Nuricumbo Melchor" );
+                       "   La Botanita", "   Fernando Garcia Torres    " );
   free(s);
   fclose(impr);
 }
@@ -1161,7 +2065,7 @@ void print_ticket_header(char *nm_ticket_header) {
     fprintf(stderr,"del archivo %s\n", nm_ticket_header);
     fprintf(impr,
      "Sistema OsoPOS, programa Remision %s en\n",vers);
-    fprintf(impr,"un sistema Linux linucs@elpuntodeventa.com\n");
+    fprintf(impr,"un sistema Linux ventas@elpuntodeventa.com\n");
   }
   else {
     do {
@@ -1204,7 +2108,7 @@ void aviso_existencia(struct articulos art)
   char aviso[255];
 
 
-  sprintf(aviso, "Baja existencia en producto de proveedor num. %u\n%s %s quedan %d\n",
+  sprintf(aviso, "Baja existencia en producto de proveedor num. %u\n%s %s quedan %f\n",
                  art.id_prov, art.codigo, art.desc, art.exist-art.cant);
 
   arch = fopen(nm_avisos, "a");
@@ -1234,15 +2138,17 @@ void aviso_existencia(struct articulos art)
 }
 
 /* Actualiza las existencias de los artículos que se vendieron en una sola operación */
-int actualiza_existencia(PGconn *base_inv) {
-int i,
-    resurtir = 0;
-PGresult *res;
+int actualiza_existencia(PGconn *base_inv, struct tm *fecha) {
+  int      i,resurtir = 0;
+  PGresult *res;
+  char     tabla[255];
+  float    pu;
 
+  sprintf(tabla, "almacen_%d", almacen);
   for(i=0; i<numarts; i++) {
     articulo[i].exist = -1;
-    search_product(base_inv, "articulos", "codigo", articulo[i].codigo, &articulo[i]);
-    if (articulo[i].exist < 0) /* No existe en la base de existencias */
+    pu = articulo[i].pu;
+    if (!search_product(base_inv, tabla, "codigo", articulo[i].codigo, &articulo[i]))
       continue;
     if (articulo[i].exist > articulo[i].exist_min  &&
                 articulo[i].exist-articulo[i].cant <= articulo[i].exist_min) {
@@ -1250,7 +2156,8 @@ PGresult *res;
       resurtir++;
     }
     articulo[i].exist -= articulo[i].cant;
-    res = Modifica_en_Inventario(base_inv, "articulos", articulo[i]);
+    articulo[i].pu = pu;
+    res = salida_almacen(base_inv, almacen, articulo[i], log_name, fecha);
     if (PQresultStatus(res) != PGRES_COMMAND_OK)
       fprintf(stderr, "Error al actualizar artículo %s %s\n",
                        articulo[i].codigo, articulo[i].desc);
@@ -1259,27 +2166,28 @@ PGresult *res;
   return(resurtir);
 }
 
-void Termina(PGconn *con, int error)
+void Termina(PGconn *con, PGconn *con_s, int error)
 {
   fprintf(stderr, "Error número %d encontrado, abortando...",errno);
   PQfinish(con);
+  PQfinish(con_s);
   exit(errno);
 }
 
 
 void mensaje(char *texto)
 {
-        attrset(COLOR_PAIR(azul_sobre_blanco));
-        mvprintw(getmaxy(stdscr)-1,0, texto);
-        attrset(COLOR_PAIR(blanco_sobre_negro));
-        clrtoeol();
+  attrset(COLOR_PAIR(azul_sobre_blanco));
+  mvprintw(getmaxy(stdscr)-1,0, texto);
+  attrset(COLOR_PAIR(blanco_sobre_negro));
+  clrtoeol();
 }
 
-
-unsigned obten_num_venta(PGconn *base)
+long obten_num_venta(PGconn *base)
 {
   char query[1024];
   PGresult *res;
+  long numero;
 
   sprintf(query, "SELECT max(numero) FROM ventas");
   res = PQexec(base, query);
@@ -1288,9 +2196,9 @@ unsigned obten_num_venta(PGconn *base)
     PQclear(res);
     return(0);
   }
-  query[0] = atoi(PQgetvalue(res, 0, 0));
+  numero = atoi(PQgetvalue(res, 0, 0));
   PQclear(res);
-  return(query[0]);
+  return(numero);
 }
 
 /********************************************************/
@@ -1302,7 +2210,7 @@ int journal_last_sale(int i, char *last_sale_fname) {
 
   f_last_sale = fopen(last_sale_fname, "a");
   if (f_last_sale != NULL) {
-    fprintf(f_last_sale, "%3d ", articulo[i].cant);
+    fprintf(f_last_sale, "%3.0f ", articulo[i].cant);
     if (strlen(articulo[i].codigo) >= maxcod)
       articulo[i].codigo[maxcod-1] = 0;
     fprintf(f_last_sale, "%s ", articulo[i].codigo);
@@ -1353,7 +2261,7 @@ int  check_for_journal(char *dirname) {
   DIR *dir;
   struct dirent *dir_ent;
   FILE *p_cmd;
-  char *pid[255]; /* IGM We need to make a double pointer */
+  char *pid[255]; /* IGM We need to make it a double pointer */
   char buf[mxbuff];
   char *buff2;
   int i=0, orphan=0;
@@ -1401,22 +2309,130 @@ int  check_for_journal(char *dirname) {
   return(orphan);
 }
 
- /********************************************************/
-   
+int aborta_remision(PGconn *con, PGconn *con_s, char *mens, char tecla, int senial) {
+
+  do
+    mensaje(mens);
+  while (toupper(getch()) != tecla);
+
+  PQfinish(con);
+  PQfinish(con_s);
+  endwin();
+
+  free(nmfpie);
+  nmfpie = NULL;
+  free(nmfenc);
+  nmfenc = NULL;
+  free(nmtickets);
+  nmtickets = NULL;
+  free(nm_factur);
+  nm_factur = NULL;
+  free(nm_avisos);
+  nm_avisos = NULL;
+  free(nm_sendmail);
+  nm_sendmail = NULL;
+  free(dir_avisos);
+  dir_avisos = NULL;
+  free(db.hostname);
+  db.hostname = NULL;
+  free(db.hostport);
+  db.hostport = NULL;
+  /*if (cc_avisos != NULL)
+    free(cc_avisos);*/
+  free(asunto_avisos);
+  asunto_avisos = NULL;
+  free(tipo_disp_ticket);
+  tipo_disp_ticket = NULL;
+  free(lp_disp_ticket);
+  free(nm_avisos);
+  nm_avisos = NULL;
+  free(nmfpie);
+  nmfpie = NULL;
+  free(nmfenc);
+  nmfenc = NULL;
+  free(nmimprrem);
+  nmimprrem = NULL;
+  free(log_name);
+  log_name = NULL;
+  free(home_directory);
+  free(nm_disp_ticket);
+  free(nm_journal);
+  free(nm_orig_journal);
+
+  exit(senial);
+}
+
+/********************************************************/
+/********************************************************/
+/*** rutinas de comunicación serial. Basado en el Serial-Programming-HOWTO ***/
+void init_serial(struct sigaction *saio, struct termios *oldtio, struct termios *newtio)
+{
+  /* open the device to be non-blocking (read will return immediatly) */
+  fd = open(disp_lector_serie, O_RDWR | O_NOCTTY | O_NONBLOCK);
+  if (fd <0) {perror(disp_lector_serie); exit(-1); }
+
+  /* install the signal handler before making the device asynchronous */
+  saio->sa_handler = signal_handler_IO;
+  saio->sa_mask.__val[0] =  0;
+  saio->sa_flags = 0;
+  saio->sa_restorer = NULL;
+  sigaction(SIGIO,saio,NULL);
+  
+  /* allow the process to receive SIGIO */
+  fcntl(fd, F_SETOWN, getpid());
+  /* Make the file descriptor asynchronous (the manual page says only 
+     O_APPEND and O_NONBLOCK, will work with F_SETFL...) */
+  fcntl(fd, F_SETFL, FASYNC);
+
+  tcgetattr(fd,oldtio); /* save current port settings */
+  /* set new port settings for canonical input processing */
+  newtio->c_cflag = serial_bps | CRTSCTS | CS8 | CLOCAL | CREAD;
+  //  newtio->c_iflag = IGNPAR | ICRNL;
+  newtio->c_iflag = IGNPAR | ICRNL;
+  newtio->c_oflag = 0;
+  newtio->c_lflag = ICANON;
+  newtio->c_cc[VMIN]=1;
+  newtio->c_cc[VTIME]=0;
+  tcflush(fd, TCIFLUSH);
+  tcsetattr(fd,TCSANOW,newtio);
+}
+
+void close_serial(int fd, struct termios *tio)
+{
+  /* restore old port settings */
+  tcsetattr(fd,TCSANOW,tio);
+}
+
+void signal_handler_IO (int status)
+{
+  int res;
+
+  res = read(fd,s_buf,255);
+  if (s_buf[res-1]=='\n')
+    s_buf[res-1]=0;
+  else
+    s_buf[res]=0;
+
+  wait_flag = FALSE;
+}
+
+
+/********************************************************/   
 
 int main(int argc, char *argv[]) {
   static char buffer, buf[255];
   static char encabezado1[mxbuff],
-      encabezado2[mxbuff] = "E. Israel Osorio H., 1999-2001 soporte@elpuntodeventa.com";
+      encabezado2[mxbuff] = "E. Israel Osorio H., 1999-2003 soporte@elpuntodeventa.com";
   FILE *impr_cmd;
   time_t tiempo;        
   static int dgar;
-  PGconn *con;
-  unsigned num_venta = 0;
+  PGconn *con, *con_s;
+  long num_venta = 0;
   unsigned formadepago;
   double utilidad;
+  double tax[maxtax];
   struct tm *fecha;     /* Hora y fecha local   */
-
+  int i;
 
   program_name = argv[0];
 
@@ -1425,6 +2441,9 @@ int main(int argc, char *argv[]) {
   fecha->tm_year += 1900;
   pid = getpid();
 
+  init_config();
+  read_general_config();
+  read_global_config();
   read_config();
   initscr();
   if (!has_colors()) {
@@ -1439,7 +2458,15 @@ int main(int argc, char *argv[]) {
   init_pair(azul_sobre_blanco, COLOR_BLUE, COLOR_WHITE);
   init_pair(cyan_sobre_negro, COLOR_CYAN, COLOR_BLACK);
 
-  con = Abre_Base(db_hostname, db_hostport, NULL, NULL, "osopos", "scaja", ""); /*igm*/
+  con_s = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.sup_user, db.sup_passwd);
+  if (con_s == NULL) {
+    aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
+            ERROR_SQL);
+  }
+  //  con = Abre_Base(db.hostname, db.hostport, NULL, NULL, "osopos", log_name, "");
+  if (db.passwd == NULL)
+    obten_passwd(db.user, db.passwd);
+  con = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.user, db.passwd); 
   if (con == NULL) {
     aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
             ERROR_SQL);
@@ -1447,7 +2474,7 @@ int main(int argc, char *argv[]) {
   //  num_venta = obten_num_venta(nm_num_venta);
   num_venta = obten_num_venta(con);
 
-  numbarras = lee_articulos(con);
+  numbarras = lee_articulos(con, con_s);
   if (!numbarras) {
     mensaje("No hay artículos en la base de datos. Use el programa de inventarios primero");
     getch();
@@ -1458,11 +2485,26 @@ int main(int argc, char *argv[]) {
     numbarras = 0;
   }
 
+  numdivisas = lee_divisas(con);
+  if (!numdivisas) {
+    mensaje("No hay divisas en la base de datos. Use el programa de inventarios primero");
+    getch();
+  }
+  else if (numdivisas == SQL_ERROR) {
+    mensaje("Error al leer base de datos, búsqueda de divisas deshabilitada.");
+    getch();
+    numbarras = 0;
+  }
+
   sprintf(encabezado1, "Sistema OsoPOS - Programa Remision %s R.%s", vers, release);
   do {
     tiempo = time(NULL);
     fecha = localtime(&tiempo);
     fecha->tm_year += 1900;
+    for (i=0; i<maxtax; i++)
+      tax[i] = 0.0;
+
+
     clear();
     mvprintw(0,0,"%u/%u/%u",
                fecha->tm_mday, (fecha->tm_mon)+1, fecha->tm_year);
@@ -1472,7 +2514,7 @@ int main(int argc, char *argv[]) {
     mvprintw(1,(getmaxx(stdscr)-strlen(encabezado2))/2,
              "%s",encabezado2);
     attrset(COLOR_PAIR(blanco_sobre_negro));
-    a_pagar = item_capture(&numarts, &utilidad, *fecha);
+    a_pagar = item_capture(con, &numarts, &utilidad, tax, *fecha);
 
 
     if (numarts && a_pagar) {
@@ -1489,11 +2531,14 @@ int main(int argc, char *argv[]) {
           attroff(A_BOLD);
           clrtoeol();
           scanw("%d",&dgar);
-          num_venta = sale_register(con, "ventas", a_pagar, utilidad, formadepago,
-                         _NOTA_MOSTRADOR, FALSE, *fecha, id_teller, 0, articulo, numarts);
+          num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
+                         _NOTA_MOSTRADOR, FALSE, *fecha, id_teller, 0, articulo, numarts, almacen);
+          if (num_venta<0)
+            aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A', (int)num_venta);
+            
           if (num_venta>0)
             clean_journal(nm_journal);
-          sprintf(buf,"%s %d %d",nmimprrem, num_venta, dgar);
+          sprintf(buf,"%s %ld %d",nmimprrem, num_venta, dgar);
           impr_cmd = popen(buf, "w");
           if (pclose(impr_cmd) != 0)
             fprintf(stderr, "Error al ejecutar %s\n", buf);
@@ -1513,18 +2558,21 @@ int main(int argc, char *argv[]) {
           impr_cmd = popen(buf, "w");
           pclose(impr_cmd);
         }
-        num_venta = sale_register(con, "ventas", a_pagar, utilidad, formadepago,
-                       _FACTURA, FALSE, *fecha, id_teller, 0, articulo, numarts);
+        num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
+                       _FACTURA, FALSE, *fecha, id_teller, 0, articulo, numarts, almacen);
+        if (num_venta<0)
+          aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A', (int)num_venta);
+            
         if (num_venta>0)
           clean_journal(nm_journal);
-        sprintf(buf, "Venta %d. Aprieta una tecla para capturar, c para cancelar...", num_venta);
+        sprintf(buf, "Venta %ld. Aprieta una tecla para capturar, c para cancelar...", num_venta);
         mensaje(buf);
         buffer = toupper(getch());
         if (buffer != 'C') {
           if (strstr(nm_factur, "http") != NULL)
-            sprintf(buf, "%s?id_venta=%d &", nm_factur, num_venta);
+            sprintf(buf, "%s?id_venta=%ld &", nm_factur, num_venta);
           else
-            sprintf(buf, "%s -r %d", nm_factur, num_venta);
+            sprintf(buf, "%s -r %ld", nm_factur, num_venta);
           system(buf);
         }
         clear();
@@ -1545,9 +2593,12 @@ int main(int argc, char *argv[]) {
           pclose(impr_cmd);
           unlink(nm_disp_ticket);
         }
-        num_venta = sale_register(con, "ventas", a_pagar, utilidad,
+        num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad,
                                    formadepago, _TEMPORAL, FALSE, *fecha,
-                                   id_teller, 0, articulo, numarts);
+                                   id_teller, 0, articulo, numarts, almacen);
+        if (num_venta<0)
+          aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A', (int)num_venta);
+
         print_ticket_footer(*fecha, num_venta);
         if (num_venta>0)
           clean_journal(nm_journal);
@@ -1563,7 +2614,7 @@ int main(int argc, char *argv[]) {
         pclose(impr_cmd);
         break;
       }
-      if (actualiza_existencia(con)) {
+      if (actualiza_existencia(con, fecha)) {
         mensaje("Baja existencia de productos. Aprieta una tecla para seguir...");
         getch();
       }
@@ -1579,6 +2630,7 @@ int main(int argc, char *argv[]) {
   refresh();
 
   PQfinish(con);
+  PQfinish(con_s);
   unlink(nm_journal);
   endwin();
 
@@ -1596,12 +2648,12 @@ int main(int argc, char *argv[]) {
   nm_sendmail = NULL;
   free(dir_avisos);
   dir_avisos = NULL;
-  free(db_hostname);
-  db_hostname = NULL;
-  free(db_hostport);
-  db_hostport = NULL;
-  if (cc_avisos != NULL)
-    free(cc_avisos);
+  free(db.hostname);
+  db.hostname = NULL;
+  free(db.hostport);
+  db.hostport = NULL;
+  /*if (cc_avisos != NULL)
+    free(cc_avisos);*/
   free(asunto_avisos);
   asunto_avisos = NULL;
   free(tipo_disp_ticket);

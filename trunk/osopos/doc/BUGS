@@ -1,0 +1,9 @@
+remision:
+---------
+1.25
+* Violaciones de segmento al tratar de modificar ciertos parametros de
+  configuracion. Se puede presentar en cualquiera de los argumentos, y se
+  debe a un erroneo manejo de apuntadores en la funcion read_config().
+1.24
+* La funcion de registro de diario (journal) solo permite operar al usuario 
+  el programa en modo unicaja, permitiendo aun que lo use mas de un usuario.

@@ -1,27 +1,21 @@
 #!/bin/bash
 
-clear
-echo "Revisando el diskette..."
-echo
-/sbin/fsck.ext2 /dev/fd0
-rc=$?
-echo
-
-if [ rc="0" ]; then
-  mount /mnt/floppy
-  if [ -d /mnt/floppy/lost+found ]; then
-    echo "Creando la base de datos de OsoPOS..."
-    pg_dump osopos -f /mnt/floppy/respaldo.osopos
-    umount /mnt/floppy
-    echo "Echo"
-  else
-    echo "*** ERROR: No se insertó un disco o no tiene formato ext2"
-    echo "           no se ha hecho respaldo"
-  fi
-else
-  echo "*** ERROR: El disco puede estar dañado"
-  echo "    no se ha generado respaldo"
+cd ~/sql
+if [ -f respaldo_`date +%Y%m%d`.sql ]; then
+  echo "Renombrando el archivo anterior"
+  mv respaldo_`date +%Y%m%d`.sql respaldo_`date +%Y%m%d`.sql.bak
 fi
 
-echo
-echo
+pg_dump osopos > respaldo_`date +%Y%m%d`.sql
+
+cp respaldo_`date +%Y%m%d`.sql respaldo_`date +%Y%m%d`.sql.orig
+rm respaldo_hoy.sql
+ln -s respaldo_`date +%Y%m%d`.sql.orig respaldo_hoy.sql
+
+if [ -f respaldo_`date +%Y%m%d`.sql.bz2 ]; then
+  rm respaldo_`date +%Y%m%d`.sql.bz2
+fi
+bzip2 respaldo_`date +%Y%m%d`.sql
+rm respaldo_hoy.bz2
+ln -s respaldo_`date +%Y%m%d`.sql.bz2 respaldo_hoy.bz2
+

@@ -1,0 +1,123 @@
+                               APENDICE
+          PARÁMETROS DE CONFIGURACIÓN DEL PROGRAMA REMISION
+
+
+lp_ticket
+global
+Tipo: Caracteres
+Nombre de la cola de impresión a donde saldrán los tickets de venta
+
+ticket
+global, local
+Tipo: Caracteres
+Ubicación del archivo de buffer de pre-imprsión.
+
+ticket.pie
+global, local
+Tipo: Caracteres de ruta de archivo
+Ubicación exacta del archivo que contiene el texto a imprimir al final de cada ticket
+
+ticket.encabezado
+global
+Tipo: Caracteres de ruta de archivo
+Ubicación exacta del archivo que contiene el texto a imprimir al inicio de cada ticket
+
+miniimpresora.tipo
+global
+Tipo: Opción. Valores válidos: STAR, EPSON
+Tipo de impresora de ticket
+
+programa.factur
+global
+Tipo: Caracteres de ruta de archivo
+Ubicación del programa de facturación de osopos
+
+programa.imprem
+global
+Tipo: Caracteres de ruta de archivo
+Ubicación del programa de impresión de notas de mostrador de osopos
+
+db.host
+global, local
+Tipo: Dirección IPV4, ya sea de tipo nombre.dominio o numérica
+Dirección del servidor que hospeda la base de datos
+
+db.port
+global, local
+Tipo: Numérico entero
+Puerto del servidor de base de datos
+
+db.nombre
+global
+Tipo: Caracter
+Nombre de la base de datos definido en el servidor
+
+db.usuario
+global
+Tipo: Caracter
+Nombre del usuario que se conectará a la base de datos. Debe ser un usuario registrado en el sistema de base de datos.
+
+renglones.articulos
+global, local
+Tipo: Numerico entero
+Número máximo de renglones que se incluirán en una venta. Generalmente es el número máximo de renglones que caben en una nota de mostrador o en una factura.
+
+porcentaje.iva
+global
+Tipo: Numérico decimal
+Valor de IVA en % que causan por defecto los artículos. Este valor es empleado cuando el programa solicita que se indique el porcentaje de IVA causado y el usuario omite el valor.
+
+avisos
+global, local
+Tipo: Caracter de ruta de archivos
+Ubicación del archivo de avisos que genera el programa. Aquí se escribirán cualquier mensaje de error o algún aviso al supervisor de cajas.
+
+email.avisos
+global
+Tipo: Caracteres de correo electrónico (nombre@servidor)
+Dirección de correo electrónico a la que se enviarán los avisos de baja existencia de producto y algunos otros mensajes relevantes para el supervisor de cajas
+
+asunto.email
+global
+Tipo: Caracter
+Contenido del campo asunto en el correo electrónico que se le envía al supervisor de cajas
+
+cc.avisos
+Tipo: Caracteres de correo electrónico (nombre@servidor)
+Dirección de correo electrónico a la que se enviará una copia de los avisos de baja existencia de producto y algunos otros mensajes relevantes para el supervisor de cajas
+
+programa.sendmail
+global, local
+Tipo: Caracteres de ruta de archivos
+Ubicación del programa de envío de correo
+
+busca_codigo_alternativo
+global, local
+Tipo: opción. Valores admitidos: 0,1.
+Bandera que indica al sistema si se buscará también al producto por su segundo código.
+
+cajero.numero
+local
+Tipo: Numérico entero
+Número de cajero. Este número se registrará junto con la venta, y sirve para identificar a cada cajero.
+
+almacen.numero
+global, local
+Tipo: Numérico entero
+Almacén del cual está saliendo la mercancía
+
+scanner_serie
+global, local
+Tipo: Caracteres de ruta de archivos
+Si existe esta línea, se indica al programa que el scanner es de puerto serie; en caso contrario se debe
+omitir esta línea. Indica la ruta al puerto serie donde se encuentra el scanner.
+
+scanner_velocidad
+global, local
+Tipo: Fijo. Valores posibles: 2400, 4800, 9600, 19200, 38400.
+Velocidad de transmisión del lector de c. de barras, en bps.
+
+iva_incluido
+global
+Tipo: Fijo. Valores posibles: 0 ó 1.
+Indica con (1) si los precios incluyen el I.V.A., y con (0) si hay que agregarlo.

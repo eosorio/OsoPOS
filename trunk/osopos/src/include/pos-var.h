@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa OsoPOS (C) 1999-2001 E. Israel Osorio H.
+   Programa OsoPOS (C) 1999-2003 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -35,6 +35,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define SQL_ERROR      -1
 #define ERROR_MEMORIA  -2
 #define MEMORY_ERROR   -2
+#define PROCESS_ERROR  -3
 #define ERROR_DIVERSO  -5
 #define OTHER_ERROR    -5
 
@@ -129,9 +130,40 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #ifndef maxnmdepto
 #define maxnmdepto   25
 #endif
+
+#ifndef maxtax /* Número máximo de impuestos por PLU*/
+#define maxtax 6
+#endif
+
+#ifndef maxmovinvent
+#define maxmovinvent    100
+#endif
+
+#ifndef maxstr_movinvent
+#define maxstr_movinvent    30
+#endif
+
+#ifndef MX_LON_DIVISA
+#define MX_LON_DIVISA       3
+#endif
+
+#ifndef MX_LON_DIVISA_DES
+#define MX_LON_DIVISA_DES   20
+#endif
+
  /* Códigos de impresora */
 #define ESC 27
 #define FF 12
+
+struct db_data {
+  char *name;      /* Nombre de la base de datos */
+  char *user;      /* Nombre del usuario que se conecta a la base de datos */
+  char *passwd;    /* Conraseña del usuario */
+  char *sup_user;  /* Nombre del usuario supervisor */
+  char *sup_passwd;/* Contraseña del supervisor */
+  char *hostname;  /* Nombre host con base de datos */
+  char *hostport;  /* Puerto en el que acepta conexiones */
+};
 
 struct datoscliente {
   char rfc[maxrfc];
@@ -147,7 +179,7 @@ struct datoscliente {
 };
 
 struct articulos {
-  int      cant, exist;
+  double   cant, exist;
   char     desc[maxdes];
   char     codigo[maxcod], codigo2[maxcod];
   double   pu,                 /* Precios unitarios */
@@ -158,10 +190,12 @@ struct articulos {
            p_costo;            /* Precio de costo      */
   char     divisa[3];          /* Divisa de los precios */
   double   disc;               /* Discuento   .=)      */
-  unsigned id_prov;            /* Id del proveedor */
+  unsigned id_prov, id_prov2;  /* Id de los dos principales proveedores */
   unsigned id_depto;
-  int      exist_min, exist_max;
+  double   exist_min, exist_max;
   double   iva_porc;          /*  Gravamen de IVA del artículo */
+  double   tax_0;             /* I.E.P.S. (impuesto suntuario) */
+  double   tax_1, tax_2, tax_3, tax_4, tax_5;
   char     prov_clave[maxcod]; /* Clave del articulo con proveedor */
 };
 
@@ -186,3 +220,8 @@ struct fech {
   short unsigned anio;
 };
 
+struct divisas {
+  char id[MX_LON_DIVISA];
+  char descripcion[MX_LON_DIVISA_DES];
+  double tc;
+};

@@ -1,0 +1,84 @@
+#!/bin/bash
+
+db_name=osopos
+PAGER="less -rf"
+
+f_ini=$1
+f_fin=$2
+depto=$3
+
+arch_tmp="/tmp/desplaza"
+impresora=ticket
+cmd_impresion="lpr -b -P $impresora "
+
+clear
+
+if [[ "$f_ini" == "" ]]; then
+    echo "Indica la fecha de inicio:"
+    echo -n "Año (aaaa): "
+    read anio
+    echo -n "Mes (mm): "
+    read mes
+    echo -n "Día (dd): "
+    read dia
+    f_ini="$anio-$mes-$dia"
+    echo
+    echo
+fi
+
+
+if [[ "$f_fin" == "" ]]; then
+    echo "Indica la fecha final:"
+    echo -n "Año (aaaa): "
+    read anio
+    echo -n "Mes (mm): "
+    read mes
+    echo -n "Día (dd): "
+    read dia
+    f_fin="$anio-$mes-$dia"
+    echo
+    echo
+fi
+
+if [[ "$depto" == "" ]]; then
+    psql -q -c "SELECT * FROM departamento order by id ASC" osopos
+    echo -n "Indica el número de departamento a mostrar (0 para todos): "
+    read depto
+    if [[ "$depto" == "" ]]; then
+	depto="0"
+    fi
+fi
+
+clear
+
+echo "     DESPLAZAMIENTO DE PRODUCTOS POR PERIODO"
+echo "          DEL $f_ini AL $f_fin"
+echo
+
+query="SELECT dsp.codigo, dsp.ct, substring(ar.descripcion, 0, 30) as desc  FROM (SELECT DISTINCT ON (d.codigo) d.codigo,sum(d.cantidad) AS ct FROM ventas_detalle d, ventas v WHERE d.id_venta=v.numero AND v.fecha>='$f_ini' AND v.fecha<='$f_fin' GROUP BY d.codigo) AS dsp, articulos ar WHERE dsp.codigo=ar.codigo "
+
+if [[ "$depto" != "0" ]]; then
+    query="$query AND ar.id_depto=$depto "
+fi
+
+query="$query ORDER BY dsp.ct DESC"
+
+
+psql -q -c "$query" $db_name
+
+echo -n "¿Imprimir en papel? "
+read sino
+
+if [[ $sino == "s"  || $sino == "S" ]]; then
+    echo "Imprimiendo..."
+    echo " DESPLAZAMIENTO DE PRODUCTOS" > $arch_tmp
+    echo "         POR PERIODO" >> $arch_tmp
+    echo " DEL $f_ini AL $f_fin" >> $arch_tmp
+    echo >> $arch_tmp
+    echo >> $arch_tmp
+    echo >> $arch_tmp
+    psql -q -c "$query" -P expanded $db_name >> $arch_tmp
+    $cmd_impresion $arch_tmp
+    rm -f $arch_tmp
+    echo "Enviado a impresión"
+fi

@@ -1,0 +1,32 @@
+#!/bin/bash
+
+clear
+echo "Esto destruirá la base de datos en el equipo servidor y reconstruira"
+echo "la base de datos del equipo conta..."
+echo
+echo
+echo "¿Esta seguro de continuar? "
+echo "Presione <Ctrl-C> antes de 10 segundos para cancelar"
+sleep 10
+cd ~/sql
+ssh -i ~/.ssh/identity conta "~/bin/respalda"
+
+if [ -f respaldo_hoy.sql ]; then
+  mv respaldo_hoy.sql respaldo_hoy.sql.bak
+fi
+wget ftp://scaja:yucateco@conta/sql/respaldo_hoy.sql
+
+if [ -f respaldo_hoy.sql.bz2 ]; then
+  mv respaldo_hoy.sql.bz2 respaldo_hoy.sql.bak.bz2
+fi
+
+bzip2 respaldo_hoy.sql
+
+if [ -f respaldo_hoy.sql ]; then
+  dropdb osopos
+  createdb osopos
+  psql osopos < respaldo_hoy.sql
+fi
+echo
+echo "Proceso finalizado..."
+

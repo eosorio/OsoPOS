@@ -27,6 +27,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/pos-curses.h"
 #define _pos
 #endif
+#include "include/print-func.h"
 
 #define numdat          8
 
@@ -69,7 +70,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 #define version "0.32-1"
 
-#define maxitemlista    2048
+#define maxitemlista    4096
 
 WINDOW *v_arts;
 char   *nminvent;
@@ -89,12 +90,276 @@ void muestra_renglon(unsigned renglon, unsigned num_items);
 int quita_renglon(unsigned renglon, unsigned num_items);
 
 int form_virtualize(WINDOW *w);
-FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta);
+//FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta);
 
 int inicializa_lista(PGconn *base, char *campo_orden);
 
 /* Muestra el detalle del artículo */
 int fill_form(FIELD *campo[35], unsigned i, PGconn *base);
+
+/***************************************************************************/
+
+int init_config()
+{
+  FILE *env_process;
+
+  home_directory = calloc(1, 255);
+  log_name = calloc(1, 255);
+
+  if (!(env_process = popen("printenv HOME", "r"))) {
+    free(log_name);
+    free(home_directory);
+    return(PROCESS_ERROR);
+  }
+  fgets(home_directory, 255, env_process);
+  home_directory[strlen(home_directory)-1] = 0;
+  pclose(env_process);
+
+  if (!(env_process = popen("printenv LOGNAME", "r"))) {
+    free(log_name);
+    free(home_directory);
+    return(PROCESS_ERROR);
+  }
+  fgets(log_name, 255, env_process);
+  log_name[strlen(log_name)-1] = 0;
+  pclose(env_process);
+
+  
+  sprintf(nm_file,"/tmp/osopos_corte");
+
+  sprintf(tipo_imp,"EPSON");
+
+  strncpy(lp_printer, "ticket", maxbuf);
+
+
+  db.name= NULL;
+  db.user = NULL;
+  db.passwd = NULL;
+  db.sup_user = NULL;
+  db.sup_passwd = NULL;
+  db.hostport = NULL;
+  db.hostname = NULL;
+
+  db.hostname = calloc(1, strlen("255.255.255.255"));
+  db.name = calloc(1, strlen("elpuntodeventa.com"));
+  db.user = calloc(1, strlen(log_name)+1);
+  strcpy(db.user, log_name);
+
+  db.sup_user = calloc(1, strlen("scaja")+1);
+}
+
+/***************************************************************************/
+
+int read_general_config()
+{
+  char *nmconfig;
+  FILE *config;
+  char buff[mxbuff],buf[mxbuff];
+  char *b;
+  char *aux = NULL;
+
+  
+  nmconfig = calloc(1, 255);
+  strncpy(nmconfig, "/etc/osopos/general.config", 255);
+
+  config = fopen(nmconfig,"r");
+  if (config) {         /* Si existe archivo de configuración */
+    b = buff;
+    fgets(buff,mxbuff,config);
+    while (!feof(config)) {
+      buff [ strlen(buff) - 1 ] = 0;
+      if (!strlen(buff) || buff[0] == '#') {
+        if (!feof(config))
+          fgets(buff,mxbuff,config);
+        continue;
+      }
+      strncpy(buf, strtok(buff,"="), mxbuff);
+        /* La función strtok modifica el contenido de la cadena buff    */
+        /* remplazando con NULL el argumento divisor (en este caso "=") */
+        /* por lo que b queda apuntando al primer token                 */
+
+        /* Definición de impresora de ticket */
+      if (!strcmp(b,"ticket")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_disp_ticket, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_disp_ticket, buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n", b);
+      }
+      else if (!strcmp(b, "lp_ticket")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(lp_disp_ticket, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(lp_disp_ticket, buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr,
+                  "corte. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"miniimpresora.tipo")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(tipo_disp_ticket, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(tipo_disp_ticket,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr,
+                  "corte. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"programa.factur")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_factur, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_factur, buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr,
+                  "corte. Error de memoria en argumento de configuracion %s\n", b);
+      }
+      else if (!strcmp(b,"db.host")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.hostname, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.hostname,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.port")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.hostport, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.hostport,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.nombre")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.name, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.name,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.sup_usuario")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.sup_user, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.sup_user,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.sup_passwd")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        db.sup_passwd = calloc(1, strlen(buf)+1);
+        if (db.sup_passwd  != NULL) {
+          strcpy(db.sup_passwd,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"porcentaje_iva")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        TAX_PERC_DEF = atoi(buf);
+      }
+      else if (!strcmp(b,"avisos")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_avisos, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_avisos,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"email.avisos")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(dir_avisos, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(dir_avisos,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"asunto.email")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(asunto_avisos, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(asunto_avisos,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"cc.avisos")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        free(cc_avisos);
+        cc_avisos = NULL;
+        cc_avisos = calloc(1, strlen(buf)+1);
+        if (cc_avisos != NULL) {
+          strcpy(cc_avisos, buf);
+        }
+        else
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"programa.sendmail")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_sendmail, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_sendmail,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"iva_incluido")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        iva_incluido = atoi(buf);
+      }
+      if (!feof(config))
+        fgets(buff,mxbuff,config);
+    }
+  
+    fclose(config);
+    if (aux != NULL)
+      aux = NULL;
+    free(nmconfig);
+    b = NULL;
+    return(0);
+  }
+  if (aux != NULL)
+    aux = NULL;
+  free(nmconfig);
+  b = NULL;
+  return(1);
+}
 
 int read_config() {
   char *nmconfig;
@@ -199,6 +464,7 @@ int inicializa_lista(PGconn *base, char *campo_orden)
   int       i, j;
   PGresult  *res;
   char *comando;
+  char str_aux[255];
 
   v_arts =  newwin(getmaxy(stdscr)-12,getmaxx(stdscr), 9,0);
 /* Los parámetros anteriores causan un SIGSEGV y los posteriores no */
@@ -214,7 +480,7 @@ int inicializa_lista(PGconn *base, char *campo_orden)
 
   comando = calloc(1,mxbuff);
   snprintf(comando, mxbuff,
-      "DECLARE cursor_arts CURSOR FOR SELECT * FROM articulos ORDER BY \"%s\"",
+      "DECLARE cursor_arts CURSOR FOR SELECT codigo,descripcion,pu,cant FROM articulos ORDER BY \"%s\"",
 	campo_orden);
   res = PQexec(base, comando);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
@@ -237,11 +503,13 @@ int inicializa_lista(PGconn *base, char *campo_orden)
 
 /*  strcpy(art.codigo,PQgetvalue(res,registro,campo));  */
 
-  for (i=0; i<PQntuples(res); i++) {
+  for (j=0; j<getmaxx(stdscr) && j<254; j++)
+    str_aux[j] = ' ';
+  str_aux[j] = 0;
+
+  for (i=0; i<PQntuples(res) && i<maxitemlista; i++) {
     item[i] = calloc(1,getmaxx(stdscr));
-    for (j=0; j<getmaxx(stdscr); j++) {
-      item[i][j] = ' ';
-    }
+    strcpy(item[i], str_aux);
 
     if (maxdes+maxcod+maxpreciolong+maxexistlong+3 > getmaxx(stdscr)-1) {
        /* Código */
@@ -261,7 +529,7 @@ int inicializa_lista(PGconn *base, char *campo_orden)
       memcpy(&item[i][16+31], comando, strlen(comando));
 
       /* Existencia */
-      sprintf(comando, "%-4d", atoi(PQgetvalue(res,i,4)) );
+      sprintf(comando, "%4.2f", atof(PQgetvalue(res,i,3)) );
       memcpy(&item[i][16+31+maxpreciolong+1], comando, strlen(comando));
     }
     else {
@@ -278,7 +546,7 @@ int inicializa_lista(PGconn *base, char *campo_orden)
       sprintf(comando, "%10.2f", atof(PQgetvalue(res,i,2)) );
       memcpy(&item[i][maxcod+maxdes+2], comando, strlen(comando));
 
-      sprintf(comando, "%-4d", atoi(PQgetvalue(res,i,4)) );
+      sprintf(comando, "%4.2f", atof(PQgetvalue(res,i,3)) );
       memcpy(&item[i][maxpreciolong+maxdes+maxcod+3], comando, strlen(comando));
     }
     item[i][getmaxx(stdscr)-1] = 0;
@@ -321,7 +589,7 @@ void modifica_item(struct articulos art, int i)
       memcpy(&item[i][16+31], aux, strlen(aux));
 
       /* Existencia */
-      sprintf(aux, "%-4d", art.exist );
+      sprintf(aux, "%-2.1f", art.exist );
       memcpy(&item[i][16+31+maxpreciolong+1], aux, strlen(aux));
     }
     else {
@@ -338,7 +606,7 @@ void modifica_item(struct articulos art, int i)
       sprintf(aux, "%10.2f", art.pu );
       memcpy(&item[i][maxcod+maxdes+2], aux, strlen(aux));
 
-      sprintf(aux, "%-4d", art.exist );
+      sprintf(aux, "%-2.1f", art.exist );
       memcpy(&item[i][maxpreciolong+maxdes+maxcod+3], aux, strlen(aux));
     }
     item[i][getmaxx(stdscr)-1] = 0;
@@ -346,7 +614,7 @@ void modifica_item(struct articulos art, int i)
 }
 
 
-FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta)
+/*FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta)
 {
     FIELD *f = new_field(1, strlen(etiqueta), pren, pcol, 0, 0);
 
@@ -356,8 +624,9 @@ FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta)
         set_field_opts(f, field_opts(f) & ~O_ACTIVE);
     }
     return(f);
-}
+}*/
 
+/* función agregada a pos-curses.h 
 FIELD *CreaCampo(int frow, int fcol, int ren, int cols)
 {
     FIELD *f = new_field(ren, cols, frow, fcol, 0, 0);
@@ -365,7 +634,7 @@ FIELD *CreaCampo(int frow, int fcol, int ren, int cols)
     if (f)
         set_field_back(f,COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
     return(f);
-}
+}*/
 
 void MuestraForma(FORM *f, unsigned pos_ren, unsigned pos_col)
 {
@@ -398,6 +667,7 @@ void BorraForma(FORM *f)
     delwin(w);
 }
 
+/* función agregada a pos-curses.h
 int my_form_driver(FORM *form, int c)
 {
     if (c == (MAX_FORM_COMMAND + 1)
@@ -409,6 +679,7 @@ int my_form_driver(FORM *form, int c)
         return(FALSE);
     }
 }
+*/
 
 void ajusta_ventana_forma(void)
 {
@@ -553,16 +824,16 @@ int fill_form(FIELD *campo[35], unsigned i, PGconn *base)
 
     set_field_buffer(campo[CAMPO_DIVISA], 0, art.divisa);
 
-    sprintf(aux, "%d", art.exist);
+    sprintf(aux, "%f", art.exist);
     set_field_buffer(campo[CAMPO_EXIS], 0, aux);
 
     sprintf(aux, "%.2f", art.disc);
     set_field_buffer(campo[CAMPO_DISC], 0, aux);
 
-    sprintf(aux, "%d", art.exist_min);
+    sprintf(aux, "%f", art.exist_min);
     set_field_buffer(campo[CAMPO_EXMIN], 0, aux);
 
-    sprintf(aux, "%d", art.exist_max);
+    sprintf(aux, "%f", art.exist_max);
     set_field_buffer(campo[CAMPO_EXMAX], 0, aux);
 
     sprintf(comando, "SELECT nick FROM proveedores WHERE id=%d",
@@ -873,45 +1144,45 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
 
   /* describe la forma */
   campo [CAMPO_COD-1] = CreaEtiqueta(1, 0, "Codigo");
-  campo [CAMPO_COD] = CreaCampo(2, 0, 1, maxcod);
+  campo [CAMPO_COD] = CreaCampo(2, 0, 1, maxcod, amarillo_sobre_azul);
   campo [CAMPO_DESCR-1] = CreaEtiqueta(1, maxcod+1, "Descripcion");
-  campo [CAMPO_DESCR] = CreaCampo(2, maxcod+1, 1, maxdes);
+  campo [CAMPO_DESCR] = CreaCampo(2, maxcod+1, 1, maxdes, amarillo_sobre_azul);
   campo [4] = CreaEtiqueta(1, maxcod+maxdes+2, "P. U.");
-  campo [CAMPO_PU] = CreaCampo(2, maxcod+maxdes+2, 1, maxpreciolong);
+  campo [CAMPO_PU] = CreaCampo(2, maxcod+maxdes+2, 1, maxpreciolong, amarillo_sobre_azul);
   campo [6] = CreaEtiqueta(1, maxcod+maxdes+maxpreciolong+3, "Dscto");
-  campo [CAMPO_DISC] = CreaCampo(2, maxcod+maxdes+maxpreciolong+3, 1, maxdisclong);
+  campo [CAMPO_DISC] = CreaCampo(2, maxcod+maxdes+maxpreciolong+3, 1, maxdisclong, amarillo_sobre_azul);
   campo [8] = CreaEtiqueta(0, 6, etiqueta);
   campo [9] = CreaEtiqueta(3, 0, "Exis");
-  campo[CAMPO_EXIS] = CreaCampo(4, 0, 1, maxexistlong);
+  campo[CAMPO_EXIS] = CreaCampo(4, 0, 1, maxexistlong, amarillo_sobre_azul);
   campo[11] = CreaEtiqueta(3, maxexistlong+1, "Ex min");
-  campo[CAMPO_EXMIN] = CreaCampo(4, maxexistlong+2, 1, maxexistlong);
+  campo[CAMPO_EXMIN] = CreaCampo(4, maxexistlong+2, 1, maxexistlong, amarillo_sobre_azul);
   campo[13] = CreaEtiqueta(3, maxexistlong+maxexistlong+4, "Ex max");
-  campo[CAMPO_EXMAX] = CreaCampo(4, maxexistlong+maxexistlong+5, 1, maxexistlong);
+  campo[CAMPO_EXMAX] = CreaCampo(4, maxexistlong+maxexistlong+5, 1, maxexistlong, amarillo_sobre_azul);
   campo[15] = CreaEtiqueta(3, maxexistlong*2+maxexistlong+7, "Codigo proveedor");
-  campo[CAMPO_CODPROV] = CreaCampo(4, maxexistlong*2+maxexistlong+7, 1, maxcod);
+  campo[CAMPO_CODPROV] = CreaCampo(4, maxexistlong*2+maxexistlong+7, 1, maxcod, amarillo_sobre_azul);
   campo[17] = CreaEtiqueta(3, maxexistlong*2+maxexistlong+maxcod+8,
               "Departamento");
-  campo[CAMPO_DEPTO] = CreaCampo(4, maxexistlong*2+maxexistlong+maxcod+8, 1, maxcod);
+  campo[CAMPO_DEPTO] = CreaCampo(4, maxexistlong*2+maxexistlong+maxcod+8, 1, maxcod, amarillo_sobre_azul);
   campo[19] = CreaEtiqueta(3, maxexistlong*2+maxexistlong+maxcod*2+9,
               "P. Costo");
   campo[CAMPO_PCOSTO] = CreaCampo(4, maxexistlong*2+maxexistlong+maxcod*2+9,
-                                  1, maxpreciolong);
+                                  1, maxpreciolong, amarillo_sobre_azul);
   campo[21] = CreaEtiqueta(3, maxexistlong*2+maxexistlong+maxcod*2+maxpreciolong+10, "IVA");
   campo[CAMPO_IVA] = CreaCampo(4, maxexistlong*2+maxexistlong+maxcod*2+maxpreciolong+10,
-                               1, maxdisclong);
+                               1, maxdisclong, amarillo_sobre_azul);
   campo[23] = CreaEtiqueta(4, maxexistlong*2+maxexistlong+maxcod*2+maxpreciolong+maxdisclong+10, "%");
   campo[CAMPO_COD2-1] = CreaEtiqueta(5, 0, "Cod. alt.");
-  campo[CAMPO_COD2] = CreaCampo(6, 0, 1, maxcod);
+  campo[CAMPO_COD2] = CreaCampo(6, 0, 1, maxcod, amarillo_sobre_azul);
   campo[CAMPO_PU2-1] = CreaEtiqueta(5, 21, "Precio 2");
-  campo[CAMPO_PU2] = CreaCampo(6, 21, 1, maxpreciolong);
+  campo[CAMPO_PU2] = CreaCampo(6, 21, 1, maxpreciolong, amarillo_sobre_azul);
   campo[CAMPO_PU3-1] = CreaEtiqueta(5, 22+maxpreciolong, "Precio 3");
-  campo[CAMPO_PU3] = CreaCampo(6, 22+maxpreciolong, 1, maxpreciolong);
+  campo[CAMPO_PU3] = CreaCampo(6, 22+maxpreciolong, 1, maxpreciolong, amarillo_sobre_azul);
   campo[CAMPO_PU4-1] = CreaEtiqueta(5, 23+maxpreciolong*2, "Precio 4");
-  campo[CAMPO_PU4] = CreaCampo(6, 23+maxpreciolong*2, 1, maxpreciolong);
+  campo[CAMPO_PU4] = CreaCampo(6, 23+maxpreciolong*2, 1, maxpreciolong, amarillo_sobre_azul);
   campo[CAMPO_PU5-1] = CreaEtiqueta(5, 24+maxpreciolong*3, "Precio 5");
-  campo[CAMPO_PU5] = CreaCampo(6, 24+maxpreciolong*3, 1, maxpreciolong);
+  campo[CAMPO_PU5] = CreaCampo(6, 24+maxpreciolong*3, 1, maxpreciolong, amarillo_sobre_azul);
   campo[CAMPO_DIVISA-1] = CreaEtiqueta(5, 25+maxpreciolong*4, "Div");
-  campo[CAMPO_DIVISA] = CreaCampo(6, 25+maxpreciolong*4, 1, 3);
+  campo[CAMPO_DIVISA] = CreaCampo(6, 25+maxpreciolong*4, 1, 3, amarillo_sobre_azul);
   campo[36] = (FIELD *)0;
 
   set_field_pad(campo[CAMPO_COD], 0);
@@ -1093,8 +1364,11 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
 
   for (i=0; i < num_deptos;  i++)
     free(depto[i]);
-  BorraForma(forma);
+  for (i=0; i < num_provs;  i++)
+    free(prov[i]);
 
+  BorraForma(forma);
+ 
   free_form(forma);
   for (c = 0; campo[c] != 0; c++)
       free_field(campo[c]);
@@ -1190,9 +1464,25 @@ int main() {
   init_pair(verde_sobre_negro, COLOR_GREEN, COLOR_BLACK);
   init_pair(normal, COLOR_WHITE, COLOR_BLACK);
 
-  //  base_inv = Abre_Base(db_hostname, db_hostport, NULL, NULL, nminvent, "scaja", "");
-  base_inv = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "scaja", "");
-  if (PQstatus(base_inv) == CONNECTION_BAD) {
+  init_config();
+  read_general_config();
+  read_global_config();
+  read_config();
+
+  con_s = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.sup_user, db.sup_passwd);
+  if (con_s == NULL) {
+    aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
+            ERROR_SQL);
+  }
+  //  con = Abre_Base(db.hostname, db.hostport, NULL, NULL, "osopos", log_name, "");
+  if (db.passwd == NULL) {
+    db.passwd = calloc(1, mxbuff);
+    obten_passwd(db.user, db.passwd);
+  }
+
+  con = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.user, db.passwd); 
+
+  if (PQstatus(con) == CONNECTION_BAD) {
     printw("FATAL: Falló la conexión a la base de datos %s\n", nminvent);
     printw("Presione <Intro> para terminar...");
     getch();
@@ -1208,7 +1498,7 @@ int main() {
   mvprintw(getmaxy(stdscr)-2, 0, "Ctrl: A-Agrega B-Busca ");
   printw("D-moDifica Q-termina R-impRime U-qUita <Alt-Enter>Muestra");
 
-  num_items = inicializa_lista(base_inv, "codigo");
+  num_items = inicializa_lista(con, "codigo");
 
   if (num_items<0) {
     mvprintw(getmaxy(stdscr)/2, 0, "Error al incializar la lista de artículos");
@@ -1221,12 +1511,14 @@ int main() {
     exit(ERROR_SQL);
   }
   ajusta_ventana_forma();
-  forma_articulo(v_forma, &num_items, base_inv);
+  forma_articulo(v_forma, &num_items, con);
 
   delwin(v_arts);
   clear();
   refresh();
   endwin();
+  PQfinish(con);
+  PQfinish(con_s);
   for (i=0; i<num_items; i++)
     free(item[i]);
   free(nmdisp);

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+echo "Salida de artículos"
+echo "1a. venta: $1. Ultima: $2"
+psql -c \
+"SELECT DISTINCT ON (descrip) substring(descrip, 0, 30) as Descripción, \
+SUM(cantidad) as ct \
+FROM ventas_detalle v WHERE  \
+id_venta>=$1 AND id_venta<=$2 \
+GROUP BY descrip ORDER BY descrip ASC" \
+osopos

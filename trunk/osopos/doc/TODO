@@ -1,13 +1,21 @@
 Alta prioridad
 ---------------
+* En remision.c se provoca una violación de segmento cuando se
+  dan demasiados <Backspace> (más de los que se requieren para borrar
+  un código) cuando no hay renglones de artículos. Probablemente sea
+  por un desbordamiento de memoria en la variable que recibe el código
+  inicialmente.
 * Hacer módulo para dar de alta departamentos y proveedores
 
 Mediana prioridad
 ------------------
+* En remision: colocar como variables los argumentos que se pasan a la funci?on
+  imprime_razon_social
 * En factur: capturar observaciones y garantia en una forma de curses
-* Registrar id_vendedor y id_cajero en tabla ventas
+* Registrar id_vendedor en tabla ventas
 * Hacer función que haga justificación en impresión (si no se alcanza a
   imprimir una palabra, la manda a la siguiente línea
 * Optimizar y capturar errores en uso de apuntadores en funciones LeeConfig
+  en programas factur, remision e invent.
 * En invent: cachar error cuando el usuario modifica o agrega articulo y 
   quiere colocar un departamento que no esta dado de alta en la tabla
