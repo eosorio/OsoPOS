@@ -1,8 +1,8 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.13 (C) 1999-2001 E. Israel Osorio H.
-   desarrollo@punto-deventa.com
+   Programa Remision 1.14 (C) 1999-2001 E. Israel Osorio H.
+   desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
 
@@ -109,10 +109,12 @@ char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *nm_avisos,    /* Nombre del archivo de avisos */
   *nm_sendmail,  /* Ruta completa de sendmail */
   *dir_avisos,   /* email de notificación */
+  *db_hostname,  /* Nombre host con base de datos */
+  *db_hostport,  /* Puerto en el que acepta conexiones */
   *cc_avisos,    /* con copia para */
   *asunto_avisos; /* Asunto del correo de avisos */
 double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
-
+  
 
 int read_config()
 {
@@ -171,6 +173,9 @@ int read_config()
 
   nm_factur = calloc(1, strlen("/usr/bin/factur"));
   strcpy(nm_factur, "/usr/bin/factur");
+
+  db_hostport = NULL;
+  db_hostname = NULL;
 
   maxitemr = 6;
 
@@ -242,6 +247,16 @@ int read_config()
         realloc(nmimprrem, strlen(buf)+1);
         strcpy(nmimprrem,buf);
       } 
+      else if (!strcmp(b,"db.host")) {
+        strcpy(buf, strtok(NULL,"="));
+        realloc(db_hostname, strlen(buf)+1);
+        strcpy(db_hostname,buf);
+      }
+      else if (!strcmp(b,"db.port")) {
+        strcpy(buf, strtok(NULL,"="));
+        realloc(db_hostport, strlen(buf)+1);
+        strcpy(db_hostport,buf);
+      }
      else if (!strcmp(b,"renglones.articulos")) {
         strcpy(buf, strtok(NULL,"="));
         maxitemr = atoi(buf);
@@ -774,7 +789,7 @@ void ImpTicketPie(struct tm fecha, unsigned numventa) {
       "OsoPOS(Remision): No se puede leer el pie de ticket\n\r");
     fprintf(stderr,"del archivo %s\n",nmfpie);
     fprintf(impr,"\nInformes y ventas de este sistema:\n");
-    fprintf(impr,"e-mail: linucs@punto-deventa.com\n");
+    fprintf(impr,"e-mail: linucs@elpuntodeventa.com\n");
   }
   else {
     do { 
@@ -808,7 +823,7 @@ void print_ticket_header(char *nm_disp_ticket, char *nm_ticket_header) {
     fprintf(stderr,"del archivo %s\n", nm_ticket_header);
     fprintf(impr,
      "Sistema OsoPOS, programa Remision %s en\n",vers);
-    fprintf(impr,"un sistema Linux linucs@punto-deventa.com\n");
+    fprintf(impr,"un sistema Linux linucs@elpuntodeventa.com\n");
   }
   else {
     do {
@@ -957,7 +972,7 @@ unsigned obten_num_venta(PGconn *base)
 int main() {
   static char buffer, buf[255];
   static char encabezado1[mxbuff],
-      encabezado2[mxbuff] = "E. Israel Osorio H., 1999-2001 linucs@punto-deventa.com";
+      encabezado2[mxbuff] = "E. Israel Osorio H., 1999-2001 linucs@elpuntodeventa.com";
   FILE *impr_cmd;
   time_t tiempo;        
   static int dgar;
@@ -967,10 +982,8 @@ int main() {
   double utilidad;
   struct tm *fecha;     /* Hora y fecha local   */
 
-  char   *nmdiario;   /* Nombre del registro del diario */
-
   
-  nmdiario = calloc(1, 34);
+
 
   tiempo = time(NULL);
   fecha = localtime(&tiempo);
