@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Corte 0.10 (C) 1999-2002 E. Israel Osorio H.
+   Programa Corte 0.12 (C) 1999-2004 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -28,7 +28,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <time.h>
 #include <unistd.h>
 
-#define VERSION "0.11"
+#define VERSION "0.12"
 #define blanco_sobre_negro 1
 #define amarillo_sobre_negro 2
 #define verde_sobre_negro 3
@@ -100,18 +100,10 @@ double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad, d
   double    total;
   PGresult* res;
 
-  res = PQexec(base,"BEGIN");
-  if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr,"Falló comando BEGIN al buscar en registro de ventas\n");
-    PQclear(res);
-    return(SQL_ERROR);
-  }
-  PQclear(res);
-
   comando = calloc(1,mxbuff*2);
 
   sprintf(comando,
-          "DECLARE cursor_v CURSOR FOR SELECT sum(v.monto), sum(v.utilidad), sum(v.iva), ");
+          "SELECT sum(v.monto), sum(v.utilidad), sum(v.iva), ");
 
   if (f_sale) {
     sprintf(comando, "%ssum(v.tax_0), sum(v.tax_1), sum(v.tax_2), sum(v.tax_3), sum(v.tax_4), sum(v.tax_5) FROM ventas v, corte c WHERE v.numero=c.numero AND v.tipo_pago=%d AND v.numero>=%u" ,
@@ -139,18 +131,8 @@ double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad, d
   }
     
   res = PQexec(base, comando);
-  if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr,"Falló comando DECLARE CURSOR al buscar los registro de ventas\n");
-    fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
-    PQclear(res);
-    return(SQL_ERROR);
-  }
-  PQclear(res);
-
-  comando = "FETCH ALL in cursor_v";
-  res = PQexec(base, comando);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-    fprintf(stderr,"comando FETCH ALL no regresó registros apropiadamente\n");
+    fprintf(stderr,"Error al consultar registros de ventas (suma_pagos)\n");
     PQclear(res);
     return(SQL_ERROR);
   }
@@ -166,11 +148,6 @@ double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad, d
 
   PQclear(res);
 
-  res = PQexec(base, "CLOSE cursor_v");
-  PQclear(res);
-
-  res = PQexec(base, "END");
-  PQclear(res);
   return(total);
 }
 
@@ -183,19 +160,11 @@ double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur,
   double    total;
   PGresult* res;
 
-  res = PQexec(base,"BEGIN");
-  if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-   fprintf(stderr,"Falló comando BEGIN al buscar en registro de ventas\n");
-   PQclear(res);
-   return(SQL_ERROR);
-  }
-  PQclear(res);
-
 
   comando = calloc(1,mxbuff*2);
   if (f_sale) {
     sprintf(comando,
-            "DECLARE cursor_v CURSOR FOR SELECT v.numero,v.monto,v.tipo_pago,v.iva,v.tax_0,v.id_cajero,CASE WHEN (c.bandera&B'00010000'=B'00010000') THEN '*' ELSE ' ' END AS x FROM ventas v, corte c WHERE c.numero=v.numero AND v.tipo_factur=%d AND v.numero>=%ld" ,
+            "SELECT v.numero,v.monto,v.tipo_pago,v.iva,v.tax_0,v.id_cajero,CASE WHEN (c.bandera&B'00010000'=B'00010000') THEN '*' ELSE ' ' END AS x FROM ventas v, corte c WHERE c.numero=v.numero AND v.tipo_factur=%d AND v.numero>=%ld" ,
             tipo_factur, f_sale);
     if (l_sale)
       sprintf(comando+strlen(comando), " AND v.numero<=%ld", l_sale);
@@ -203,11 +172,11 @@ double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur,
   else {
     if (cashier_id)
       sprintf(comando,
-              "DECLARE cursor_v CURSOR FOR SELECT v.numero,v.monto,v.tipo_pago,v.iva,v.tax_0,v.id_cajero,CASE WHEN (c.bandera&B'00010000'=B'00010000') THEN '*' ELSE ' ' END AS x FROM ventas v, corte c WHERE (v.numero=c.numero AND v.id_cajero=%d AND v.tipo_factur=%d",
+              "SELECT v.numero,v.monto,v.tipo_pago,v.iva,v.tax_0,v.id_cajero,CASE WHEN (c.bandera&B'00010000'=B'00010000') THEN '*' ELSE ' ' END AS x FROM ventas v, corte c WHERE (v.numero=c.numero AND v.id_cajero=%d AND v.tipo_factur=%d",
               cashier_id, tipo_factur);
     else
       sprintf(comando,
-              "DECLARE cursor_v CURSOR FOR SELECT v.numero,v.monto,v.tipo_pago,v.iva,v.tax_0,v.id_cajero,CASE WHEN (c.bandera&B'00010000'=B'00010000') THEN '*' ELSE ' ' END AS x FROM ventas v, corte c WHERE (v.numero=c.numero AND v.tipo_factur=%d",
+              "SELECT v.numero,v.monto,v.tipo_pago,v.iva,v.tax_0,v.id_cajero,CASE WHEN (c.bandera&B'00010000'=B'00010000') THEN '*' ELSE ' ' END AS x FROM ventas v, corte c WHERE (v.numero=c.numero AND v.tipo_factur=%d",
               tipo_factur);
     
     if (parcial)
@@ -218,19 +187,8 @@ double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur,
   }
   strcat(comando, " ORDER BY v.numero");
   res = PQexec(base, comando);
-  if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr,"Falló comando DECLARE CURSOR al buscar los registro de ventas\n");
-    fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
-    free(comando);
-    PQclear(res);
-   return(SQL_ERROR);
-  }
-  PQclear(res);
-
-  strcpy(comando, "FETCH ALL in cursor_v");
-  res = PQexec(base, comando);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-    fprintf(stderr,"comando FETCH ALL no regresó registros apropiadamente\n");
+    fprintf(stderr,"Error al consultar registros de ventas (muestra_comprobantes)\n");
     free(comando);
     PQclear(res);
     return(SQL_ERROR);
@@ -288,11 +246,6 @@ double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur,
   fprintf(disp, "  ====================================\n\n");
   PQclear(res);
 
-  res = PQexec(base, "CLOSE cursor_v");
-  PQclear(res);
-
-  res = PQexec(base, "END");
-  PQclear(res);
   return(total);
 }
 
@@ -303,28 +256,14 @@ void clean_records(PGconn *base)
   FILE     *f_print;
 
   clear();
-  if ((f_print = fopen(nm_file, "r"))) {
-    fclose(f_print);
-    mvprintw(getmaxy(stdscr)/2, 0,
-             "ADVERTENCIA: Ya existe un archivo de impresión de corte.\n");
-    printw("             Si continua, este se reemplazará.\n");
-    /* trans. WARNING: There is a print file. If you proceed, it will be replaced */
-    printw("¿Está seguro de continuar? N\b");
-    /* trans. Are you sure? */
-    if (toupper(getch()) != 'S')
-      return;
-    printw("\n");
-  }
   res = PQexec(base, "BEGIN");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    printw("Error, no se pudo comenzar la transacción para borrar\n");
-    printw("       registros de ventas\n");
-    printw("Mensaje de error: %s\n", PQerrorMessage(base));
+    printw("Error, no puedo comenzar transaccion para actualizar catálogo de corte\n");
     return;
   }
   PQclear(res);
 
-  PQexec(base, "UPDATE corte SET bandera=(bandera | B'01000000')");
+  PQexec(base, "UPDATE corte SET bandera=(bandera | B'01000000') WHERE (bandera & B'01000000')=B'00000000'");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     strcpy(mensaje, PQerrorMessage(base));
     if (strlen(mensaje)) {
@@ -346,7 +285,7 @@ void clean_records(PGconn *base)
 
   res = PQexec(base, "END");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr, "Error, no se pudo terminar la transacción para borrar ventas\n");
+    fprintf(stderr, "Error, no se pudo terminar la transacción para actualizar catálogo de corte\n");
     fprintf(stderr, "Mensaje de error: %s\n", PQerrorMessage(base));
     return;
   }
@@ -573,14 +512,8 @@ int read_config() {
   static int i;
 
 
-  sprintf(home_directory, ".");
+  strcpy(home_directory, getenv("HOME"));
 
-  process = popen("printenv HOME", "r");
-  if (process != NULL) {
-    fgets(home_directory, maxbuf, process);
-    home_directory[strlen(home_directory)-1] = 0;
-    pclose(process);
-  }
   sprintf(nmconfig, "%s/.osopos/corte.config", home_directory);
 
   config = fopen(nmconfig,"r");
@@ -1078,30 +1011,12 @@ int read_general_config()
 
 int init_config()
 {
-  FILE *env_process;
-
   home_directory = calloc(1, 255);
+  strcpy(home_directory, getenv("HOME"));
+
   log_name = calloc(1, 255);
+  strcpy(log_name, getenv("LOGNAME"));
 
-  if (!(env_process = popen("printenv HOME", "r"))) {
-    free(log_name);
-    free(home_directory);
-    return(PROCESS_ERROR);
-  }
-  fgets(home_directory, 255, env_process);
-  home_directory[strlen(home_directory)-1] = 0;
-  pclose(env_process);
-
-  if (!(env_process = popen("printenv LOGNAME", "r"))) {
-    free(log_name);
-    free(home_directory);
-    return(PROCESS_ERROR);
-  }
-  fgets(log_name, 255, env_process);
-  log_name[strlen(log_name)-1] = 0;
-  pclose(env_process);
-
-  
   sprintf(nm_file,"/tmp/osopos_corte");
 
   sprintf(tipo_imp,"EPSON");
@@ -1123,6 +1038,7 @@ int init_config()
   strcpy(db.user, log_name);
 
   db.sup_user = calloc(1, strlen("scaja")+1);
+  return(OK);
 }
 
 int main()
@@ -1170,7 +1086,7 @@ int main()
   mvprintw(getmaxy(stdscr)-2, 0, "\"corte\" se brinda SIN GARANTIA. Presione V para más información");
   move(0, 0);
   do {
-    printw("Programa de corte de caja, v. %s. (C) 1999-2003. E. Israel Osorio H.\n",
+    printw("Programa de corte de caja, v. %s. (C) 1999-2004. E. Israel Osorio H.\n",
            VERSION);
     printw("soporte@elpuntodeventa.com\n\n");
     mvprintw(getmaxy(stdscr)-1, 0, msg);
