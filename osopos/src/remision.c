@@ -759,8 +759,10 @@ void imp_ticket_arts() {
           fputs(" E", impr);
         fputs("\n", impr);
   }
-  if (strstr(tipo_disp_ticket, "EPSON"))
-    fprintf(impr, "\n     %cr%cTotal: %10.2f%cr%c\n", ESC, 1, a_pagar, ESC, 0);
+  if (strstr(tipo_disp_ticket, "EPSON")) {
+    fprintf(impr, "\n%cr%c      Total: %10.2f\n", ESC, 1, a_pagar);
+    fprintf(impr, "%cr%c", ESC, 0);
+  }
   else
     fprintf(impr, "\n     Total: %10.2f\n", a_pagar);
   fprintf(impr, "     I.V.A.: %10.2f\n", iva);
@@ -800,7 +802,7 @@ void ImpTicketPie(struct tm fecha, unsigned numventa) {
     fclose(fpie);
   }
   fprintf(impr,"\n\n\n");
-  imprime_razon_social(impr);
+  imprime_razon_social(impr, tipo_disp_ticket);
   free(s);
   fclose(impr);
 }
@@ -862,7 +864,7 @@ int AbreCajon(char *tipo_miniimp) {
     fprintf(stderr,"operado por %s\n",nm_disp_ticket);
     return(0);
   }
-  if (!strcpy(tipo_miniimp, "STAR"))
+  if (strstr(tipo_miniimp, "STAR"))
     fprintf(impr, "%c", abre_cajon_star);
   else
     fprintf(impr,"%c%c%c%c%c", ESC,'p', 0, 255, 255);
