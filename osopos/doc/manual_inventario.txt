@@ -1,0 +1,95 @@
+Manual de operación del programa inventarios
+
+Para empezar el programa, debe teclear desde la línea de comandos "inventario"
+y apretar la tecla <Intro>
+
+A continuación le aparecerá una pantalla con una forma, una lista desplazable
+de los artículos y un renglón de ayuda.
+
+Uso de la forma
+
+Cada sección azul de la forma se llama "campo", y en ellas usted podrá
+introducir los datos del artículo a trabajar. Para llenar un campo solo tiene
+que usar el teclado, y para pasar al siguiente campo pulse la tecla <Intro> o
+<Tab> (el tabulador es la teca que se encuentra del lado izquierdo del teclado
+y tiene un dibujo de  -->|  Los campos son de ancho fijo, y no se pueden
+introducir mas caracteres y/o números que los que se pueden ver adentro del
+campo. En los campos de precios, existencias y descuento solo pueden ir
+números, y en los demas campos pueden ir letras y/o numeros. Para mas
+información vea el apendice de campos de la forma.
+
+ -----------------------------------------------------------------------------
+|                          Introduzca los articulos                           |
+|Codigo               Descripcion                             P. U.      Exis |
+|602760000339         Block taquigrafia estrella              12.00      22   |
+|Descuento  Ex min Ex max Codigo proveedor     Departamento         P. Costo  |
+|0.00        15     50    Papelera Osorio      Papeleria            0.00      |
+ -----------------------------------------------------------------------------
+ 
+
+Nota: Para que el contenido de un campo sea tomado en cuenta, se debe pasar al
+campo siguiente despues de haber intriducido los datos.
+
+
+La lista de artículos
+
+En la lista que aparece debajo de la forma, se muestran cuatro columnas, las
+que muestran el código del producto, su descripción, precio unitario al
+público y la existencia actual. El renglón azul indica donde se encuentra la
+selección actual, y se puede mover hacia arriba y hacia abajo dentro de los
+límites de la tabla con las flechas de cursor en el teclado. Si la línea de
+selección esta al inicio de la litsa y se pretende ir más arriba, se dará una
+alterta auditiva, indicando que no se puede ir mas arriba. De manera similar,
+si la línea de selección se encuentra en el límite inferior de la lista y se
+pretende ir más abajo, sonará una señal.
+
+070330909229         Encendedor Bic pequenio                       5.00 8
+8712045000533        Enfamil 1 450g                               52.10 22
+602760000339         Block taquigrafia estrella                   12.00 22
+3154141580512        Tijeras para zurdo Mapped                    52.10 22
+
+  Cuando un artículo es insertado o modificado, el artículo es mostrado en la
+parte superior de la lista y esta colocará la línea de selección sobre dicho
+artículo.
+
+Mostrando detalles de artículos en la lista
+  Para ver los detalles de un producto, se debe colocar la línea de selección
+sobre el producto deseado y despues presionar la tecla 'Alt' e 'Intro'
+simultáneamente; con esto los datos del producto seleccionado serán mostrados
+en los campos de la forma. Otra manera de mostrar los detalles del un artículo
+es buscándolo por código Vea "Búsqueda de artículos por código".
+
+Agregando artículos a la lista
+  Para agregar un artículo nuevo a la lista, se tienen que llenar los campos
+de la forma (al menos el código del producto) y despues presionar la tecla
+'Control' y 'A' simultáneamente. Si el código del artículo ya existe, se
+producirá una alerta sonora, de lo contrario se agregará el artículo al final
+de la lista. 
+
+Búsqueda de artículos por código
+  Los artículos pueden ser buscados en la base de datos si se introduce el
+código del artículo en la forma y despues se presiona 'Control' y 'B'
+simultáneamente. Si el código del artículo está registrado, se mostrarán los
+detalles en los campos de la forma, y la línea de selección mostrará el
+renglón adecuado en la lista.
+
+Modificando artículos existentes
+  Los datos de artículos que ya están en la lista pueden ser modificados
+llenando los datos del artículo en la forma y despues presionando 'Control' y
+'D' simultáneamente. Una manera más fácil de hacer que los campos de la forma
+se llenen (y despues sólo cambiamos lo necesario) es haciendo una búsqueda por
+código o mostrando el artículo con <Alt-Enter>. Si el código del artículo no
+existe en la base de datos, se escuchará una altera sonora.
+
+Eliminando artículos de la base de datos
+  Para quitar un artículo de la lusta de existencias y de la base de datos de
+inventarios, se tiene que introducir el código del producto y después
+presionar 
+
+Imprimir una lista de precios y existencias
+  La lista completa que se despliega en la pantalla puede ser impresa si se
+tiene configurada y conectada una impresora de al menos 10" de ancho. Para
+hacerlo solo basta con tener lista la impresora y presionar en el teclado la
+combinación 'Control' y 'R'. El formato de la lista será el mismo que tiene la
+lista en pantalla.
+

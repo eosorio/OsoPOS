@@ -1,0 +1,9 @@
+Tabla de caracteres para español en la DP-500
+
+á  206
+é  176
+í  181
+ó  186
+ú  191
+¿  196
+¡  201

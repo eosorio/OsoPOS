@@ -1,0 +1,17 @@
+Alta prioridad
+---------------
+* Colocar de nuevo el uso de lpr
+* Limpiar directorio de fuentes y subir a CVS
+* Revisar que no se sigan descontando articulos al llegar a cero en
+  existencia
+* Debugear gtk_invent
+* Hacer que las ventas se registren en tablas por detalle,
+  conteniendo id_venta, vendedor, articulos.
+* Arreglar uso de apuntadores en LeeConfig de todos los fuentes
+
+Mediana prioridad
+* Hacer función que haga justificación en imopresión (si no se alcanza a
+  imprimir una palabra, la manda a la siguiente línea
+* Optimizar y capturar errores en uso de apuntadores en funciones LeeConfig
+* Hacer pantallas de gtk_remision
+

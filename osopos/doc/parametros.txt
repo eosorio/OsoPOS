@@ -1,0 +1,4 @@
+Para Electro Hogar:
+maximo de articulos en remision   6
+máximo de articulos en factura   20
+
