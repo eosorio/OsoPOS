@@ -1,6 +1,3 @@
 #!/bin/bash
 
-echo
-echo
-grep --ignore-case $1 \
-   /home/OsoPOS/log/precios.txt | more
+psql osopos -c "select codigo,descripcion,pu from articulos where descripcion~*'$1'"
