@@ -84,7 +84,7 @@ void Crea_Factura( struct datoscliente cliente,
   fprintf(ffact,"%cJ%c",ESC,15);
   Espacios(ffact, margen);
   fprintf(ffact,"     %s, %s",cliente.dom_ciudad, cliente.dom_edo);
-  buff = strlen(cliente.ciudad) + strlen(cliente.dom_edo) + 2 + margen;
+  buff = strlen(cliente.dom_ciudad) + strlen(cliente.dom_edo) + 2 + margen;
   if (buff<40)
     Espacios(ffact, 40-buff);
   fprintf(ffact,"%s\n\n\n\n\r",cliente.rfc);

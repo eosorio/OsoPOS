@@ -153,7 +153,7 @@ int BuscaCliente(char *rfc, struct datoscliente *cliente, PGconn *con) {
 
   strcpy(query, "SELECT dom_calle,dom_numero,dom_inter,dom_col,dom_ciudad,dom_edo,dom_cp");
   strcat(query, " FROM facturas_ingresos WHERE rfc=");
-  sprintf(query, "%s'%s' ORDER BY fecha DESC LIMIT 1", query, rfc);
+  sprintf(query, "%s'%s' ORDER BY id DESC LIMIT 1", query, rfc);
   resultado = PQexec(con, query);
 
   if (resultado == NULL  || PQresultStatus(resultado) != PGRES_TUPLES_OK) {

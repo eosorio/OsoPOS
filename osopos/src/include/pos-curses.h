@@ -1,5 +1,5 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- pos-func.h 0.20-1 Biblioteca de funciones de OsoPOS.
+ pos-func.h 0.22-1 Biblioteca de funciones de OsoPOS.
         Copyright (C) 1999,2000 Eduardo Israel Osorio Hernández
 
         Este programa es un software libre; puede usted redistribuirlo y/o
@@ -76,13 +76,18 @@ int wgetkeystrokes(WINDOW *w, char *input_str, int str_len) {
 	else
 	  switch(ch) {
       case 32: /* Espacio */
+        if (!i) {
+          i--;
+          continue;
+        }
       case 42: /* Asterisco */
       case 225: /* a acentuada */
       case 233: /* e acentuada */
       case 237: /* i acentuada */
       case 243: /* o acentuada */
       case 250: /* u acentuada */
-      case 241: /* ñ */
+      case 209: /* Ñ mayuscula */
+      case 241: /* ñ minuscula */
         input_str[i+1] = 0;
         input_str[i] = ch;
         wprintw(w, "%c", ch);
@@ -94,9 +99,12 @@ int wgetkeystrokes(WINDOW *w, char *input_str, int str_len) {
         return(0);
         break;
       case 127:
-        input_str[i] = 0;
+      case 263:
+        input_str[--i] = 0;
+        wmove(w, w->_cury, w->_curx-1);
+        wclrtoeol(w);
         i--;
-        break;
+       break;
       default:
 	  }
   }  /* for */
