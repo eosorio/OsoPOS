@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.14 (C) 1999-2001 E. Israel Osorio H.
+   Programa Remision 1.22 (C) 1999-2001 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -23,12 +23,14 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 */
 
 
+#define MALLOC_CHECK_ 2
+
 #include <stdio.h>
 #include "include/pos-curses.h"
 #define _pos_curses
 
-#define vers "1.13"
-#define release "Electro Hogar"
+#define vers "1.22"
+#define release "La Botana"
 
 #ifndef maxdes
 #define maxdes 39
@@ -65,28 +67,21 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define _TEMPORAL        5
 
 int forma_de_pago();
-/*  PGresult *registra_venta(PGconn *base, */
-/*                           char   *tabla, */
-/*                           int    num_venta, */
-/*                           double total, */
-/*                           double utilidad, */
-/*                           int    tipo_pago, */
-/*                           int    tipo_fact, */
-/*                           bool   corte_parcial); */
-
 void Termina(PGconn *con, int error);
-int LeeConfig(char*, char*);
-double capt_remision(/*char *nm_reg_diario, char *nm_reg_temp,*/ int *numart, double *util);
+//int LeeConfig(char*, char*);
+double item_capture(int *numart, double *util, struct tm fecha);
 void imp_ticket_arts();
 void ImpTicketPie(struct tm fecha, unsigned numvents);
 /* Función que reemplaza a ActualizaEx */
 int actualiza_existencia(PGconn *con);
 /* Esta función reemplaza a leebarras */
 int lee_articulos(PGconn *base_inventario);
-void MuestraArtLista(WINDOW *vent, int i, short cr);
+void show_item_list(WINDOW *vent, int i, short cr);
 void show_subtotal(double);
 void mensaje(char *texto);
 void aviso_existencia(struct articulos art);
+void switch_pu(WINDOW *, struct articulos *, int, double *, int);
+int journal_last_sale(int i, char *last_sale_fname);
 
 FILE *impresora;
 double a_pagar; 
@@ -98,6 +93,7 @@ short unsigned maxitemr;
 
   /* Variables de configuración */
 char *home_directory;
+char *log_name;
 char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *lp_disp_ticket,      /* Definición de miniprinter en /etc/printcap */
   *nmfpie,              /* Pie de página de ticket */
@@ -114,7 +110,9 @@ char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *cc_avisos,    /* con copia para */
   *asunto_avisos; /* Asunto del correo de avisos */
 double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
-int search_2nd;  /* ¿Buscar código alternativo al mismo tiempo que el primario ? */  
+short unsigned search_2nd;  /* ¿Buscar código alternativo al mismo tiempo que el primario ? */ 
+int id_teller = 0;
+short unsigned manual_discount; /* Aplicar el descuento manual de precio en la misma línea */
 
 int read_config()
 {
@@ -122,23 +120,29 @@ int read_config()
   FILE *config;
   static char buff[mxbuff],buf[mxbuff];
   static char *b;
+  char *aux = NULL;
  
   home_directory = calloc(1, 255);
+  log_name = calloc(1, 255);
   nmconfig = calloc(1, 255);
   config = popen("printenv HOME", "r");
   fgets(home_directory, 255, config);
   home_directory[strlen(home_directory)-1] = 0;
   pclose(config);
 
-  strcpy(nmconfig, home_directory);
+  config = popen("printenv LOGNAME", "r");
+  fgets(log_name, 255, config);
+  log_name[strlen(log_name)-1] = 0;
+  pclose(config);
+
+  strncpy(nmconfig, home_directory, 255);
   strcat(nmconfig, "/.osopos/remision.config");
 
   search_2nd = 1;
 
- /* Raw writing to port will not be supported anymore */
-  //nm_disp_ticket = calloc(1, strlen("/dev/lpx")+1);
-  nm_disp_ticket = calloc(1, strlen("/tmp/ticket")+1);
-  strcpy(nm_disp_ticket,  "/tmp/ticket");
+  nm_disp_ticket = calloc(1, strlen("/tmp/ticket_")+strlen(log_name)+1);
+  strcpy(nm_disp_ticket, "/tmp/ticket_");
+  strcat(nm_disp_ticket, log_name);
 
   lp_disp_ticket = calloc(1, strlen("ticket")+1);
   strcpy(lp_disp_ticket, "ticket");
@@ -158,10 +162,10 @@ int read_config()
   nm_avisos = calloc(1, strlen("/var/log/osopos/avisos.txt")+1);
   strcpy(nm_avisos, "/var/log/osopos/avisos.txt");
   
-  dir_avisos = calloc(1, strlen("scaja")+1);
-  strcpy(dir_avisos, "scaja");
+  dir_avisos = calloc(1, strlen("scaja@")+1);
+  strcpy(dir_avisos, "scaja@");
   
-  cc_avisos = "";
+  cc_avisos = NULL;
 
   asunto_avisos = calloc(1, strlen("Aviso de baja existencia")+1);
   strcpy(asunto_avisos, "Aviso de baja existencia");
@@ -177,130 +181,191 @@ int read_config()
 
   db_hostport = NULL;
   db_hostname = NULL;
+  db_hostname = calloc(1, strlen("255.255.255.255"));
 
   maxitemr = 6;
 
   TAX_PERC_DEF = 15;
 
+  manual_discount = 1;
+
   config = fopen(nmconfig,"r");
   if (config) {         /* Si existe archivo de configuración */
     b = buff;
-    fgets(buff,sizeof(buff),config);
+    fgets(buff,mxbuff,config);
     while (!feof(config)) {
       buff [ strlen(buff) - 1 ] = 0;
       if (!strlen(buff) || buff[0] == '#') {
-        fgets(buff,sizeof(buff),config);
+        if (!feof(config))
+          fgets(buff,mxbuff,config);
         continue;
       }
-      strcpy(buf, strtok(buff,"="));
+      strncpy(buf, strtok(buff,"="), mxbuff);
         /* La función strtok modifica el contenido de la cadena buff    */
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
         /* Definición de impresora de ticket */
       if (!strcmp(b,"ticket")) {
-        strcpy(buf, strtok(NULL,"="));
-        free(nm_disp_ticket);
-        nm_disp_ticket = NULL;
-        nm_disp_ticket = calloc(1, strlen(buf)+1);
-        strcpy(nm_disp_ticket,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_disp_ticket, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(nm_disp_ticket, buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n", b);
       }
       else if (!strcmp(b, "lp_ticket")) {
-        strcpy(buf, strtok(NULL,"="));
-        free(lp_disp_ticket);
-        lp_disp_ticket = NULL;
-        lp_disp_ticket = calloc(1, strlen(buf)+1);
-        strcpy(lp_disp_ticket, buf);
-      }
-        /* Registro del diario */
-      /*      else if (!strcmp(b,"registro")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(nmdiario,strlen(buf)+1);
-        strcpy(nmdiario,buf);
-        }*/
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(lp_disp_ticket, strlen(buf)+1);
+        if (aux != NULL)
+          strcpy(lp_disp_ticket, buf);
+        else
+          fprintf(stderr,
+                  "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
+       }
       else if (!strcmp(b,"ticket.pie")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(nmfpie, strlen(buf)+1);
-        strcpy(nmfpie,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nmfpie, strlen(buf)+1);
+        if (aux != NULL)
+          strncpy(nmfpie, buf, strlen(buf));
+        else
+          fprintf(stderr,
+                  "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
       }
       else if (!strcmp(b,"ticket.encabezado")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(nmfenc, strlen(buf)+1);
-        strcpy(nmfenc,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nmfenc, strlen(buf)+1);
+        if (aux != NULL)
+          strcpy(nmfenc,buf);
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
       }
       else if (!strcmp(b,"miniimpresora.tipo")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(tipo_disp_ticket, strlen(buf)+1);
-        strcpy(tipo_disp_ticket,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(tipo_disp_ticket, strlen(buf)+1);
+        if (aux != NULL)
+          strcpy(tipo_disp_ticket,buf);
+        else
+          fprintf(stderr,
+                  "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
       }
       else if (!strcmp(b,"programa.factur")) {
-        strcpy(buf, strtok(NULL,"="));
-        free(nm_factur);
-        nm_factur = NULL;
-        nm_factur = calloc(1, strlen(buf)+1);
-        if (strlen(buf)>mxbuff)
-          strncpy(nm_factur, buf, mxbuff);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_factur, strlen(buf)+1);
+        if (aux != NULL)
+          strcpy(nm_factur, buf);
         else
-          strncpy(nm_factur, buf, strlen(buf));
+          fprintf(stderr,
+                 "remision. Error de memoria en argumento de configuracion %s\n", b);
       }
       else if (!strcmp(b,"programa.imprem")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(nmimprrem, strlen(buf)+1);
-        strcpy(nmimprrem,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nmimprrem, strlen(buf)+1);
+        if (aux != NULL)
+          strncpy(nmimprrem,buf, strlen(buf));
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
       } 
       else if (!strcmp(b,"db.host")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(db_hostname, strlen(buf)+1);
-        strcpy(db_hostname,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db_hostname, strlen(buf)+1);
+        if (aux != NULL)
+          strncpy(db_hostname,buf, strlen(buf));
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
       }
       else if (!strcmp(b,"db.port")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(db_hostport, strlen(buf)+1);
-        strcpy(db_hostport,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db_hostport, strlen(buf)+1);
+        if (aux != NULL)
+          strncpy(db_hostport,buf, strlen(buf));
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
       }
      else if (!strcmp(b,"renglones.articulos")) {
-        strcpy(buf, strtok(NULL,"="));
+        strncpy(buf, strtok(NULL,"="), mxbuff);
         maxitemr = atoi(buf);
       }
       else if (!strcmp(b,"porcentaje_iva")) {
-        strcpy(buf, strtok(NULL,"="));
+        strncpy(buf, strtok(NULL,"="), mxbuff);
         TAX_PERC_DEF = atoi(buf);
       }
       else if (!strcmp(b,"avisos")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(nm_avisos, strlen(buf)+1);
-        strcpy(nm_avisos,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_avisos, strlen(buf)+1);
+        if (aux != NULL)
+          strncpy(nm_avisos,buf, strlen(buf));
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
       }
       else if (!strcmp(b,"email.avisos")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(dir_avisos, strlen(buf)+1);
-        strcpy(dir_avisos,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(dir_avisos, strlen(buf)+1);
+        if (aux != NULL)
+          strncpy(dir_avisos,buf, strlen(buf));
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
       }
       else if (!strcmp(b,"asunto.email")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(asunto_avisos, strlen(buf)+1);
-        strcpy(asunto_avisos,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(asunto_avisos, strlen(buf)+1);
+        if (aux != NULL)
+          strncpy(asunto_avisos,buf, strlen(buf));
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
       }
       else if (!strcmp(b,"cc.avisos")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(cc_avisos, strlen(buf)+1);
-        strcpy(cc_avisos,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(cc_avisos, strlen(buf)+1);
+        if (aux != NULL)
+          strncpy(cc_avisos,buf, strlen(buf));
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
       }
       else if (!strcmp(b,"programa.sendmail")) {
-        strcpy(buf, strtok(NULL,"="));
-        realloc(nm_sendmail, strlen(buf)+1);
-        strcpy(nm_sendmail,buf);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(nm_sendmail, strlen(buf)+1);
+        if (aux != NULL)
+          strncpy(nm_sendmail,buf, strlen(buf));
+        else
+          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+                  b);
       }
       else if (!strcmp(b,"busca_codigo_alternativo")) {
-        strcpy(buf, strtok(NULL,"="));
+        strncpy(buf, strtok(NULL,"="), mxbuff);
         search_2nd = atoi(buf);
+      }
+     else if (!strcmp(b,"cajero.numero")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        id_teller = atoi(buf);
       }
       if (!feof(config))
         fgets(buff,mxbuff,config);
     }
     fclose(config);
+    if (aux != NULL)
+      aux = NULL;
+    free(nmconfig);
+    b = NULL;
     return(0);
   }
+  if (aux != NULL)
+    aux = NULL;
+  free(nmconfig);
+  b = NULL;
   return(1);
 }
 
@@ -343,20 +408,20 @@ int lee_articulos(PGconn *base_inventario)
   nCampos = PQnfields(res);
 
   for (i=0; i < PQntuples(res) && i<mxmembarra; i++) {
-    strcpy(barra[i].codigo , PQgetvalue(res,i,0));
-    strcpy(barra[i].codigo2 , PQgetvalue(res,i,13));
-    strcpy(barra[i].desc, PQgetvalue(res,i,1));
+    strncpy(barra[i].codigo , PQgetvalue(res,i,0), maxcod);
+    strncpy(barra[i].codigo2 , PQgetvalue(res,i,13), maxcod);
+    strncpy(barra[i].desc, PQgetvalue(res,i,1), maxdes);
     barra[i].pu = atof(PQgetvalue(res,i,2));
-    barra[i].pu = atof(PQgetvalue(res,i,14));
-    barra[i].pu = atof(PQgetvalue(res,i,15));
-    barra[i].pu = atof(PQgetvalue(res,i,16));
-    barra[i].pu = atof(PQgetvalue(res,i,17));
+    barra[i].pu2 = atof(PQgetvalue(res,i,14));
+    barra[i].pu3 = atof(PQgetvalue(res,i,15));
+    barra[i].pu4 = atof(PQgetvalue(res,i,16));
+    barra[i].pu5 = atof(PQgetvalue(res,i,17));
     barra[i].disc = atof(PQgetvalue(res,i,3));
     barra[i].exist = atoi(PQgetvalue(res,i,4));
     barra[i].exist_min = atoi(PQgetvalue(res,i,5));
     barra[i].p_costo = atof(PQgetvalue(res,i,9));
     barra[i].iva_porc = atof(PQgetvalue(res,i,11));
-    strcpy(barra[i].divisa, PQgetvalue(res,i,12));
+    strncpy(barra[i].divisa, PQgetvalue(res,i,12), 3);
   }
 
   if (PQntuples(res) >= mxmembarra)  {
@@ -404,10 +469,16 @@ int exit=0; /* falso si hay que salirse */
       exit = strcmp(cod, barra[i].codigo2);
 
     if (!exit) {
-      strcpy(art->codigo, barra[i].codigo);
-      strcpy(art->desc, barra[i].desc);
+      strncpy(art->codigo, barra[i].codigo, maxcod);
+      strncpy(art->desc, barra[i].desc, maxdes);
       art->p_costo = barra[i].p_costo;
       art->pu = barra[i].pu;
+      art->pu2= barra[i].pu2;
+      art->pu3= barra[i].pu3;
+      art->pu4= barra[i].pu4;
+      art->pu5= barra[i].pu5;
+      art->id_prov = barra[i].id_prov;
+      art->id_depto = barra[i].id_depto;
       art->iva_porc = barra[i].iva_porc;
       return(i);
     }
@@ -417,12 +488,14 @@ int exit=0; /* falso si hay que salirse */
 
 /***************************************************************************/
 
-int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva)
+int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
+                     char *last_sale_fname)
 {
   int i,j;
   int num_item;
   char codigo[maxcod];
   double iva_articulo;
+  FILE *f_last_sale;
 
   mvprintw(getmaxy(stdscr)-3,0,"Código del(los) artículo(s) a cancelar: ");
   clrtoeol();
@@ -430,17 +503,27 @@ int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva)
   move(getmaxy(stdscr)-3,0);
   clrtoeol();
 
+  f_last_sale = fopen(last_sale_fname, "a");
+  if (f_last_sale != NULL) {
+    fprintf(f_last_sale, "Cancelando articulo: %s\n", codigo);
+    fclose(f_last_sale);
+  }
+
   for (i=0; strcmp(codigo, articulo[i].codigo) && i<*reng; i++);
-  num_item = i;
+  if (i  ||  strcmp(codigo, articulo[i].codigo) == 0)
+    num_item = i;
+  else {
+    return(-1);
+  }
 
   iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
   (*iva)  -=  (articulo[i].cant * iva_articulo);
   (*subtotal) -= (articulo[i].cant * articulo[i].pu);
   /* Desplaza los artículos a una posición inferior */
   for (; i<*reng; i++) {
-    strcpy(articulo[i].codigo, articulo[i+1].codigo);
+    strncpy(articulo[i].codigo, articulo[i+1].codigo, maxcod);
     articulo[i].pu = articulo[i+1].pu;
-    strcpy(articulo[i].desc, articulo[i+1].desc);
+    strncpy(articulo[i].desc, articulo[i+1].desc, maxdes);
     articulo[i].cant = articulo[i+1].cant;
   }
   (*reng)--;
@@ -450,18 +533,19 @@ int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva)
     for (i=*reng, j=vent->_maxy; j>=0; j--, i-- ) {
       wmove(vent, j,0);
       wclrtoeol(vent);
-      MuestraArtLista(vent, i, FALSE);
+      show_item_list(vent, i, FALSE);
     }
   else
     for (i=0; i<*reng && i<vent->_maxy; i++)
-      MuestraArtLista(vent, i, TRUE);
+      show_item_list(vent, i, TRUE);
 
+  mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
   wrefresh(vent);
   return(num_item);
 }
 
 
-void MuestraArtLista(WINDOW *vent, int i, short cr) {
+void show_item_list(WINDOW *vent, int i, short cr) {
   mvwprintw(vent, vent->_cury,  0, "%3d %15s", articulo[i].cant, articulo[i].codigo);
   mvwprintw(vent, vent->_cury, 22, "%-39s", articulo[i].desc);
   mvwprintw(vent, vent->_cury, 62, "$%8.2f", articulo[i].pu);
@@ -480,53 +564,125 @@ void show_subtotal(double subtotal) {
   clrtoeol();
 }
 
+void switch_pu(WINDOW *v_arts,
+               struct articulos *art,
+               int which_pu,
+               double *subtotal,
+               int i) 
+{
+  double iva_articulo;
+  double new_pu;
+
+  switch (which_pu) {
+  case 2:
+    new_pu = art->pu2;
+    break;
+  case 3:
+    new_pu = art->pu3;
+    break;
+  case 4:
+    new_pu = art->pu4;
+    break;
+  case 5:
+  default:
+    new_pu = art->pu5;
+  }
+
+  iva_articulo = new_pu - new_pu / (art->iva_porc/100 + 1);
+  *subtotal += (art->cant * (new_pu - art->pu));
+  iva += (iva_articulo * art->cant);
+  art->pu = new_pu;
+  wmove(v_arts, v_arts->_cury-1, 0);
+  show_item_list(v_arts, i-1, TRUE);
+  show_subtotal(*subtotal);
+
+
+}
+
 /***************************************************************************/
 
-double capt_remision(int    *numart,
-                     double *util) {
+double item_capture(int    *numart,
+                     double *util, struct tm fecha) {
   double  subtotal = 0.0;
   double  iva_articulo;
-  //  FILE    *registro;
-  //FILE    *regtemp;
   int     i=0,
           j,k;
-  char    *buff;
-  int     chbuff;
+  char    *buff, *buff2, *last_sale_fname;
+  int     chbuff = -1;
   WINDOW  *v_arts;
-  *util = 0;
+  FILE    *f_last_sale;
 
+  *util = 0;
   iva = 0.0;
 
   v_arts = newwin(getmaxy(stdscr)-8, getmaxx(stdscr)-1, 4, 0);
   scrollok(v_arts, TRUE);
   buff = calloc(1,mxbuff);
+  buff2 = calloc(1, mxbuff);
+  last_sale_fname = calloc(1, strlen(home_directory) + strlen("/ultima_venta.tmp")+1);
+  if (buff == NULL  || buff2 == NULL || last_sale_fname == NULL) {
+    fprintf(stderr, "remision. FATAL: no puedo alocar %d bytes de memoria\n", mxbuff);
+    /* can't allocat %d memory bytes */
+    return(ERROR_MEMORIA);
+  }
+  
+  sprintf(last_sale_fname, "%s/ultima_venta.tmp", home_directory);
+  f_last_sale = fopen(last_sale_fname, "w");
+  if (f_last_sale == NULL)
+    fprintf(stderr, "remision. No puedo escribir al archivo %s\n", last_sale_fname);
+  else {
+    fprintf(f_last_sale, "  %2d/%2d/%2d,  %2d:%2d:%2d hrs.\n",
+            fecha.tm_mday, (fecha.tm_mon)+1, fecha.tm_year, fecha.tm_hour,
+            fecha.tm_min, fecha.tm_sec);
+    fclose(f_last_sale);
+  }
+
   mvprintw(3,0,
            "Cant.       Clave                Descripción                 P. Unitario");
+            /* qt.       code                description                 unit cost */
   articulo[0].cant = 1;
 
   do {
+    for (j=0; j<mxbuff; buff[j++] = 0);
     iva_articulo = 0.0;
     articulo[i].pu = 0;
     articulo[i].p_costo = 0;
     mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
+    /* barcode, decription or qty. */
     do {       
-      buff[0] = 0;
+
       switch(chbuff = wgetkeystrokes(stdscr, buff, mxbuff)) {
         //        case KEY_F(1):
         case 2: /* F2 */
           strcpy(buff, "descuento");
+          strcpy(articulo[i].desc, "descuento");
           chbuff = 0;
           break;
         case 3: /* F3 */
-          cancela_articulo(v_arts, &i, &subtotal, &iva);
+          cancela_articulo(v_arts, &i, &subtotal, &iva, last_sale_fname);
           show_subtotal(subtotal);
+          mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
           continue;
+          break;
+        case 5:
+        case 6:
+        case 7:
+        case 8:
+          if (i) {
+            articulo[i].codigo[0] = 0;
+            articulo[i].desc[0] = 0;
+            switch_pu(v_arts, &articulo[i-1], chbuff-3, &subtotal, i);
+            move(getmaxy(stdscr)-2,0);
+          }
           break;
       default:
       }
     }
     while (chbuff);
     //    getstr(buff);
+
+    chbuff = -1; /* Limpiamos para usar despues */
+
     move(getmaxy(stdscr)-2,0);
     deleteln();
 
@@ -539,6 +695,11 @@ double capt_remision(int    *numart,
       articulo[i].cant = atoi(articulo[i].desc);
 
       if (!articulo[i].cant) {
+        f_last_sale = fopen(last_sale_fname, "a");
+        if (f_last_sale != NULL) {
+          fprintf(f_last_sale, "Cancelando renglones previos de %s\n", articulo[i-1].codigo);
+          fclose(f_last_sale);
+        }
          /* Cancela el último artículo */
         wmove(v_arts, v_arts->_cury-1,0);
         wclrtoeol(v_arts);
@@ -548,6 +709,11 @@ double capt_remision(int    *numart,
         iva  -= (iva_articulo * articulo[i].cant);
       }
       else {
+        f_last_sale = fopen(last_sale_fname, "a");
+        if (f_last_sale != NULL) {
+          fprintf(f_last_sale, "Nueva cantidad: %d\n", articulo[i].cant);
+          fclose(f_last_sale);
+        }
         iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
         subtotal += ((articulo[i].cant-articulo[i-1].cant) * articulo[i-1].pu);
         iva  += (iva_articulo * (articulo[i].cant-articulo[i-1].cant));
@@ -555,7 +721,7 @@ double capt_remision(int    *numart,
       }
       if (i) {
         wmove(v_arts, v_arts->_cury-1, v_arts->_curx);
-        MuestraArtLista(v_arts, i-1, TRUE);
+        show_item_list(v_arts, i-1, TRUE);
       }
       show_subtotal(subtotal);
 
@@ -570,17 +736,23 @@ double capt_remision(int    *numart,
         /* Repetición de artículo */
         /* ¿ No debería de ser && en lugar de || ? */
       if (i && (!strcmp(buff,articulo[i-1].desc) || !strcmp(buff,articulo[i-1].codigo)) ) {
+        f_last_sale = fopen(last_sale_fname, "a");
+        if (f_last_sale != NULL) {
+          fprintf(f_last_sale, "Repitiendo código: %s\n", articulo[i-1].codigo);
+          fclose(f_last_sale);
+        }
         (articulo[i-1].cant)++;
         subtotal += articulo[i-1].pu;
         iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
         iva += iva_articulo;
         wmove(v_arts, v_arts->_cury-1, v_arts->_curx);
-        MuestraArtLista(v_arts, i-1, TRUE);
+        show_item_list(v_arts, i-1, TRUE);
         show_subtotal(subtotal);
         continue;
       }
 
-      if (find_code(buff, &articulo[i], search_2nd) == 0) {
+      chbuff = find_code(buff, &articulo[i], search_2nd); /* Reusamos chbuff */
+      if (chbuff < 0) {
         strncpy(articulo[i].desc, buff, maxdes);
         articulo[i].iva_porc = TAX_PERC_DEF;
       }
@@ -588,40 +760,58 @@ double capt_remision(int    *numart,
 
     /* El artículo no tiene código, puede ser un art. no registrado */
     /* o un descuento */
-    if (!articulo[i].pu) {
+    if (chbuff<0) {
       if (strlen(buff) <= 1) {
         articulo[i].cant=0;
         continue;
       }
       if (strstr(articulo[i].desc,"ancela") && i) {
-        cancela_articulo(v_arts, &i, &subtotal, &iva);
+        cancela_articulo(v_arts, &i, &subtotal, &iva, last_sale_fname);
         show_subtotal(subtotal);
         continue;
       }
-      strcpy(articulo[i].codigo,"Sin codigo");
-      mvprintw(getmaxy(stdscr)-3,0,"Introduce precio unitario: ");
-      clrtoeol();
-      scanw("%lf",&articulo[i].pu);
-      deleteln();
-      if ( strstr(articulo[i].desc,"escuento") && i) {
+      do {
+        wmove(stdscr, getmaxy(stdscr)-3,0);
+        if (strlen(buff2) > 6)
+          printw("Cantidad muy grande... ");   /* Quantity very big */
+        printw("Introduce precio unitario: "); /* Introduce unitary cost */
+        clrtoeol();
+        getnstr(buff2, mxbuff);
+        if (strlen(buff2) > 6)
+          continue;
+        articulo[i].pu = atof(buff2);
+        buff2[0] = 0;
+        //        scanw("%f",&articulo[i].pu);
+        deleteln();
+      }
+      while (strlen(buff2) > 6);
+      if ( strstr(articulo[i].desc,"escuento") && i && !manual_discount) {
+        journal_last_sale(i, last_sale_fname);
+
         articulo[i-1].pu += articulo[i].pu;
         articulo[i].codigo[0] = 0;
         articulo[i].desc[0] = 0;
 
-        iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+        if (articulo[i-1].iva_porc)
+          iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
+        else
+          iva_articulo = 0;
         subtotal += (articulo[i-1].cant * articulo[i].pu);
         iva += (iva_articulo * articulo[i-1].cant);
         wmove(v_arts, v_arts->_cury-1, 0);
-        MuestraArtLista(v_arts, i-1, TRUE);
+        show_item_list(v_arts, i-1, TRUE);
         show_subtotal(subtotal);
         continue;
       }
       /* Artículo no registrado */
-      mvprintw(getmaxy(stdscr)-3,0,"Introduce porcentaje de I.V.A.: ");
+      strncpy(articulo[i].desc, buff, maxdes);
+      strcpy(articulo[i].codigo,"Sin codigo"); /* No code */
+      mvprintw(getmaxy(stdscr)-3,0,"Introduce porcentaje de I.V.A.: "); /* Introd. tax % */
       clrtoeol();
       scanw("%lf",&articulo[i].iva_porc);
       deleteln();
-      MuestraArtLista(v_arts, i, TRUE);
+      journal_last_sale(i, last_sale_fname);
+      show_item_list(v_arts, i, TRUE);
       iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
       subtotal += (articulo[i].pu * articulo[i].cant);
       iva += (iva_articulo * articulo[i].cant);
@@ -629,7 +819,8 @@ double capt_remision(int    *numart,
       articulo[++i].cant = 1;
     }
     else {  /* Articulo registrado */
-      MuestraArtLista(v_arts, i, TRUE);
+      journal_last_sale(i, last_sale_fname);
+      show_item_list(v_arts, i, TRUE);
       iva_articulo =  articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
       subtotal += (articulo[i].pu * articulo[i].cant);
       iva += (iva_articulo * articulo[i].cant);
@@ -652,13 +843,14 @@ double capt_remision(int    *numart,
   if (i) {
     attrset(COLOR_PAIR(amarillo_sobre_negro));
     attron(A_BOLD);
-    mvprintw(getmaxy(stdscr)-5,0, "Total a pagar: %.2f", subtotal);
+    mvprintw(getmaxy(stdscr)-5,0, "Total a pagar: %.2f", subtotal); /* Sale total */
     attroff(A_BOLD);
     attrset(COLOR_PAIR(blanco_sobre_negro));
     clrtoeol();
   }
 
   free(buff);
+  free(buff2);
   return(subtotal);
 }
 
@@ -835,7 +1027,7 @@ void ImpTicketPie(struct tm fecha, unsigned numventa) {
 }
 
 //void ImpTicketEncabezado() {
-void print_ticket_header(char *nm_disp_ticket, char *nm_ticket_header) {
+void print_ticket_header(char *nm_ticket_header) {
   FILE *impr,*fenc;
   char *s;
 
@@ -916,7 +1108,7 @@ void aviso_existencia(struct articulos art)
         fprintf(arch, "To: %s\n", dir_avisos);
         fprintf(arch, "From: %s\n", "scaja");
         fprintf(arch, "Subject: %s\n", asunto_avisos);
-        if (strlen(cc_avisos))
+        if (cc_avisos != NULL)
           fprintf(arch, "Cc: %s\n", cc_avisos);
         fprintf(arch, "\n\n%s\n", aviso);
         fclose(arch);
@@ -931,7 +1123,7 @@ PGresult *res;
 
   for(i=0; i<numarts; i++) {
     articulo[i].exist = -1;
-    Busca_en_Inventario(base_inv, "articulos", "codigo", articulo[i].codigo, &articulo[i]);
+    search_product(base_inv, "articulos", "codigo", articulo[i].codigo, &articulo[i]);
     if (articulo[i].exist < 0) /* No existe en la base de existencias */
       continue;
     if (articulo[i].exist > articulo[i].exist_min  &&
@@ -997,6 +1189,32 @@ unsigned obten_num_venta(PGconn *base)
   return(query[0]);
 }
 
+/********************************************************/
+
+int journal_last_sale(int i, char *last_sale_fname) {
+
+  FILE *f_last_sale;
+
+  f_last_sale = fopen(last_sale_fname, "a");
+  if (f_last_sale != NULL) {
+    fprintf(f_last_sale, "%3d ", articulo[i].cant);
+    if (strlen(articulo[i].codigo) >= maxcod)
+      articulo[i].codigo[maxcod-1] = 0;
+    fprintf(f_last_sale, "%s ", articulo[i].codigo);
+    Espacios(f_last_sale, maxcod - strlen(articulo[i].codigo));
+    if (strlen(articulo[i].desc) >= maxdes)
+      articulo[i].desc[maxdes-1] = 0;
+    fprintf(f_last_sale, "%s ", articulo[i].desc);
+    Espacios(f_last_sale, maxdes - strlen(articulo[i].desc));
+    fprintf(f_last_sale, "%.2f\n", articulo[i].pu);
+    fclose(f_last_sale);
+    return(OK);
+  }
+  else
+    return(ERROR_ARCHIVO_1);
+}
+
+
 int main() {
   static char buffer, buf[255];
   static char encabezado1[mxbuff],
@@ -1010,15 +1228,14 @@ int main() {
   double utilidad;
   struct tm *fecha;     /* Hora y fecha local   */
 
-  
 
 
   tiempo = time(NULL);
   fecha = localtime(&tiempo);
   fecha->tm_year += 1900;
 
-  initscr();
   read_config();
+  initscr();
   if (!has_colors()) {
     aborta("Este equipo no puede producir colores, pulse una tecla para abortar...",
             10);
@@ -1031,7 +1248,7 @@ int main() {
   init_pair(azul_sobre_blanco, COLOR_BLUE, COLOR_WHITE);
   init_pair(cyan_sobre_negro, COLOR_CYAN, COLOR_BLACK);
 
-  con = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "scaja", ""); /*igm*/
+  con = Abre_Base(db_hostname, db_hostport, NULL, NULL, "osopos", "scaja", ""); /*igm*/
   if (con == NULL) {
     aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
             ERROR_SQL);
@@ -1064,7 +1281,7 @@ int main() {
     mvprintw(1,(getmaxx(stdscr)-strlen(encabezado2))/2,
              "%s",encabezado2);
     attrset(COLOR_PAIR(blanco_sobre_negro));
-    a_pagar = capt_remision(&numarts, &utilidad);
+    a_pagar = item_capture(&numarts, &utilidad, *fecha);
 
 
     if (numarts && a_pagar) {
@@ -1082,7 +1299,7 @@ int main() {
           clrtoeol();
           scanw("%d",&dgar);
           num_venta = registra_venta(con, "ventas", a_pagar, utilidad, formadepago,
-                         _NOTA_MOSTRADOR, FALSE, *fecha, 0, 0, articulo, numarts);
+                         _NOTA_MOSTRADOR, FALSE, *fecha, id_teller, 0, articulo, numarts);
           sprintf(buf,"%s %d %d",nmimprrem, num_venta, dgar);
           impr_cmd = popen(buf, "w");
           if (pclose(impr_cmd) != 0)
@@ -1104,7 +1321,7 @@ int main() {
           pclose(impr_cmd);
         }
         num_venta = registra_venta(con, "ventas", a_pagar, utilidad, formadepago,
-                       _FACTURA, FALSE, *fecha, 0, 0, articulo, numarts);
+                       _FACTURA, FALSE, *fecha, id_teller, 0, articulo, numarts);
         sprintf(buf, "Venta %d. Aprieta una tecla para capturar, c para cancelar...", num_venta);
         mensaje(buf);
         buffer = toupper(getch());
@@ -1139,7 +1356,7 @@ int main() {
         }
         num_venta = registra_venta(con, "ventas", a_pagar, utilidad,
                                    formadepago, _TEMPORAL, FALSE, *fecha,
-                                   0, 0, articulo, numarts);
+                                   id_teller, 0, articulo, numarts);
         ImpTicketPie(*fecha, num_venta);
         sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
@@ -1149,7 +1366,7 @@ int main() {
         pclose(impr_cmd);
         mensaje("Corta el papel y aprieta una tecla para continuar (t para terminar)...");
         buffer = toupper(getch());
-        print_ticket_header(nm_disp_ticket, nmfenc);
+        print_ticket_header(nmfenc);
         sprintf(buf, "lpr -Fb -P %s %s", lp_disp_ticket, nm_disp_ticket);
         impr_cmd = popen(buf, "w");
         pclose(impr_cmd);
@@ -1170,15 +1387,47 @@ int main() {
   clear();
   refresh();
 
-  free(nm_disp_ticket);
-  free(nm_avisos);
-  free(nmfpie);
-  free(nmfenc);
-  free(nmimprrem);
-  free(home_directory);
-
   PQfinish(con);
   endwin();
+
+  free(nmfpie);
+  nmfpie = NULL;
+  free(nmfenc);
+  nmfenc = NULL;
+  free(nmtickets);
+  nmtickets = NULL;
+  free(nm_factur);
+  nm_factur = NULL;
+  free(nm_avisos);
+  nm_avisos = NULL;
+  free(nm_sendmail);
+  nm_sendmail = NULL;
+  free(dir_avisos);
+  dir_avisos = NULL;
+  free(db_hostname);
+  db_hostname = NULL;
+  free(db_hostport);
+  db_hostport = NULL;
+  if (cc_avisos != NULL)
+    free(cc_avisos);
+  free(asunto_avisos);
+  asunto_avisos = NULL;
+  free(tipo_disp_ticket);
+  tipo_disp_ticket = NULL;
+  free(lp_disp_ticket);
+  free(nm_avisos);
+  nm_avisos = NULL;
+  free(nmfpie);
+  nmfpie = NULL;
+  free(nmfenc);
+  nmfenc = NULL;
+  free(nmimprrem);
+  nmimprrem = NULL;
+  free(log_name);
+  log_name = NULL;
+  free(home_directory);
+  free(nm_disp_ticket);
+
   return(OK);
 }
 
