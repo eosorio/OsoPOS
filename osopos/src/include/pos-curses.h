@@ -23,6 +23,9 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <form.h>
 #define _form
 
+#include <panel.h>
+#define _panel
+
 char scan_terminator='\n';
 
 int ErrorArchivo(char *nmarch);
@@ -175,6 +178,42 @@ int my_form_driver(FORM *form, int c)
         return(FALSE);
     }
 }
+
+/*+-------------------------------------------------------------------------
+	mkpanel(rows,cols,tly,tlx) - alloc a win and panel and associate them
+--------------------------------------------------------------------------*/
+static PANEL *
+mkpanel(int color, int rows, int cols, int tly, int tlx)
+{
+    WINDOW *win;
+    PANEL *pan = 0;
+
+    if ((win = newwin(rows, cols, tly, tlx)) != 0) {
+	if ((pan = new_panel(win)) == 0) {
+	    delwin(win);
+	} else if (has_colors()) {
+	    int fg = (color == COLOR_BLUE) ? COLOR_WHITE : COLOR_BLACK;
+	    int bg = color;
+	    init_pair(color, fg, bg);
+	    wbkgdset(win, COLOR_PAIR(color) | ' ');
+	} else {
+	    wbkgdset(win, A_BOLD | ' ');
+	}
+    }
+    return pan;
+}				/* end of mkpanel */
+
+/*+-------------------------------------------------------------------------
+	rmpanel(pan)
+--------------------------------------------------------------------------*/
+static void
+rmpanel(PANEL * pan)
+{
+    WINDOW *win = panel_window(pan);
+    del_panel(pan);
+    delwin(win);
+}				/* end of rmpanel */
+
 
 int obten_passwd(char *usuario, char *passwd)
 {
