@@ -33,7 +33,8 @@
 char buff1[maxbuf],buff2[maxbuf];
 struct articulos art[maxart];
 char nmimpre[maxbuf],
-	tipoimp[maxbuf];	/* Tipo de impresora */
+	tipoimp[maxbuf],	/* Tipo de impresora */
+	lp_printer[maxbuf];
 int numarts, dgaran=-1;
 short unsigned maxitem;
 short iva_incluido;
@@ -43,7 +44,7 @@ int CalculaIVA();
 void ImprimeRemision(int numart);
 
 
-int LeeConfig(char *nmdatos) {
+int LeeConfig() {
   char       nmconfig[] = "imprem.config";
   FILE       *config;
   char       buff[maxbuf],buf[maxbuf];
@@ -51,9 +52,10 @@ int LeeConfig(char *nmdatos) {
   static int i;
 
   iva_incluido = 1;
-  strcpy(nmimpre,"/dev/lp1");
-  strcpy(nmdatos,"/home/OsoPOS/caja/venta.ultima");
+  strcpy(nmimpre,"/tmp/osopos_nota");
+  //  strcpy(nmdatos,"/home/OsoPOS/caja/venta.ultima");
   strcpy(tipoimp,"EPSON");
+  strncpy(lp_printer, "facturas", maxbuf);
   maxitem = 20;
 
   config = fopen(nmconfig,"r");
@@ -78,19 +80,23 @@ int LeeConfig(char *nmdatos) {
         strcpy(buf, strtok(NULL,"="));
         strcpy(nmimpre,buf);
       }
+      else if (!strcmp(b,"impresora.lpr")) {
+        strncpy(buf, strtok(NULL,"="), maxbuf);
+        strncpy(lp_printer,buf, maxbuf);
+      }
       else if (!strcmp(b,"impresora.tipo")) {
         strcpy(buf, strtok(NULL,"="));
         strcpy(tipoimp,buf);
         for (i=0; i<strlen(tipoimp); i++)
           tipoimp[i] = toupper(tipoimp[i]);
       }
-      else if (!strcmp(b,"datos")) {
+      /*      else if (!strcmp(b,"datos")) {
         strcpy(buf, strtok(NULL,"="));
         free(nmdatos);
         nmdatos = NULL;
         nmdatos = calloc(1, strlen(buf)+1);
         strcpy(nmdatos,buf);
-      }
+	}*/
       else if (!strcmp(b,"iva.incluido")) {
         strcpy(buf, strtok(NULL,"="));
         iva_incluido = (buf[0] == 'S');
@@ -113,7 +119,7 @@ int CalculaIVA() {
 
   for(i=0; i<numarts; i++) {
     if (!iva_incluido)
-      art[i].pu =  art[i].pu / (iva_porcentaje+1);
+      art[i].pu =  art[i].pu / (art[i].iva_porc+1);
     sumatoria += (art[i].pu * art[i].cant);
   }
   subtotal = sumatoria;
@@ -185,6 +191,87 @@ void ImprimeRemision(int numart) {
 
   if (iva_incluido) {
     fprintf(impresora, "%8.2f\n\r", subtotal);
+    fprintf(impresora, "%49s %8.2f\n\r", "", iva);
+  }
+  else
+    fprintf(impresora, "\n\n\r");
+
+  avance_vert(impresora,15); /* 15/216" entre renglones */
+  fprintf(impresora,"     %45s%8.2f\r\n","",total);
+  avance_vert(impresora,15);
+
+  strncpy(buff1,str_cant(total, &ib),sizeof(buff1));
+
+  /* Importe con letra */
+  fprintf(impresora,"%16s%spesos\r\n%16s"," ",buff1," ");
+  if (ib>9)
+    fprintf(impresora,"%2d/100 M.N.\r\n",ib);
+  else	/* Asegura que los centavos se impriman a dos digitos */
+    fprintf(impresora,"0%1d/100 M.N.\r\n",ib);
+
+  fprintf(impresora,"%c",FF);
+  fclose(impresora);
+}
+
+
+int imprime(int numart) {
+  FILE *impresora;
+  static int i=0, renglon;
+  static int ib;
+  time_t tiempo;
+  struct tm *fecha;
+  char str_buff[maxbuf];
+
+  impresora = fopen(nmimpre,"w");
+  if (!impresora) {
+    fprintf(stderr,
+	"ERROR: No se puede escribir al archivo %s\n",nmimpre);
+    fprintf(stderr,"Quiza no se cuenta con los permisos necesarios\n");
+    exit(10);
+  }
+  fprintf(impresora,"%c",18);
+  /* Cancela modo condensado */
+  tiempo = time(NULL);
+  fecha = localtime(&tiempo);
+  fecha->tm_year += 1900;
+
+       /* Imprime encabezado */
+  fprintf(impresora,"\n\n\n\n\n\n");
+  fprintf(impresora,"%3d   %3d  %5d",fecha->tm_mday,
+          fecha->tm_mon +1 ,fecha->tm_year);
+  fprintf(impresora,"\r\n\n");
+  fprintf(impresora,"%c%c%cM",ESC,15,ESC); /* 17cpi */
+  fprintf(impresora,"\n\n\n\n\n%c%c%c",ESC,'J',890);
+  /* 890/216" de avance vertical */
+
+  /* Imprime articulos */
+  for (i=0,renglon=0; i<numart; i++,renglon++) {
+    fprintf(impresora,"%3d     %-39s    %8.2f\n\r",
+	art[i].cant,art[i].desc,art[i].cant*art[i].pu);
+    if (renglon<maxitem)
+      avance_vert(impresora,15); /* 15/216" entre renglones */
+  }
+
+  /* Imprime renglones vacios faltantes */
+  for (; renglon<maxrenglon-2; renglon++) {
+     /* 2 renglones por el Subtotal y el IVA, */
+    fprintf(impresora,"\n\r");
+    if (renglon<maxitem)
+      avance_vert(impresora,15); /* 15/216" entre renglones */
+  }
+
+     /* Imprime subtotal, IVA y total */
+  avance_vert(impresora,3); /* 3/216" de avance */
+
+  if (dgaran < 0)
+    sprintf(buff1,"(     dias de garantia)");
+  else
+    sprintf(buff1,"( %3d dias de garantia)",dgaran);
+
+  fprintf(impresora, "        %-42s",buff1);
+
+  if (iva_incluido) {
+    fprintf(impresora, "%8.2f\n\r", subtotal);
     fprintf(impresora, "%47s %8.2f\n\r", "", iva);
   }
   else
@@ -205,23 +292,45 @@ void ImprimeRemision(int numart) {
 
   fprintf(impresora,"%c",FF);
   fclose(impresora);
+  sprintf(str_buff, "lpr -Fb -P %s %s", lp_printer, nmimpre);
+/*  impresora = popen(str_buff, "w");
+  return(pclose(impresora));   */
 }
 
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
+  //  char *nmdatos;
+  unsigned num_venta = 0;
+  PGconn *conn;
 
-  char *nmdatos;
+  //  nmdatos = calloc(1, strlen("/home/OsoPOS/caja/venta.ultima")+1);
+  //  LeeConfig(nmdatos);
+  LeeConfig();
 
-  nmdatos = calloc(1, strlen("/home/OsoPOS/caja/venta.ultima")+1);
-  LeeConfig(nmdatos);
-  numarts = LeeVenta(nmdatos,art);
-  if (argc>1)
-    dgaran = atoi(argv[1]);
+  if (argc>1) {
+    dgaran = atoi(argv[2]);
+    num_venta = atoi(argv[1]);
+  }
 
-  if (numarts) {
+  conn = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "israel", "");
+  if (conn == NULL) {
+    fprintf(stderr, "FATAL: No puedo accesar la base de datos osopos\n. Abortando...");
+    return(ERROR_SQL);
+  }
+//  numarts = LeeVenta(nmdatos,art);
+  numarts = lee_venta(conn, num_venta, art);
+
+  if (numarts>0) {
     CalculaIVA();
     ImprimeRemision(numarts);
+    //    free(nmdatos);
+    PQfinish(conn);
+    return (OK);
   }
-  free(nmdatos);
-  return (OK);
+  else {
+    //    free(nmdatos);
+    PQfinish(conn);
+    return (numarts);
+  }
 }

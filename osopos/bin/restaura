@@ -1,0 +1,48 @@
+#!/bin/bash
+
+clear
+echo "Revisando la integridad del diskette"
+echo
+
+/sbin/fsck.ext2 /dev/fd0
+mount /mnt/floppy
+
+echo
+echo
+if [ -d /mnt/floppy/lost+found ]; then
+  if [ -f /mnt/floppy/respaldo.osopos ]; then
+    echo "ESTO DESTRUIRA LA BASE DATOS ACTUAL Y COLOCARA UNA"
+    echo "ANTERIOR. Apriete Ctrl-C antes de 10 segundos para"
+    echo "cancelar..."
+    sleep 1
+    echo " 1"
+    sleep 1
+    echo " 2"
+    sleep 1
+    echo " 3"
+    sleep 1
+    echo " 4"
+    sleep 1
+    echo " 5"
+    sleep 1
+    echo " 6"
+    sleep 1
+    echo " 7"
+    sleep 1
+    echo " 8"
+    sleep 1
+    echo " 9"
+    sleep 1
+    echo "10"
+    destroydb osopos
+    createdb osopos
+    psql -e osopos  < /mnt/floppy/respaldo.osopos
+  else
+    echo "*** ERROR: No existe respaldo en el diskette"
+    echo "La base de datos sigue intacta"
+  fi
+else
+  echo "*** ERROR: El disco no está montado o no tiene un sistema ext2"
+  echo "    La base de datos sigue intacta"
+fi
+umount /mnt/floppy

@@ -21,6 +21,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <string.h>
 #include <stdio.h>
 
+#include <time.h>
 #include <crypt.h>
 #include <pgsql/libpq-fe.h>
 #include <err.h>
@@ -55,6 +56,25 @@ int BuscaBarraArch(char *nmarch, char *cod, char *descr, float *precio,
 
 int LeeVenta(char *nombre, struct articulos art[maxarts]);
 /* Interpreta el archivo generado por la última venta efectuada */
+
+int lee_venta(PGconn *base,
+              int num_venta,
+              struct articulos art[maxarts]);
+
+/* Registra la venta en base de datos y devuelve el número de venta */
+int registra_venta(PGconn *base,
+		   char *tabla,
+		   double monto,
+		   double utilidad,
+		   int tipo_pago,
+		   int tipo_factur,
+		   int corte_parcial,
+		   struct tm fecha,
+		   int id_cajero,
+		   int id_vendedor,
+		   struct articulos art[maxart],
+		   unsigned num_arts);
+
 
 PGresult *Agrega_en_Inventario(PGconn *base, char *tabla, struct articulos art);
 
@@ -338,6 +358,113 @@ int LeeVenta(char *nombre, struct articulos art[maxarts]) {
 }
 
 /*********************************************************************/
+int lee_venta(PGconn *base,
+              int num_venta,
+              struct articulos art[maxarts])
+{
+  char *query;
+  PGresult *res;
+  int i;
+
+  query = calloc(1, 1024);
+  if (query == NULL)
+    return (ERROR_MEMORIA);
+
+  sprintf(query, "SELECT codigo, descrip, cantidad, pu, iva_porc FROM ventas_detalle WHERE id_venta=%d",
+          num_venta);
+  res = PQexec(base, query);
+  if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+    fprintf(stderr,"ERROR: no encuentro registro de la venta %d.",
+	    num_venta);
+    free(query);
+    PQclear(res);
+    return(ERROR_SQL);
+  }
+
+  for (i=0; i<PQntuples(res); i++) {
+    strncpy(art[i].codigo, PQgetvalue(res, i, 0), maxcod);
+    strncpy(art[i].desc, PQgetvalue(res, i, 1), maxdes);
+    art[i].cant = atoi(PQgetvalue(res, i, 2));
+    art[i].pu = atof(PQgetvalue(res, i, 3));
+    art[i].iva_porc = atof(PQgetvalue(res, i, 4));
+  }
+
+  PQclear(res);
+  return(i);
+}
+
+/*********************************************************************/
+
+int registra_venta(PGconn *base,
+		   char *tabla,
+		   double monto,
+		   double utilidad,
+		   int tipo_pago,
+		   int tipo_factur,
+		   int corte_parcial,
+		   struct tm fecha,
+		   int id_cajero,
+		   int id_vendedor,
+		   struct articulos art[maxart], /* convertir en *art */
+		   unsigned num_arts)
+{
+
+  char *query;
+  char corte;
+  int num_venta, i;
+  PGresult *res;
+
+  query = calloc(1, 1024);
+  if (query == NULL)
+    return (ERROR_MEMORIA);
+
+  if (corte_parcial)
+    corte = 't';
+  else
+    corte = 'f';
+  sprintf(query, "INSERT INTO ventas (monto, tipo_pago, tipo_factur, corte_parcial, utilidad, id_vendedor, id_cajero, fecha, hora) VALUES (%.2f, %d, %d, '%c', %.2f, %d, %d, '%d-%d-%d', '%d:%d:%d')",
+	  monto, tipo_pago, tipo_factur, corte, utilidad, id_vendedor, id_cajero,
+	  fecha.tm_year, (fecha.tm_mon)+1, fecha.tm_mday,
+	  fecha.tm_hour, fecha.tm_min, fecha.tm_sec);
+  res = PQexec(base, query);
+  if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+    fprintf(stderr, "Error al registrar venta\n %s\n", query);
+    free(query);
+    PQclear(res);
+    return(ERROR_SQL);
+  }      
+  sprintf(query, "SELECT numero FROM ventas WHERE id_cajero=%d AND fecha='%d-%d-%d' AND hora='%d:%d:%d'",
+	  id_cajero, fecha.tm_year, (fecha.tm_mon)+1, fecha.tm_mday,
+	  fecha.tm_hour, fecha.tm_min, fecha.tm_sec);
+  res = PQexec(base, query);
+  if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+    fprintf(stderr,"ERROR: no encuentro registro de la venta a las %d:%d:%d horas del día %d-%d-%d",
+	    fecha.tm_hour, fecha.tm_min, fecha.tm_sec, fecha.tm_year, (fecha.tm_mon)+1, fecha.tm_mday);
+    free(query);
+    PQclear(res);
+    return(ERROR_SQL);
+  }
+  num_venta = atoi(PQgetvalue(res, 0, 0));
+
+  for (i=0; i<num_arts; i++) {
+    strncpy(query, "INSERT INTO ventas_detalle (\"id_venta\", \"codigo\", \"cantidad\", \"descrip\", \"pu\", \"iva_porc\")", 1024);
+    sprintf(query, "%s VALUES (%d, '%s', %d, '%s', %.2f, %.2f)", query, num_venta,
+	    art[i].codigo, art[i].cant, art[i].desc, art[i].pu, art[i].iva_porc);
+    res = PQexec(base, query);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+      fprintf(stderr, "Error al registrar detalle de ventas.\n%s\n", query);
+      free(query);
+      PQclear(res);
+      return(ERROR_SQL);
+    }
+  }
+
+  
+  free(query);
+  return(num_venta);
+}
+ 
+/*********************************************************************/
 
 PGresult *Agrega_en_Inventario(PGconn *base, char *tabla, struct articulos art)
 {
@@ -349,7 +476,6 @@ PGresult *Agrega_en_Inventario(PGconn *base, char *tabla, struct articulos art)
           "INSERT INTO %s VALUES('%s', '%s', %.2f, %.2f, %u, %u, %u, '%u', '%u', %.2f)",
             tabla, art.codigo, art.desc, art.pu, art.disc, art.exist,
             art.exist_min, art.exist_max, art.id_prov, art.id_depto, art.p_costo);
-  resultado = PQexec(base, comando_sql);
   free(comando_sql);
   return(resultado);
 }
@@ -424,7 +550,6 @@ PGresult *Busca_en_Inventario(PGconn *base,
   }
   PQclear(res);
 
-  /* fetch instances from the pg_database, the system catalog of databases*/
   comando = calloc(1,mxbuff);
   sprintf(comando,
       "DECLARE cursor_arts CURSOR FOR SELECT * FROM articulos WHERE \"%s\"~*'%s'",
