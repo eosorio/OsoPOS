@@ -1,0 +1,41 @@
+Remision:
+1.29
+Agrego configuración global y uso de nueva tabla almacen
+1.27
+Prevengo vulnerabilidad encontrada en multiplicador, cuando no se introduce
+un digito después del operador
+1.26
+Se agrega modo de autorecuperación en base a los PID del programa, permitiendo
+que se opere en modo multicaja.
+1.25
+Se cambia el modo de regitro de venta para agregar función de autorecuperación.
+1.24
+Se registran los movimientos para que el cajero pueda recuperar su venta en
+modo manual.
+
+Invent:
+0.31
+Se corrige bug que impedía modificar departamento y proveedor de un 
+articulo dado
+
+corte.c
+0.5
+* Changed table ventas, replacing field corte_parcial (type bool) with corte (type bit(8)), for
+the purpose of preserve the sales records and not delete them.
+
+
+remision.c
+1.26
+* Fixed sale autorecover, in last version it failed with more than one program running
+
+1.25
+* Replaced some system calls with library calls
+* Added sale autorecover
+
+
+pos-func.h
+0.22
+* Insertion of sale record now with "corte" in binary format
+
+sincroniza
+* Adición nueva. Script que espejea la base de datos
