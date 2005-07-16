@@ -1,6 +1,6 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- pos-func.h 0.22-1 Biblioteca de funciones de OsoPOS.
-        Copyright (C) 1999,2000 Eduardo Israel Osorio Hernández
+ pos-func.h 0.23-1 Biblioteca de funciones de OsoPOS.
+        Copyright (C) 1999,2000,2004 Eduardo Israel Osorio Hernández
 
         Este programa es un software libre; puede usted redistribuirlo y/o
 modificarlo de acuerdo con los términos de la Licencia Pública General GNU
@@ -132,6 +132,7 @@ int wgetkeystrokes(WINDOW *w, char *input_str, int str_len) {
         case 250: /* u acentuada */
         case 209: /* Ñ mayuscula */
         case 241: /* ñ minuscula */
+        case '/':
         case '.':
           input_str[i+1] = 0;
           input_str[i] = ch;
@@ -177,6 +178,38 @@ int my_form_driver(FORM *form, int c)
         beep();
         return(FALSE);
     }
+}
+
+
+void MuestraForma(FORM *f, unsigned pos_ren, unsigned pos_col)
+{
+    WINDOW      *w;
+    int ren, col;
+
+    scale_form(f, &ren, &col);
+
+    if ((w =newwin(ren+2, col+2, pos_ren, pos_col)) != (WINDOW *)0)
+    {
+        set_form_win(f, w);
+        set_form_sub(f, derwin(w, ren, col, 1, 1));
+        box(w, 0, 0);
+        keypad(w, TRUE);
+    }
+
+    if (post_form(f) != E_OK)
+        wrefresh(w);
+}
+
+void BorraForma(FORM *f)
+{
+    WINDOW      *w = form_win(f);
+    WINDOW      *s = form_sub(f);
+
+    unpost_form(f);
+    werase(w);
+    wrefresh(w);
+    delwin(s);
+    delwin(w);
 }
 
 /*+-------------------------------------------------------------------------

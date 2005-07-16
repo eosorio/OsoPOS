@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Corte 0.12 (C) 1999-2004 E. Israel Osorio H.
+   Programa Corte 0.13 (C) 1999-2004 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -28,7 +28,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <time.h>
 #include <unistd.h>
 
-#define VERSION "0.12"
+#define VERSION "0.13"
 #define blanco_sobre_negro 1
 #define amarillo_sobre_negro 2
 #define verde_sobre_negro 3
@@ -55,7 +55,7 @@ double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur,
                             unsigned cashier_id, long f_sale, long l_sale);
 void genera_corte(int parcial, PGconn *con, FILE *disp, unsigned cashier_number,
                   long first_sale, long last_sale);
-void   clean_records(PGconn *base);
+void   clean_records(PGconn *base, long f_sale);
 char *procesa(char opcion, PGconn *con, FILE *disp);
 int read_config();
 int init_config();
@@ -249,21 +249,40 @@ double muestra_comprobantes(PGconn *base, FILE *disp, int tipo_factur,
   return(total);
 }
 
-void clean_records(PGconn *base)
+void clean_records(PGconn *base, long f_sale)
 {
   PGresult *res;
   char     mensaje[255];
-  FILE     *f_print;
 
   clear();
-  res = PQexec(base, "BEGIN");
-  if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    printw("Error, no puedo comenzar transaccion para actualizar catálogo de corte\n");
-    return;
-  }
-  PQclear(res);
 
-  PQexec(base, "UPDATE corte SET bandera=(bandera | B'01000000') WHERE (bandera & B'01000000')=B'00000000'");
+  if (f_sale == 0) {
+    sprintf(mensaje, "SELECT min(numero) FROM corte WHERE (bandera & B'01000000')!=B'01000000' ");
+    res = PQexec(base, mensaje);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+      fprintf(stderr, "Error, no puedo consultar número de primera venta\n");
+      fprintf(stderr, "Mensaje de error: %s\n", PQerrorMessage(base));
+      return;
+    }
+    else {
+      if (PQntuples(res))
+        f_sale = atol(PQgetvalue(res, 0, 0));
+      else
+        f_sale = 0;
+
+      PQclear(res);
+    }
+  }
+  if (!f_sale) {
+    printw("No hay ventas en el día de hoy\n");
+    /* There are no records today */
+  }
+
+  sprintf(mensaje,
+          "UPDATE corte SET bandera=(bandera | B'01000000') WHERE numero>=%ld AND (bandera & B'01000000')!=B'01000000'",
+          f_sale);
+
+  res = PQexec(base, mensaje);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     strcpy(mensaje, PQerrorMessage(base));
     if (strlen(mensaje)) {
@@ -273,30 +292,36 @@ void clean_records(PGconn *base)
       /* Error message: */
       PQclear(res);
     }
-    else  {
-      printw("No hay ventas en el día de hoy\n");
-      /* There are no records today */
-    }
-    mvprintw(getmaxy(stdscr)-1, 0, "Presione una tecla para continuar...");
-    /* Press any key */
-    getch();
-    clear();
   }
 
-  res = PQexec(base, "END");
-  if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr, "Error, no se pudo terminar la transacción para actualizar catálogo de corte\n");
-    fprintf(stderr, "Mensaje de error: %s\n", PQerrorMessage(base));
-    return;
-  }
-
+  mvprintw(getmaxy(stdscr)-1, 0, "Presione una tecla para continuar...");
+  /* Press any key */
+  getch();
+  clear();
   PQclear(res);
 }
 
-void marca_revisados(PGconn *base, int num_cajero)
+void marca_revisados(PGconn *base, int num_cajero, long f_sale)
 {
   PGresult *res;
   char     *mensaje;
+
+  mensaje = calloc(1,255);
+
+  if (f_sale == 0) {
+    sprintf(mensaje, "SELECT min(numero) FROM corte WHERE (bandera & B'10000000')!=B'10000000' ");
+    res = PQexec(base, mensaje);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+      fprintf(stderr, "Error, no puedo consultar número de primera venta\n");
+      fprintf(stderr, "Mensaje de error: %s\n", PQerrorMessage(base));
+      return;
+    }
+    else {
+      if (PQntuples(res))
+        f_sale = atol(PQgetvalue(res, 0, 0));
+      PQclear(res);
+    }
+  }
 
   res = PQexec(base, "BEGIN");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
@@ -307,11 +332,13 @@ void marca_revisados(PGconn *base, int num_cajero)
   }
   PQclear(res);
 
-  mensaje = calloc(1,255);
 
   sprintf(mensaje, "UPDATE corte SET bandera=(bandera | B'10000000')");
   if (num_cajero>=0)
-    sprintf(mensaje, "%s FROM ventas v WHERE v.id_cajero=%d AND v.numero=corte.numero ", mensaje, num_cajero);
+    sprintf(mensaje, "%s FROM ventas v WHERE corte.numero>=%ld AND v.numero=corte.numero AND v.id_cajero=%d ",
+            mensaje, f_sale, num_cajero);
+  else
+    sprintf(mensaje, "%s WHERE corte.numero>=%ld AND bandera&B'10000000'=B'10000000' ", mensaje, f_sale);
 
   res = PQexec(base, mensaje);
   mensaje[0]=0;
@@ -431,28 +458,59 @@ void genera_corte(int parcial, PGconn *con, FILE *disp, unsigned cashier_id,
   fprintf(disp, "Utilidades brutas: %12.2f\n\n\n\n\n\n", util);
   fclose(disp);
 
-  if (!f_sale) {
-    if (parcial)
-      marca_revisados(con, cashier_id);
-    else
-      clean_records(con);
-  }
+  if (parcial)
+    marca_revisados(con, cashier_id, f_sale);
+  else
+    clean_records(con, f_sale);
+
 }
 
 char *procesa(char opcion, PGconn *con, FILE *disp)
 {
   int cashier_num;
-  unsigned first_sale, last_sale;
+  unsigned first_sale=0, last_sale=0;
+  char query[maxbuf*2];
+  PGresult* res;
 
   move(getmaxy(stdscr),0);
   clrtoeol();
   switch (opcion) {
   case '1':
-    genera_corte(FALSE, con, disp, 0, 0, 0);
+    sprintf(query, "SELECT min(numero) FROM corte WHERE bandera&B'01000000'!=B'01000000' ");
+    res = PQexec(con, query);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+      strcpy(msg, PQerrorMessage(con));
+      if (strlen(msg)) {
+        printw("No puedo obtener numero de primera venta.\n");
+        /* Can't modify day records */
+        printw("Mensaje de error: %s\n", msg);
+        /* Error message: */
+        PQclear(res);
+      }
+    }
+    else
+      if (PQntuples(res))
+        first_sale = atoi(PQgetvalue(res, 0, 0));
+    genera_corte(FALSE, con, disp, 0, first_sale, 0);
     sprintf(msg, "Corte de día generado.");
     break;
   case '2':
-    genera_corte(TRUE, con, disp, 0, 0, 0);
+    sprintf(query, "SELECT min(numero) from corte where bandera&B'10000000'!=B'\10000000' ");
+    res = PQexec(con, query);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+      strcpy(msg, PQerrorMessage(con));
+      if (strlen(msg)) {
+        printw("No puedo obtener numero de primera.\n");
+        /* Can't modify day records */
+        printw("Mensaje de error: %s\n", msg);
+        /* Error message: */
+        PQclear(res);
+      }
+    }
+    else
+      if (PQntuples(res))
+        first_sale = atoi(PQgetvalue(res, 0, 0));
+     genera_corte(TRUE, con, disp, 0, first_sale, 0);
     sprintf(msg,  "Corte parcial generado.");
     break;
   case '3':
@@ -487,7 +545,7 @@ char *procesa(char opcion, PGconn *con, FILE *disp)
     system(buff);
     break;
   case '8':
-    clean_records(con);
+    clean_records(con, first_sale);
     sprintf(msg, "Registros eliminados.");
     break;
   case 'V' :
@@ -504,7 +562,6 @@ char *procesa(char opcion, PGconn *con, FILE *disp)
 int read_config() {
   char       nmconfig[maxbuf];
   FILE       *config;
-  FILE       *process;
   char       buf[maxbuf];
   char       *b;
   char       home_directory[maxbuf];
