@@ -743,6 +743,27 @@ PGresult *Quita_de_Inventario(PGconn *base, char *tabla, char *codigo)
   return(res);
 }
 
+/*********************************************************************/
+
+PGresult *Agrega_en_Carrito(PGconn *base, struct articulos art, char *usuario)
+{
+  char *query;
+  PGresult *resultado;
+
+  query = calloc(1,mxbuff);
+  sprintf(query,
+          "INSERT INTO carro_virtual (usuario, codigo, cant) VALUES ('%s', '%s', %f) ",
+          usuario, art.codigo, art.cant);
+  resultado = PQexec(base, query);
+  if (PQresultStatus(resultado) != PGRES_COMMAND_OK) {
+    fprintf(stderr, "Error al agregar artículos en carrito.\n%s\n", query);
+    free(query);
+    return(resultado);
+  }  
+  free(query);
+  return(resultado);
+}
+
 /*************************************************************/
 
 PGresult *search_product(PGconn *base, 
@@ -1012,4 +1033,30 @@ int checa_descuento(PGconn *base, int num_venta, int almacen) {
     return(ERROR_SQL);
   }
   return(PQntuples(res));
+}
+
+int lee_garantia(PGconn *base, struct articulos art[maxart], int numarts) {
+  PGresult *res;
+  char query[255];
+  int i;
+
+  for (i=0; i<numarts; i++) {
+    if (!strcmp(art[i].codigo, "Sin codigo"))
+      continue;
+    sprintf(query, "SELECT tiempo, unidad_t FROM articulos_garantias WHERE codigo='%s' ",
+            art[i].codigo);
+
+    res = PQexec(base, query);
+    if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
+      fprintf(stderr, "Error al consultar periodos de garantía\n");
+      fprintf(stderr,"Error: %s\n", PQerrorMessage(base));
+      PQclear(res);
+      return(ERROR_SQL);
+    }
+    
+    art[i].garan_t = atoi(PQgetvalue(res, 0, 0));
+    art[i].garan_unidad = atoi(PQgetvalue(res, 0, 1));
+  }
+
+  return(OK);
 }
