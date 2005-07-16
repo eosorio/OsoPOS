@@ -219,7 +219,7 @@ int read_global_config()
   int i_buf;
   
   nmconfig = calloc(1, 255);
-  strncpy(nmconfig, "/etc/osopos/remision.config", 255);
+  strncpy(nmconfig, "/etc/osopos/factur.config", 255);
 
   config = fopen(nmconfig,"r");
   if (config) {         /* Si existe archivo de configuración */
@@ -334,42 +334,6 @@ int read_global_config()
       else if (!strcmp(b,"porcentaje_iva")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         TAX_PERC_DEF = atoi(buf);
-      }
-     else if (!strcmp(b,"almacen.numero")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        almacen = atoi(buf);
-      }
-      else if(!strcmp(b, "scanner_serie")) {
-        lector_serial = 1;
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(disp_lector_serie, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(disp_lector_serie, buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "factur. Error de memoria en argumento de configuracion %s\n",
-                  b);
-      }
-      else if(!strcmp(b, "scanner_velocidad")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        i_buf = atoi(buf);
-        switch (i_buf) {
-        case 2400:
-          serial_bps = B2400;
-          break;
-        case 4800:
-          serial_bps = B4800;
-          break;
-        case 9600:
-          serial_bps = B9600;
-          break;
-        case 19200:
-          serial_bps = B19200;
-          case 38400:
-        default:
-          serial_bps = B38400;
-        }
       }
       else if(!strcmp(b, "divisa")) {
         strncpy(buf, strtok(NULL,"="), MX_LON_DIVISA);

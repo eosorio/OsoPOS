@@ -2,7 +2,7 @@
 
  Facturación 1.16. Módulo de facturación de OsoPOS.
 
-        Copyright (C) 1999-2002 Eduardo Israel Osorio Hernández
+        Copyright (C) 1999-2003 Eduardo Israel Osorio Hernández
 
         Este programa es un software libre; puede usted redistribuirlo y/o
 modificarlo de acuerdo con los términos de la Licencia Pública General GNU
@@ -21,13 +21,18 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 */
 
 
-    
+#include <unistd.h>
+#include <dirent.h>
 #include <stdio.h>
+#include <termios.h>
 #include "include/pos-curses.h"
 #define _pos_curses
 #include <panel.h>
 #include <time.h>
 #include <values.h>
+#include <fcntl.h>
+#include <sys/signal.h>
+#include <sys/types.h>
 #include "include/print-func.h"
 
 //#include "include/linucs.h"
@@ -87,9 +92,10 @@ void  muestra_cliente(int renglon, int columna, struct datoscliente cliente);
 void  AjustaModoTerminal(void);
 /* FIELD *CreaEtiqueta(int frow, int fcol, NCURSES_CONST char *label); */
 //FIELD *CreaCampo(int pren, int pcol, int ren, int cols);
-void  MuestraForma(FORM *f, unsigned ren, unsigned col);
-void  BorraForma(FORM *f);
-int   form_virtualize(WINDOW *w);
+//void  MuestraForma(FORM *f, unsigned ren, unsigned col);
+//void  BorraForma(FORM *f);
+int   obs_form_virtualize(WINDOW *w);
+int   form_virtualize(WINDOW *w, int readchar, int c);
 //int   my_form_driver(FORM *form, int c);
 
 
@@ -111,10 +117,12 @@ void muestra_ayuda_cliente(int ren, int col) {
   addstr("<Insert>  Sobreescribir/insertar\n");
 }
 
-int form_virtualize(WINDOW *w)
+int form_virtualize(WINDOW *w, int readchar, int c)
 {
   int  mode = REQ_INS_MODE;
-  int         c = wgetch(w);
+
+  if (readchar)
+    c = wgetch(w);
 
   switch(c) {
     case QUIT:
@@ -208,6 +216,22 @@ int form_virtualize(WINDOW *w)
     }
 }
 
+int obs_form_virtualize(WINDOW *w)
+{
+  int  mode = REQ_INS_MODE;
+  int         c = wgetch(w);
+
+  switch(c) {
+    case KEY_DOWN:
+      return(REQ_NEXT_FIELD);
+    case KEY_UP:
+      return(REQ_PREV_FIELD);
+    default:
+        return(form_virtualize(w, FALSE, c));
+    }
+}
+
+
 void captura_cliente(PGconn *con, unsigned* num_venta, unsigned *folio_fact) {
    WINDOW *ven;
    FORM *forma;
@@ -255,7 +279,7 @@ void captura_cliente(PGconn *con, unsigned* num_venta, unsigned *folio_fact) {
   campo[CAMPO_ANIO] = CreaCampo(0, 68, 1, 2, amarillo_sobre_azul);
   campo[31] = (FIELD *)0;
 
-  set_field_type(campo[CAMPO_DIA], TYPE_NUMERIC, 0, 1, 31);
+  set_field_type(campo[CAMPO_DIA], TYPE_INTEGER, 2, 1, 31);
   set_field_type(campo[CAMPO_MES], TYPE_NUMERIC, 0, 1, 12);
 
 
@@ -301,7 +325,7 @@ void captura_cliente(PGconn *con, unsigned* num_venta, unsigned *folio_fact) {
 
   while (!finished)
   {
-    switch(form_driver(forma, c = form_virtualize(ven))) {
+    switch(form_driver(forma, c = form_virtualize(ven, TRUE, 0))) {
     case E_OK:
       break;
     case E_UNKNOWN_COMMAND:
@@ -459,17 +483,17 @@ int captura_articulos() {
 
   while (!finished)
   {
-    switch(form_driver(forma, c = form_virtualize(ventana))) {
+    switch(form_driver(forma, c = form_virtualize(ventana, TRUE, 0))) {
     case E_OK:
       break;
     case E_UNKNOWN_COMMAND:
       if (c == CTRL('A')) {
-        art[i].cant = atoi(campo[1]->buf);
+        art[i].cant = atof(campo[1]->buf);
         strncpy(art[i].desc, campo[3]->buf, maxdes-1);
         limpiacad(art[i].desc, TRUE);
         art[i].pu = atof(campo[5]->buf);
         art[i].iva_porc = atof(campo[7]->buf);
-        mvprintw(pos_ren+tam_ren+i+2, 1, "%-d", art[i].cant);
+        mvprintw(pos_ren+tam_ren+i+2, 1, "%-.2f", art[i].cant);
         mvprintw(pos_ren+tam_ren+i+2, maxexistlong+2, "%s", art[i].desc);
         if (maxdes > 65) {
           mvprintw(pos_ren+tam_ren+i+2, maxexistlong+65+2, " %8.2f",
@@ -541,17 +565,20 @@ int CaptObserv(char *obs[maxobs], char *garantia) {
       set_form_win(f_obs, w_obs);
       set_form_sub(f_obs, derwin(w_obs, num_rows, num_cols, 1, 1));
       box(w_obs, 0, 0);
+      keypad(w_obs, TRUE);
       wattrset(w_obs, COLOR_PAIR(verde_sobre_negro));
       mvwprintw(w_obs, 0, 2, "Observaciones:");
       wattrset(w_obs, COLOR_PAIR(normal));
+      strncpy(fld_obs[1]->buf, "Pago en una sola exhibicion", maxdes);
 
       if (post_form(f_obs) != E_OK)
         wrefresh(w_obs);
       noecho();
       raw();
 
+
       while (!finished)  {
-        switch(form_driver(f_obs, c = form_virtualize(w_obs))) {
+        switch(form_driver(f_obs, c = obs_form_virtualize(w_obs))) {
         case E_OK:
           break;
         case E_UNKNOWN_COMMAND:
@@ -617,7 +644,7 @@ void Muestra_Factura(struct fech fecha,
   muestra_cliente(1,0, cliente);
 
   for (i=0; i<numart; i++) {
-    mvprintw(i+6, 1, "%-d", art[i].cant);
+    mvprintw(i+6, 1, "%f", art[i].cant);
     mvprintw(i+6, maxexistlong+2, "%s", art[i].desc);
     if (maxdes > 70)
       mvprintw(i+6, maxexistlong+70+2, " %8.2f", art[i].pu);
@@ -644,23 +671,20 @@ void Muestra_Factura(struct fech fecha,
 
 void imprime_factura() {
   char *comando;
+  char buffer;
 
   mvprintw(getmaxy(stdscr)-1, 0, "¿Imprimir factura (S/N)? S\b");
   buffer = toupper(getch());
   if ((buffer != 'S') && (buffer != '\n'))
     return;
 
-  if (impresion_directa) {
-    imprime_doc(nmfact, puerto_imp);
-  }
-  else {
-    comando = calloc(1, mxbuff);
-    sprintf(comando, "lpr -Fb -P %s %s",  lprimp, nmfact);
-    system(comando);
-    sprintf(comando, "rm -rf %s", nmfact);
-    system(comando);
-    free(comando);
-  }
+  comando = calloc(1, mxbuff);
+  sprintf(comando, "lpr -Fb -P %s %s",  lprimp, nmfact);
+  system(comando);
+  sprintf(comando, "rm -rf %s", nmfact);
+  system(comando);
+  free(comando);
+
 }
 
 void AjustaModoTerminal(void)
@@ -696,7 +720,7 @@ FIELD *CreaCampo(int frow, int fcol, int ren, int cols)
     return(f);
 }*/
 
-void MuestraForma(FORM *f, unsigned pos_ren, unsigned pos_col)
+/* void MuestraForma(FORM *f, unsigned pos_ren, unsigned pos_col)
 {
     WINDOW      *w;
     int ren, col;
@@ -713,9 +737,9 @@ void MuestraForma(FORM *f, unsigned pos_ren, unsigned pos_col)
 
     if (post_form(f) != E_OK)
         wrefresh(w);
-}
+} */
 
-void BorraForma(FORM *f)
+/*void BorraForma(FORM *f)
 {
     WINDOW      *w = form_win(f);
     WINDOW      *s = form_sub(f);
@@ -725,7 +749,7 @@ void BorraForma(FORM *f)
     wrefresh(w);
     delwin(s);
     delwin(w);
-}
+} */
 
 /*int my_form_driver(FORM *form, int c)
 {
@@ -756,13 +780,15 @@ int main(int argc, char *argv[]) {
 
   initscr();
   start_color();
+  init_config();
+  read_global_config();
   read_config();
 
   init_pair(amarillo_sobre_azul, COLOR_YELLOW, COLOR_BLUE);
   init_pair(verde_sobre_negro, COLOR_GREEN, COLOR_BLACK);
   init_pair(normal, COLOR_WHITE, COLOR_BLACK);
 
-  con = Abre_Base(NULL, NULL, NULL, NULL, "osopos", "scaja", NULL);
+  con = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.sup_user, db.sup_passwd); 
   if (con == NULL) {
     aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
             ERROR_SQL);

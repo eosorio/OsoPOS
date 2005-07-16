@@ -1,7 +1,7 @@
 /*    -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
-OsoPOS - Programa de inventario 1999 E. Israel Osorio 
-   ventas@punto-deventa.com
+OsoPOS - Programa de inventario 1999,2003 E. Israel Osorio 
+   soporte@elpuntodeventa.com
 
      Este programa es un software libre; puede usted redistribuirlo y/o
 modificarlo de acuerdo con los términos de la Licencia Pública General GNU
@@ -35,7 +35,6 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 #include <form.h>
 
-
 #ifndef CTRL
 #define CTRL(x)         ((x) & 0x1f)
 #endif
@@ -68,20 +67,23 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define CAMPO_PCOSTO         20
 #define CAMPO_IVA            22
 
-#define version "0.32-1"
+#define version "0.33-1"
 
 #define maxitemlista    4096
 
 WINDOW *v_arts;
 char   *nminvent;
 char   *nmdisp;
+char   *tipo_imp;
+char   *lp_printer;
 char   *home_directory; 
+unsigned almacen;
+struct db_data db;
 char   *item[maxitemlista];
 struct articulos art;
-PGconn *base_inv;
-char   *db_hostname,  /* Nombre host con base de datos */
-       *db_hostport;  /* Puerto en el que acepta conexiones */
+PGconn *con, *con_s;
 
+int    iva_incluido;
 
 int read_config();
 int imprime_lista(PGconn *con, char *campo_orden);
@@ -102,6 +104,7 @@ int fill_form(FIELD *campo[35], unsigned i, PGconn *base);
 int init_config()
 {
   FILE *env_process;
+  char *log_name;
 
   home_directory = calloc(1, 255);
   log_name = calloc(1, 255);
@@ -125,11 +128,9 @@ int init_config()
   pclose(env_process);
 
   
-  sprintf(nm_file,"/tmp/osopos_corte");
-
   sprintf(tipo_imp,"EPSON");
 
-  strncpy(lp_printer, "ticket", maxbuf);
+  strncpy(lp_printer, "facturas", maxbuf);
 
 
   db.name= NULL;
@@ -146,6 +147,7 @@ int init_config()
   strcpy(db.user, log_name);
 
   db.sup_user = calloc(1, strlen("scaja")+1);
+  return(0);
 }
 
 /***************************************************************************/
@@ -178,53 +180,7 @@ int read_general_config()
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
-        /* Definición de impresora de ticket */
-      if (!strcmp(b,"ticket")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(nm_disp_ticket, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(nm_disp_ticket, buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n", b);
-      }
-      else if (!strcmp(b, "lp_ticket")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(lp_disp_ticket, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(lp_disp_ticket, buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr,
-                  "corte. Error de memoria en argumento de configuracion %s\n",
-                  b);
-      }
-      else if (!strcmp(b,"miniimpresora.tipo")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(tipo_disp_ticket, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(tipo_disp_ticket,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr,
-                  "corte. Error de memoria en argumento de configuracion %s\n",
-                  b);
-      }
-      else if (!strcmp(b,"programa.factur")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(nm_factur, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(nm_factur, buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr,
-                  "corte. Error de memoria en argumento de configuracion %s\n", b);
-      }
-      else if (!strcmp(b,"db.host")) {
+      if (!strcmp(b,"db.host")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(db.hostname, strlen(buf)+1);
         if (aux != NULL) {
@@ -232,7 +188,7 @@ int read_general_config()
           aux = NULL;
         }
         else
-          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
       else if (!strcmp(b,"db.port")) {
@@ -243,7 +199,7 @@ int read_general_config()
           aux = NULL;
         }
         else
-          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
       else if (!strcmp(b,"db.nombre")) {
@@ -254,7 +210,7 @@ int read_general_config()
           aux = NULL;
         }
         else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
       else if (!strcmp(b,"db.sup_usuario")) {
@@ -265,7 +221,7 @@ int read_general_config()
           aux = NULL;
         }
         else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
       else if (!strcmp(b,"db.sup_passwd")) {
@@ -276,68 +232,12 @@ int read_general_config()
           aux = NULL;
         }
         else
-          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
       else if (!strcmp(b,"porcentaje_iva")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         TAX_PERC_DEF = atoi(buf);
-      }
-      else if (!strcmp(b,"avisos")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(nm_avisos, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(nm_avisos,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
-                  b);
-      }
-      else if (!strcmp(b,"email.avisos")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(dir_avisos, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(dir_avisos,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
-                  b);
-      }
-      else if (!strcmp(b,"asunto.email")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(asunto_avisos, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(asunto_avisos,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
-                  b);
-      }
-      else if (!strcmp(b,"cc.avisos")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        free(cc_avisos);
-        cc_avisos = NULL;
-        cc_avisos = calloc(1, strlen(buf)+1);
-        if (cc_avisos != NULL) {
-          strcpy(cc_avisos, buf);
-        }
-        else
-          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
-                  b);
-      }
-      else if (!strcmp(b,"programa.sendmail")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(nm_sendmail, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(nm_sendmail,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
-                  b);
       }
       else if (!strcmp(b,"iva_incluido")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
@@ -387,10 +287,6 @@ int read_config() {
   strcpy(nmdisp, "/tmp/scaja_invent");
   strcpy(nminvent, "osopos");
 
-  db_hostport = NULL;
-  db_hostname = NULL;
-  db_hostname = calloc(1, strlen("255.255.255.255"));
-
   config = fopen(nmconfig,"r");
   if (config) {         /* Si existe archivo de configuración */
     b = buff;
@@ -429,18 +325,18 @@ int read_config() {
       }
       else if (!strcmp(b,"db.host")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db_hostname, strlen(buf)+1);
+        aux = realloc(db.hostname, strlen(buf)+1);
         if (aux != NULL)
-          strncpy(db_hostname,buf, strlen(buf));
+          strncpy(db.hostname,buf, strlen(buf));
         else
           fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
       else if (!strcmp(b,"db.port")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db_hostport, strlen(buf)+1);
+        aux = realloc(db.hostport, strlen(buf)+1);
         if (aux != NULL)
-          strncpy(db_hostport,buf, strlen(buf));
+          strncpy(db.hostport,buf, strlen(buf));
         else
           fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
                   b);
@@ -803,7 +699,7 @@ int fill_form(FIELD *campo[35], unsigned i, PGconn *base)
   limpiacad(codigo, TRUE);
   comando = calloc(1, mxbuff);
 
-  res = search_product(base, "articulos", "codigo", codigo, &art);
+  res = search_product(base, "articulos", "codigo", codigo, TRUE, &art);
   if (res == NULL) {
     aux = calloc(1, mxbuff);
 
@@ -935,12 +831,12 @@ int interpreta_campos(struct articulos *art, FIELD *campo[35])
 
   strncpy(str_prov, campo[CAMPO_CODPROV]->buf, maxnickprov);
   limpiacad(str_prov, TRUE);
-  aux = busca_proveedor(base_inv, str_prov);
+  aux = busca_proveedor(con_s, str_prov);
   art->id_prov = aux<0 ? 0 : aux;
 
   strncpy(str_depto, campo[CAMPO_DEPTO]->buf, maxdeptolen);
   limpiacad(str_depto, TRUE);
-  aux = busca_depto(base_inv, str_depto);
+  aux = busca_depto(con, str_depto);
   art->id_depto = aux<0 ? 0 : aux;
 
   art->p_costo = atof(campo[CAMPO_PCOSTO]->buf);
@@ -1466,7 +1362,7 @@ int main() {
 
   init_config();
   read_general_config();
-  read_global_config();
+  //  read_global_config();
   read_config();
 
   con_s = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.sup_user, db.sup_passwd);
