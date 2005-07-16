@@ -210,9 +210,12 @@ struct articulos {
   double   tax_1, tax_2, tax_3, tax_4, tax_5;
   char     prov_clave[maxcod]; /* Clave del articulo con proveedor */
   char     serie[MX_LON_NUMSERIE]; /* Número de serie */
+  char     tiene_serie;        /* El artículo tiene control de num. serie */
   unsigned almacen;            /* Almacen de origen */
   unsigned t_renta;            /* Tiempo proporcionado en renta */
   short    unidad_t;           /* Unidad del tiempo de renta (0: minutos, ... 3: semanas ... 5:años*/
+  short    garan_t;            /* Tiempo de garantía */
+  short    garan_unidad;       /* Unidad de tiempo de garantía */
 };
 
 struct proveedor {
