@@ -33,11 +33,9 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <fcntl.h>
 #include <sys/signal.h>
 #include <sys/types.h>
-
+#include <glib.h>
 
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
-#define FALSE 0
-#define TRUE 1
 
 #define _SERIAL_COMM   /* Se usarán rutinas de comunicación serial */
 
@@ -267,11 +265,11 @@ int init_config()
   db.hostport = NULL;
   db.hostname = NULL;
 
-  db.hostname = calloc(1, strlen("255.255.255.255"));
-  db.name = calloc(1, strlen("elpuntodeventa.com"));
-  db.user = calloc(1, strlen(log_name)+1);
-  strcpy(db.user, log_name);
-  db.sup_user = calloc(1, strlen("scaja")+1);
+  db.hostname = g_strdup("255.255.255.255");
+  db.hostport = g_strdup("5432");
+  db.name = g_strdup("elpuntodeventa.com");
+  db.user = g_strdup_printf("%s", log_name);
+  db.sup_user = g_strdup_printf("scaja");
 
   maxitemr = 6;
 
@@ -290,7 +288,7 @@ int init_config()
 
 int read_config()
 {
-  char *nmconfig;
+  gchar *nmconfig;
   FILE *config;
   char buff[mxbuff],buf[mxbuff];
   char *b;
@@ -301,13 +299,9 @@ int read_config()
   
   //  setledstate(teclado, VC_NUMLOCK); 
 
-  nmconfig = calloc(1, 255);
- 
-  strncpy(nmconfig, home_directory, 255);
-  strcat(nmconfig, "/.osopos/remision.config");
+  nmconfig = g_strdup_printf("%s/.osopos/remision.config", home_directory);
 
-
- config = fopen(nmconfig,"r");
+  config = fopen(nmconfig,"r");
   if (config) {         /* Si existe archivo de configuración */
     b = buff;
     fgets(buff,mxbuff,config);
@@ -369,36 +363,19 @@ int read_config()
                   b);
                   } */
       else if (!strcmp(b,"db.host")) {
+        g_free(db.hostname);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.hostname, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(db.hostname,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.hostname =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"db.port")) {
+        g_free(db.hostport);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.hostport, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(db.hostport,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.hostport =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"db.passwd")) {
+        g_free(db.passwd);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        db.passwd = calloc(1, strlen(buf)+1);
-        if (db.passwd != NULL) {
-          strcpy(db.passwd,buf);
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.passwd =  g_strdup_printf("%s", buf);
       }
      else if (!strcmp(b,"renglones.articulos")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
@@ -510,13 +487,13 @@ int read_config()
     fclose(config);
     if (aux != NULL)
       aux = NULL;
-    free(nmconfig);
+    g_free(nmconfig);
     b = NULL;
     return(0);
   }
   if (aux != NULL)
     aux = NULL;
-  free(nmconfig);
+  g_free(nmconfig);
   b = NULL;
   return(1);
 }
@@ -525,15 +502,14 @@ int read_config()
 
 int read_global_config()
 {
-  char *nmconfig;
+  gchar *nmconfig;
   FILE *config;
   char buff[mxbuff],buf[mxbuff];
   char *b;
   char *aux = NULL;
   int i_buf;
   
-  nmconfig = calloc(1, 255);
-  strncpy(nmconfig, "/etc/osopos/remision.config", 255);
+  nmconfig = g_strdup_printf("/etc/osopos/remision.config");
 
   config = fopen(nmconfig,"r");
   if (config) {         /* Si existe archivo de configuración */
@@ -649,37 +625,19 @@ int read_global_config()
                   b);
       } 
       else if (!strcmp(b,"db.host")) {
+        g_free(db.hostname);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.hostname, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(db.hostname,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.hostname =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"db.port")) {
+        g_free(db.hostport);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.hostport, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(db.hostport,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.hostport =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"db.nombre")) {
+        g_free(db.name);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.name, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(db.name,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.name =  g_strdup_printf("%s", buf);
       }
       /*      else if (!strcmp(b,"db.usuario")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
@@ -693,26 +651,14 @@ int read_global_config()
                   b);
                   }*/
       else if (!strcmp(b,"db.sup_usuario")) {
+        g_free(db.sup_user);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.sup_user, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(db.sup_user,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuración %s\n",
-                  b);
+        db.sup_user =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"db.sup_passwd")) {
+        g_free(db.sup_passwd);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        db.sup_passwd = calloc(1, strlen(buf)+1);
-        if (db.sup_passwd  != NULL) {
-          strcpy(db.sup_passwd,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.sup_passwd =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"renglones.articulos")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
@@ -858,13 +804,13 @@ int read_global_config()
     fclose(config);
     if (aux != NULL)
       aux = NULL;
-    free(nmconfig);
+    g_free(nmconfig);
     b = NULL;
     return(0);
   }
   if (aux != NULL)
     aux = NULL;
-  free(nmconfig);
+  g_free(nmconfig);
   b = NULL;
   return(1);
 }
@@ -873,15 +819,14 @@ int read_global_config()
 
 int read_general_config()
 {
-  char *nmconfig;
+  gchar *nmconfig;
   FILE *config;
   char buff[mxbuff],buf[mxbuff];
   char *b;
   char *aux = NULL;
   int i_buf;
   
-  nmconfig = calloc(1, 255);
-  strncpy(nmconfig, "/etc/osopos/general.config", 255);
+  nmconfig = g_strdup_printf("/etc/osopos/general.config");
 
   config = fopen(nmconfig,"r");
   if (config) {         /* Si existe archivo de configuración */
@@ -968,48 +913,24 @@ int read_general_config()
                   b);
       }
       else if (!strcmp(b,"db.port")) {
+        g_free(db.hostport);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.hostport, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(db.hostport,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.hostport =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"db.nombre")) {
+        g_free(db.name);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.name, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(db.name,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.name =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"db.sup_usuario")) {
+        g_free(db.sup_user);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.sup_user, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(db.sup_user,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.sup_user =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"db.sup_passwd")) {
+        g_free(db.sup_passwd);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        db.sup_passwd = calloc(1, strlen(buf)+1);
-        if (db.sup_passwd  != NULL) {
-          strcpy(db.sup_passwd,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.sup_passwd =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"porcentaje_iva")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
@@ -1117,13 +1038,13 @@ int read_general_config()
     fclose(config);
     if (aux != NULL)
       aux = NULL;
-    free(nmconfig);
+    g_free(nmconfig);
     b = NULL;
     return(0);
   }
   if (aux != NULL)
     aux = NULL;
-  free(nmconfig);
+  g_free(nmconfig);
   b = NULL;
   return(1);
 }
@@ -1427,10 +1348,7 @@ int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
   (*subtotal) -= (articulo[i].cant * articulo[i].pu);
   /* Desplaza los artículos a una posición inferior */
   for (; i<*reng; i++) {
-    strncpy(articulo[i].codigo, articulo[i+1].codigo, maxcod);
-    articulo[i].pu = articulo[i+1].pu;
-    strncpy(articulo[i].desc, articulo[i+1].desc, maxdes);
-    articulo[i].cant = articulo[i+1].cant;
+    memcpy(&articulo[i], &articulo[i+1], sizeof(articulo[i+1]));
   }
   (*reng)--;
 
@@ -1640,7 +1558,7 @@ double item_capture(PGconn *con, int *numart, double *util,
           break;
         case 3: /* F3 */
           journal_marked_items(nm_journal, "cancela", 0);
-          cancela_articulo(v_arts, &i, &subtotal, tax, &iva, last_sale_fname);
+          cancela_articulo(v_arts, &i, &subtotal, &iva, tax, last_sale_fname);
           show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
           mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
           continue;
@@ -2586,10 +2504,15 @@ int aborta_remision(PGconn *con, PGconn *con_s, char *mens, char tecla, int seni
   nm_sendmail = NULL;
   free(dir_avisos);
   dir_avisos = NULL;
-  free(db.hostname);
-  db.hostname = NULL;
-  free(db.hostport);
-  db.hostport = NULL;
+
+  g_free(db.name);
+  g_free(db.user);
+  g_free(db.passwd);
+  g_free(db.sup_user);
+  g_free(db.sup_passwd);
+  g_free(db.hostport);
+  g_free(db.hostname);
+
   /*if (cc_avisos != NULL)
     free(cc_avisos);*/
   free(asunto_avisos);
@@ -3180,6 +3103,7 @@ int main(int argc, char *argv[]) {
     aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
             ERROR_SQL);
   }
+
   //  num_venta = obten_num_venta(nm_num_venta);
   num_venta = obten_num_venta(con);
 
@@ -3424,10 +3348,15 @@ int main(int argc, char *argv[]) {
   nm_sendmail = NULL;
   free(dir_avisos);
   dir_avisos = NULL;
-  free(db.hostname);
-  db.hostname = NULL;
-  free(db.hostport);
-  db.hostport = NULL;
+
+  g_free(db.name);
+  g_free(db.user);
+  g_free(db.passwd);
+  g_free(db.sup_user);
+  g_free(db.sup_passwd);
+  g_free(db.hostport);
+  g_free(db.hostname);
+
   /*if (cc_avisos != NULL)
     free(cc_avisos);*/
   free(asunto_avisos);
