@@ -1,5 +1,5 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- pos-func.h 0.25-1 Biblioteca de funciones de OsoPOS.
+ pos-func.h 0.25-2 Biblioteca de funciones de OsoPOS.
         Copyright (C) 1999-2002 Eduardo Israel Osorio Hernández
 
         Este programa es un software libre; puede usted redistribuirlo y/o
@@ -857,17 +857,15 @@ PGconn *Abre_Base( char *host_pg,
                    char *passwd )
 {
   PGconn *con;
-  char *msg;
+  gchar *msg;
 
   con = PQsetdbLogin(host_pg, puerto_pg, opciones_pg, tty_pg, nombre_bd, login, passwd);
   if (PQstatus(con) == CONNECTION_BAD) {
-    msg = calloc(1,256);
-    sprintf(msg, "Falló la conexión a la base '%s' .\n\r", nombre_bd);
+    msg = g_strdup_printf("Falló la conexión a la base '%s' .\n\r", nombre_bd);
     fprintf(stderr, msg);
-    sprintf(msg,"Error: %s\n\r",PQerrorMessage(con));
+    msg = g_strdup_printf("Error: %s\n\r",PQerrorMessage(con));
     fprintf(stderr,msg);
-    free(msg);
-    msg = NULL;
+    g_free(msg);
     return(NULL);
   }
   return(con);
