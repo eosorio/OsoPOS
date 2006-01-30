@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.43 (C) 1999-2005 E. Israel Osorio H.
+   Programa Remision 1.44 (C) 1999-2006 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -53,7 +53,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/print-func.h"
 #define _printfunc
 
-#define vers "1.43"
+#define vers "1.44"
 #define release "ElPunto"
 
 #ifndef maxdes
@@ -1485,6 +1485,7 @@ double item_capture(PGconn *con, int *numart, double *util,
   int     exist_journal=0;
   FILE    *f_last_items;
   FILE    *p_impr;
+  double  b_double = 0.0;
 
   *util = 0;
   iva = 0.0;
@@ -1795,8 +1796,9 @@ double item_capture(PGconn *con, int *numart, double *util,
         journal_last_sale(i, last_sale_fname);
         journal_marked_items(nm_journal, buff2, exist_journal);
 
+        b_double = 0.0; /* En esta variable vamos a calcular el descuento total en impuestos */
         if (articulo[i-1].iva_porc) {
-          if (iva_incluido)
+          if (iva_incluido>0 || listar_neto>0)
             iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i-1].iva_porc/100 + 1);
           else
             iva_articulo = articulo[i].pu * (articulo[i-1].iva_porc/100);
@@ -1804,30 +1806,46 @@ double item_capture(PGconn *con, int *numart, double *util,
         else
           iva_articulo = 0;
 
+        b_double += iva_articulo;
+
         if (articulo[i-1].tax_0)
           tax_item[0] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_0/100 + 1);
         else
           tax_item[0] = 0;
+        b_double += tax_item[0];
+
         if (articulo[i-1].tax_1)
           tax_item[1] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_1/100 + 1);
         else
           tax_item[1] = 0;
+        b_double += tax_item[1];
+
         if (articulo[i-1].tax_2)
           tax_item[2] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_2/100 + 1);
         else
           tax_item[2] = 0;
+        b_double += tax_item[2];
+
         if (articulo[i-1].tax_3)
           tax_item[3] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_3/100 + 1);
         else
           tax_item[3] = 0;
+        b_double += tax_item[3];
+
         if (articulo[i-1].tax_4)
           tax_item[4] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_4/100 + 1);
         else
           tax_item[4] = 0;
+        b_double += tax_item[4];
+
         if (articulo[i-1].tax_5)
           tax_item[5] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_5/100 + 1);
         else
           tax_item[5] = 0;
+        b_double += tax_item[5];
+
+        if (listar_neto>0 && iva_incluido==0)
+          articulo[i].pu = articulo[i].pu-b_double;
 
         articulo[i-1].pu += articulo[i].pu;
         articulo[i].codigo[0] = 0;
