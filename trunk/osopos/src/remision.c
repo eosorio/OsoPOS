@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.44 (C) 1999-2006 E. Israel Osorio H.
+   Programa Remision 1.45 (C) 1999-2006 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -53,7 +53,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/print-func.h"
 #define _printfunc
 
-#define vers "1.44"
+#define vers "1.45"
 #define release "ElPunto"
 
 #ifndef maxdes
@@ -125,7 +125,7 @@ void init_serial(struct sigaction *saio, struct termios *oldtio, struct termios 
 void signal_handler_IO (int status);
 void close_serial(int fd, struct termios *tio);
 int busqueda_articulo(char *);
-void muestra_renglon(WINDOW *,unsigned renglon, unsigned num_items);
+void muestra_renglon(WINDOW *, int y, int x, short borra_ven, unsigned renglon, unsigned num_items);
 int datos_renta(int *num_cliente, time_t *f_pedido, time_t *f_entrega);
 
 double tipo_cambio(char *);
@@ -136,6 +136,9 @@ int busca_art_marcado(char *cod, struct articulos art[maxart], int campo, int re
 int imprime_fechas_renta(PGconn *con, PGconn *con_s, time_t *f_pedido, time_t *f_entrega);
 int print_customer_data(PGconn *con, PGconn *con_s, long int id_cliente);
 int captura_vendedor();
+int selecciona_caja_virtual(PGconn *con, int num_cajas);
+int read_virtual_pos_config(PGconn *con, unsigned num_caja);
+
 volatile int STOP=FALSE; 
 
 FILE *impresora;
@@ -157,7 +160,6 @@ char   *item[maxitem_busqueda]; /* Líneas de caracteres en ventana de búsqueda *
 char *home_directory;
 char *log_name;
 char *nm_disp_ticket,           /* Nombre de impresora de ticket */
-  *lp_disp_ticket,      /* Definición de miniprinter en /etc/printcap */
   *cmd_lp,              /* Comando usado para imprimir */
   *disp_lector_serie,  /* Ruta al scanner de c. de barras serial */
   *nmfpie,              /* Pie de página de ticket */
@@ -173,6 +175,8 @@ char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *dir_avisos,   /* email de notificación */
   *asunto_avisos, /* Asunto del correo de avisos */
   *cc_avisos;     /* con copia para */
+
+gchar  *lp_disp_ticket;      /* Definición de miniprinter en /etc/printcap */
 
 char   s_divisa[MX_LON_DIVISA];       /* Designación de la divisa que se usa para cobrar en la base de datos */
 short unsigned search_2nd;  /* ¿Buscar código alternativo al mismo tiempo que el primario ? */ 
@@ -198,6 +202,7 @@ int lease_mode = 0;
 int cnf_impresion_garantia = 1;
 int serie;        /* Serie de folios de comprobantes */
 int cnf_registrar_vendedor = 0;
+unsigned caja_virtual = 0; /* Número de caja virtual que se está operando */
 
 int init_config()
 {
@@ -217,8 +222,7 @@ int init_config()
   strcpy(nm_disp_ticket, "/tmp/ticket_");
   strcat(nm_disp_ticket, log_name);
 
-  lp_disp_ticket = calloc(1, strlen("ticket")+20);
-  strcpy(lp_disp_ticket, "ticket");
+  lp_disp_ticket = g_strdup_printf("ticket");
 
   disp_lector_serie = calloc(1, strlen("/dev/barcode")+1);
   strcpy(disp_lector_serie, "/dev/barcode");
@@ -538,7 +542,8 @@ int read_global_config()
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n", b);
       }
-      else if (!strcmp(b, "lp_ticket")) {
+      /* REMPLAZADO POR CATALOGO DE CONFIGURACION EN BASE DE DATOS */
+      /*      else if (!strcmp(b, "lp_ticket")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(lp_disp_ticket, strlen(buf)+1);
         if (aux != NULL) {
@@ -549,7 +554,7 @@ int read_global_config()
           fprintf(stderr,
                   "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
-       }
+                  }*/
       else if (!strcmp(b,"ticket.pie")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nmfpie, strlen(buf)+1);
@@ -573,7 +578,8 @@ int read_global_config()
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
-      else if (!strcmp(b,"miniimpresora.tipo") || !strcmp(b,"impresion.tipo_miniprinter")) {
+      /* REMPLAZADO POR CATALOGO DE CONFIGURACION EN BASE DE DATOS */
+      /*      else if (!strcmp(b,"miniimpresora.tipo") || !strcmp(b,"impresion.tipo_miniprinter")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(tipo_disp_ticket, strlen(buf)+1);
         if (aux != NULL) {
@@ -584,7 +590,7 @@ int read_global_config()
           fprintf(stderr,
                   "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
-      }
+                  }*/
       else if (!strcmp(b,"impresion.comando")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(cmd_lp, strlen(buf)+1);
@@ -855,7 +861,8 @@ int read_general_config()
         else
           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n", b);
       }
-      else if (!strcmp(b, "lp_ticket")) {
+      /* REMPLAZADO POR CATALOGO DE CONFIGURACION EN BASE DE DATOS */
+      /*      else if (!strcmp(b, "lp_ticket")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(lp_disp_ticket, strlen(buf)+1);
         if (aux != NULL) {
@@ -866,8 +873,9 @@ int read_general_config()
           fprintf(stderr,
                   "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
-       }
-      else if (!strcmp(b,"miniimpresora.tipo")) {
+                  }*/
+      /* REMPLAZADO POR CATALOGO DE CONFIGURACION EN BASE DE DATOS */
+      /*      else if (!strcmp(b,"miniimpresora.tipo")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(tipo_disp_ticket, strlen(buf)+1);
         if (aux != NULL) {
@@ -878,7 +886,7 @@ int read_general_config()
           fprintf(stderr,
                   "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
-      }
+                  }*/
       else if (!strcmp(b,"programa.factur")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nm_factur, strlen(buf)+1);
@@ -1567,9 +1575,9 @@ double item_capture(PGconn *con, int *numart, double *util,
         case 4:
           sprintf(buff2, "%s %s", cmd_lp, lp_disp_ticket);
           p_impr = popen(buff2, "w");
-          sprintf(buff2, "Francisco Javier Mondrag%cn Villa", 186);
+          sprintf(buff2, "Eduardo Israel Osorio Hernandez");
           imprime_razon_social(p_impr, tipo_disp_ticket,
-                               "Electro Hogar", buff2);
+                               "elpuntodeventa", buff2);
           pclose(p_impr);
 
           print_ticket_header(nmfenc);
@@ -2149,9 +2157,9 @@ void print_ticket_footer(struct tm fecha, unsigned numventa, long folio, int ser
   }
   fprintf(impr,"\n\n\n");
 
-  sprintf(s, "Francisco Javier Mondrag%cn Villa", 186);
+  sprintf(s, "Eduardo Israel Osorio Hernandez");
   imprime_razon_social(impr, tipo_disp_ticket,
-                       "Electro Hogar", s );
+                       "elpuntodeventa", s );
   free(s);
   fclose(impr);
 }
@@ -2537,7 +2545,7 @@ int aborta_remision(PGconn *con, PGconn *con_s, char *mens, char tecla, int seni
   asunto_avisos = NULL;
   free(tipo_disp_ticket);
   tipo_disp_ticket = NULL;
-  free(lp_disp_ticket);
+  g_free(lp_disp_ticket);
   free(nm_avisos);
   nm_avisos = NULL;
   free(nmfpie);
@@ -2617,6 +2625,7 @@ int busqueda_articulo(char *codigo)
   PANEL  *pan = 0;
 
   int vx, vy; /* Dimensiones horizontal y vertical de la ventana */
+  int x, y;   /* Coordenadas del primer elemento del menú */
   int max_v_desc;
   int i,j,k;
   int num_items = 0;
@@ -2627,6 +2636,8 @@ int busqueda_articulo(char *codigo)
 
   vx = 70;
   vy = 15;
+  x = 1;
+  y = 1;
   max_v_desc = vx - maxcod - 15;
   pan = mkpanel(COLOR_BLACK, vy, vx, (getmaxy(stdscr)-vy)/2, (getmaxx(stdscr)-vx)/2);
   set_panel_userptr(pan, "pan");
@@ -2680,7 +2691,7 @@ int busqueda_articulo(char *codigo)
     i = 0;
     noecho();
     keypad(v_busq, TRUE);
-    muestra_renglon(v_busq, 0, num_items);
+    muestra_renglon(v_busq, y, x, FALSE, i, num_items);
     while (!finished)
       {
         switch(ch = wgetch(v_busq)) {
@@ -2690,15 +2701,15 @@ int busqueda_articulo(char *codigo)
             continue;
           }
           wattrset(v_busq, COLOR_PAIR(normal));
-          mvwprintw(v_busq, v_busq->_cury, 0, "%s", item[i--]);
-          if (v_busq->_cury == 0) {
+          mvwprintw(v_busq, v_busq->_cury, x, "%s", item[i--]);
+          if (v_busq->_cury-y == 0) {
             wscrl(v_busq, -1);
             wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-            mvwprintw(v_busq, 0, 0, "%s", item[i]);
+            mvwprintw(v_busq, y, x, "%s", item[i]);
           }
           else {
             wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-            mvwprintw(v_busq, v_busq->_cury-1, 0, "%s", item[i]);
+            mvwprintw(v_busq, v_busq->_cury-1, x, "%s", item[i]);
           }
           wrefresh(v_busq);
     
@@ -2709,15 +2720,15 @@ int busqueda_articulo(char *codigo)
             continue;
           }
           wattrset(v_busq, COLOR_PAIR(normal));
-          mvwprintw(v_busq, v_busq->_cury, 0, "%s", item[i++]);
+          mvwprintw(v_busq, v_busq->_cury, x, "%s", item[i++]);
           if (v_busq->_cury == v_busq->_maxy) {
             wscrl(v_busq, +1);
             wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-            mvwprintw(v_busq, v_busq->_maxy, 0, "%s", item[i]);
+            mvwprintw(v_busq, v_busq->_maxy, x, "%s", item[i]);
           }
           else {
             wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-            mvwprintw(v_busq, v_busq->_cury+1, 0, "%s", item[i]);
+            mvwprintw(v_busq, v_busq->_cury+1, x, "%s", item[i]);
         }        
           wrefresh(v_busq);
         break;
@@ -2748,17 +2759,18 @@ int busqueda_articulo(char *codigo)
   return(num_items);
 }
 
-void muestra_renglon(WINDOW *v_arts, unsigned renglon, unsigned num_items)
+void muestra_renglon(WINDOW *v_arts, int y, int x, short borra_ven, unsigned renglon, unsigned num_items)
 {
   int      i;
 
   wattrset(v_arts, COLOR_PAIR(normal));
-  wclear(v_arts);
+  if (borra_ven)
+    wclear(v_arts);
   for (i=0; i<num_items-1-renglon && i<v_arts->_maxy; i++)
-    mvwprintw(v_arts, i+1, 0, "%s", item[renglon+i+1]);
+    mvwprintw(v_arts, i+1+y, x, "%s", item[renglon+i+1]);
 
   wattrset(v_arts, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-  mvwprintw(v_arts, 0, 0, "%s", item[renglon]);
+  mvwprintw(v_arts, y, x, "%s", item[renglon]);
   refresh();
   wrefresh(v_arts);
 }
@@ -3059,10 +3071,142 @@ int imprime_fechas_renta(PGconn *con, PGconn *con_s, time_t *f_pedido, time_t *f
 
 /********************************************************/   
 
+int selecciona_caja_virtual(PGconn *con, int num_cajas)
+{
+  WINDOW *v_selecc;
+  PANEL  *pan = 0;
+
+  int vx, vy; /* Dimensiones horizontal y vertical de la ventana */
+  int i,j;
+  int x, y;
+  int ch, finished = 0;
+  char *aux;
+
+  vx = 70;
+  vy = 15;
+  y = 2;  /* Coordenadas de la primera línea de menu de selección */
+  x = 1;
+
+  pan = mkpanel(COLOR_BLACK, vy, vx, (getmaxy(stdscr)-vy)/2, (getmaxx(stdscr)-vx)/2);
+  set_panel_userptr(pan, "pan");
+
+  v_selecc = panel_window(pan);
+
+
+  scrollok(v_selecc, TRUE);
+  box(v_selecc, 0, 0);
+
+  aux = calloc(1, mxbuff);
+
+  show_panel(pan);
+  mvwprintw(v_selecc, 1, 1, "Seleccione la caja virtual para operar:\n");
+  wrefresh(v_selecc);
+ 
+  for (j=0; j<num_cajas; j++) {
+    item[j] = calloc(1, getmaxx(v_selecc));
+    /* Aqui debe ir la consulta al catálogo de nombres de cajas virtuales */
+    sprintf(item[j], "Caja %d", j+1);
+    mvwprintw(v_selecc, v_selecc->_cury, 1, "%s", item[j]);
+  }
+
+  wrefresh(v_selecc);
+
+  if (num_cajas) {
+    i = 0;
+    noecho();
+    keypad(v_selecc, TRUE);
+    muestra_renglon(v_selecc, y, x, FALSE, 0, num_cajas);
+    while (!finished)
+      {
+        switch(ch = wgetch(v_selecc)) {
+        case KEY_UP:
+          if (i <= 0) {
+            beep();
+            continue;
+          }
+          wattrset(v_selecc, COLOR_PAIR(normal));
+          mvwprintw(v_selecc, v_selecc->_cury, x, "%s", item[i--]);
+          if (v_selecc->_cury-y == 0) {
+            wscrl(v_selecc, -1);
+            wattrset(v_selecc, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+            mvwprintw(v_selecc, y, x, "%s", item[i]);
+          }
+          else {
+            wattrset(v_selecc, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+            mvwprintw(v_selecc, v_selecc->_cury-1, x, "%s", item[i]);
+          }
+          wrefresh(v_selecc);
+    
+          break;
+        case KEY_DOWN:
+          if (i+1 >= num_cajas) {
+            beep();
+            continue;
+          }
+          wattrset(v_selecc, COLOR_PAIR(normal));
+          mvwprintw(v_selecc, v_selecc->_cury, x, "%s", item[i++]);
+          if (v_selecc->_cury == v_selecc->_maxy) {
+            wscrl(v_selecc, +1);
+            wattrset(v_selecc, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+            mvwprintw(v_selecc, v_selecc->_maxy, x, "%s", item[i]);
+          }
+          else {
+            wattrset(v_selecc, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
+            mvwprintw(v_selecc, v_selecc->_cury+1, x, "%s", item[i]);
+        }        
+          wrefresh(v_selecc);
+        break;
+        case ENTER:
+          finished = TRUE;
+        }
+      }
+
+
+    for (j=0; j<num_cajas; j++) {
+      free(item[j]);
+    }
+  }
+  else {
+  }
+  wrefresh(v_selecc);
+  wclear(v_selecc);
+  wrefresh(v_selecc);
+  rmpanel(pan);
+  free(aux);
+  echo();
+  return(i);
+}
+
+/********************************************************/   
+
+int read_pos_config(PGconn *con, unsigned num_caja)
+{
+  /* Valores aceptados de num_caja
+     0:  No existen cajas virtuales se lee configuración general
+     >0: Representa el número de caja virtual
+  */
+  lp_disp_ticket = g_strdup_printf(lee_config_pos(con, num_caja, "COLA_TICKET"));
+  strcpy(tipo_disp_ticket, lee_config_pos(con, num_caja, "MINIIMPRESORA_TIPO"));
+  /*  lee_config_pos(con, num_caja, "IMPRESION_COMANDO");
+  lee_config_pos(con, num_caja, "MINIIMPRESORA_AUTOCUTTER");
+  lee_config_pos(con, num_caja, "ALMACEN");
+  lee_config_pos(con, num_caja, "SCANNER_PUERTOSERIE");
+  lee_config_pos(con, num_caja, "DIVISA");
+  lee_config_pos(con, num_caja, "LISTAR_PRECIO_NETO");
+  lee_config_pos(con, num_caja, "DESGLOSAR_DESCUENTO");
+  lee_config_pos(con, num_caja, "CAPTURAR_SERIE");
+  lee_config_pos(con, num_caja, "CONSULTA_CATALOGO");
+  lee_config_pos(con, num_caja, "MODO_RENTA");
+  lee_config_pos(con, num_caja, "REGISTRAR_VENDEDOR");*/
+
+}
+
+/********************************************************/   
+
 int main(int argc, char *argv[]) {
   static char buffer, buf[255];
   static char encabezado1[mxbuff],
-      encabezado2[mxbuff] = "E. Israel Osorio H., 1999-2005 soporte@elpuntodeventa.com";
+      encabezado2[mxbuff] = "Eduardo I. Osorio H., 1999-2006 soporte@elpuntodeventa.com";
   FILE *impr_cmd;
   time_t tiempo;        
   static int dgar;
@@ -3074,9 +3218,10 @@ int main(int argc, char *argv[]) {
   double tax[maxtax];
   double importe_recibido, cambio;
   struct tm *fecha;     /* Hora y fecha local   */
-  int i;
+  int i = 0;
   time_t f_entrega, f_pedido; /* Para control de rentas */
-  int id_cliente;
+  int id_cliente = 0;
+  int num_cajas_virtuales = 0;
 
   program_name = argv[0];
   buf[0] = 0;
@@ -3122,6 +3267,12 @@ int main(int argc, char *argv[]) {
             ERROR_SQL);
   }
 
+  if ((num_cajas_virtuales = atoi(lee_config(con, "CAJAS_VIRTUALES"))) > 0)
+    caja_virtual = selecciona_caja_virtual(con, num_cajas_virtuales);
+  else
+    caja_virtual = 0;
+  read_pos_config(con, caja_virtual);
+
   //  num_venta = obten_num_venta(nm_num_venta);
   num_venta = obten_num_venta(con);
 
@@ -3149,7 +3300,13 @@ int main(int argc, char *argv[]) {
     numbarras = 0;
   }
 
-  sprintf(encabezado1, "Sistema OsoPOS - Programa Remision %s R.%s", vers, release);
+  sprintf(encabezado1, "OsoPOS - Módulo POS %s R.%s. Caja ", vers, release);
+  if (caja_virtual==0)
+    sprintf(encabezado1, "%s ÚNICA", encabezado1);
+  else
+    sprintf(encabezado1, "%s %u", encabezado1, caja_virtual);
+
+  //  /*igm*/ sprintf(encabezado1, "Host: %s | D. datos: %s", db.hostname, db.name);
   do {
     tiempo = time(NULL);
     fecha = localtime(&tiempo);
@@ -3381,7 +3538,7 @@ int main(int argc, char *argv[]) {
   asunto_avisos = NULL;
   free(tipo_disp_ticket);
   tipo_disp_ticket = NULL;
-  free(lp_disp_ticket);
+  g_free(lp_disp_ticket);
   free(nm_avisos);
   nm_avisos = NULL;
   free(nmfpie);

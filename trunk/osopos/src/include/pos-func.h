@@ -1058,3 +1058,35 @@ int lee_garantia(PGconn *base, struct articulos art[maxart], int numarts) {
 
   return(OK);
 }
+
+char *lee_config(PGconn *db_con, char *variable) {
+  PGresult *res;
+  char query[255];
+
+  sprintf(query, "SELECT valor FROM configuracion WHERE llave='%s'", variable);
+  res = PQexec(db_con, query);
+  if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
+    fprintf(stderr, "Error al consultar variables de configuración\n");
+    PQclear(res);
+    return(NULL);
+  }
+
+  return(PQgetvalue(res, 0, 0));
+}
+
+char *lee_config_pos(PGconn *db_con, unsigned id_pos, char *variable) {
+  PGresult *res;
+  char query[255];
+
+  sprintf(query, "SELECT valor FROM configuracion_pos WHERE id_pos=%u AND llave='%s'",
+          id_pos, variable);
+  res = PQexec(db_con, query);
+  if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
+    fprintf(stderr, "Error al consultar variables de configuración de la terminal virtual %u\n",
+            id_pos);
+    PQclear(res);
+    return(NULL);
+  }
+
+  return(PQgetvalue(res, 0, 0));
+}
