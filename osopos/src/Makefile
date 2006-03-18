@@ -1,7 +1,7 @@
-all: invent remision factur corte imprrem osopos
+all: invent remision carrito factur corte imprrem osopos
 install: install_invent install_remision install_factur install_corte install_imprrem install_osopos
 
-CC = gcc -g -Wall -march=i486
+CC = gcc -g -Wall -march=athlon
 
 PGLIBS = -lpq -lcrypt
 
@@ -12,6 +12,8 @@ PANELLIBS = -lpanel
 GTKLIBS = `gtk-config --cflags` `gtk-config --libs`
 
 FORMSLIBS = -lform
+
+GLIBLIBS = `pkg-config --cflags --libs glib-2.0`
 
 C_REMISION = -Dmxmembarra=8000 -Dmxmemdivisa=5 -Dmaxitem_busqueda=100
 
@@ -30,7 +32,11 @@ SUPERVISOR_BINDIR = /home/OsoPOS/scaja/bin
 
 remision: remision.c
 	${CC} -o ../bin/remision.o remision.c ${PGLIBS} ${FORMSLIBS} \
-	${PANELLIBS} ${CURSESLIBS} ${C_REMISION} ${C_OSOPOS} -ggdb
+	${PANELLIBS} ${CURSESLIBS} ${GLIBLIBS} ${C_REMISION} ${C_OSOPOS} -ggdb
+
+carrito: carrito.c
+	${CC} -o ../bin/carrito.o carrito.c ${PGLIBS} ${FORMSLIBS} \
+	${PANELLIBS} ${CURSESLIBS} ${GLIBLIBS} ${C_REMISION} ${C_OSOPOS} -ggdb
 
 factur: factur.c
 	${CC} -o ../bin/factur.o factur.c ${PGLIBS} ${FORMSLIBS} ${PANELLIBS} \
@@ -46,7 +52,7 @@ movinvent: mov_invent.c
 
 corte: corte.c
 	${CC} -o ../bin/corte.o corte.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
-	${PANELLIBS} -ggdb
+	${PANELLIBS} ${GLIBLIBS} -ggdb
 
 osopos: osopos.c
 	${CC} -o ../bin/osopos.o osopos.c ${CURSESLIBS}
