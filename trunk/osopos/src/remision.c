@@ -127,10 +127,10 @@ void close_serial(int fd, struct termios *tio);
 int busqueda_articulo(char *);
 void muestra_renglon(WINDOW *, int y, int x, short borra_ven, unsigned renglon, unsigned num_items);
 int datos_renta(int *num_cliente, time_t *f_pedido, time_t *f_entrega);
-
 double tipo_cambio(char *);
-int find_mem_code(char *cod, struct articulos *art, int search_2nd);
-int find_db_code(PGconn *con, char *cod, struct articulos *art, int wday);
+void asign_mem_code(struct articulos *art, int item);
+int find_mem_code(char *cod, struct articulos *art, int search_2nd, short *es_granel);
+int find_db_code(PGconn *con, char *cod, struct articulos *art, int wday, short *es_granel);
 int form_virtualize(WINDOW *w, int readchar, int c);
 int busca_art_marcado(char *cod, struct articulos art[maxart], int campo, int ren);
 int imprime_fechas_renta(PGconn *con, PGconn *con_s, time_t *f_pedido, time_t *f_entrega);
@@ -1071,7 +1071,7 @@ int lee_articulos(PGconn *base_inventario, PGconn *con_s)
   sprintf(comando, "%s al.codigo, ar.descripcion, al.codigo2, al.pu, ", comando);
   sprintf(comando, "%s al.pu2, al.pu3, al.pu4, al.pu5, al.cant,  al.c_min, ", comando);
   sprintf(comando, "%s al.tax_0, al.tax_1, al.tax_2, al.tax_3, al.tax_4, al.tax_5, ", comando);
-  sprintf(comando, "%s ar.iva_porc, ar.p_costo, al.divisa ", comando);
+  sprintf(comando, "%s ar.iva_porc, ar.p_costo, al.divisa, ar.granel ", comando);
   sprintf(comando, "%s FROM almacen_1 al, articulos ar WHERE al.codigo=ar.codigo AND id_alm=%d ", comando, almacen);
   res = PQexec(base_inventario, comando);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
@@ -1105,8 +1105,9 @@ int lee_articulos(PGconn *base_inventario, PGconn *con_s)
     barra[i].tax_3 = atof(PQgetvalue(res,i,13));
     barra[i].tax_4 = atof(PQgetvalue(res,i,14));
     barra[i].tax_5 = atof(PQgetvalue(res,i,15));
+    strncpy(comando, PQgetvalue(res,i,19), 1);
+    barra[i].granel = comando[0];
     strncpy(barra[i].divisa, PQgetvalue(res,i,18), MX_LON_DIVISA);
-
   }
 
   if (PQntuples(res) >= mxmembarra)  {
@@ -1163,13 +1164,51 @@ int lee_divisas(PGconn *base_invent)
 
 /***************************************************************************/
 
-int find_mem_code(char *cod, struct articulos *art, int search_2nd) {
-  //int busca_precio(char *cod, struct articulos *art) {
+void asign_mem_code(struct articulos *art, int item) {
+
+double tc=1;
+
+  strncpy(art->codigo, barra[item].codigo, maxcod);
+  strncpy(art->codigo2, barra[item].codigo2, maxcod);
+  strncpy(art->desc, barra[item].desc, maxdes);
+
+  tc = tipo_cambio(barra[item].divisa);
+
+  art->p_costo = barra[item].p_costo;
+  art->pu = barra[item].pu * tc;
+  art->pu2= barra[item].pu2 * tc;
+  art->pu3= barra[item].pu3 * tc;
+  art->pu4= barra[item].pu4 * tc;
+  art->pu5= barra[item].pu5 * tc;
+  art->id_prov = barra[item].id_prov;
+  art->id_depto = barra[item].id_depto;
+  art->iva_porc = barra[item].iva_porc;
+  strcpy(art->divisa, barra[item].divisa);
+  art->tax_0 = barra[item].tax_0;
+  art->tax_1 = barra[item].tax_1;
+  art->tax_2 = barra[item].tax_2;
+  art->tax_3 = barra[item].tax_3;
+  art->tax_4 = barra[item].tax_4;
+  art->tax_5 = barra[item].tax_5;
+
+}
+
+/***************************************************************************/
+
+int find_mem_code(char *cod, struct articulos *art, int search_2nd, short *es_granel) {
+//int busca_precio(char *cod, struct articulos *art) {
 /* Busca el código de barras en la memoria y devuelve la posicion */
 /* del producto en la matriz de productos en memoria. */
 int i;
 int exit=0; /* falso si hay que salirse */
-double tc=1;
+int granel=-1; /* Coincidencia con PLU de producto de granel */
+gchar *plu_granel;
+gchar *s_peso;
+
+  plu_granel = NULL;
+  if (strlen(cod) == 13) /* longitud de EAN13 */
+    /* Se asigna un max. de 6 digitos en el código de barras para el PLU */
+    plu_granel = g_strndup(cod+1, 6);
 
   for (i=0; (i<numbarras); ++i) {
     exit = strcmp(cod, barra[i].codigo);
@@ -1177,37 +1216,29 @@ double tc=1;
       exit = strcmp(cod, barra[i].codigo2);
 
     if (!exit) {
-      strncpy(art->codigo, barra[i].codigo, maxcod);
-      strncpy(art->codigo2, barra[i].codigo2, maxcod);
-      strncpy(art->desc, barra[i].desc, maxdes);
-
-      tc = tipo_cambio(barra[i].divisa);
-
-      art->p_costo = barra[i].p_costo;
-      art->pu = barra[i].pu * tc;
-      art->pu2= barra[i].pu2 * tc;
-      art->pu3= barra[i].pu3 * tc;
-      art->pu4= barra[i].pu4 * tc;
-      art->pu5= barra[i].pu5 * tc;
-      art->id_prov = barra[i].id_prov;
-      art->id_depto = barra[i].id_depto;
-      art->iva_porc = barra[i].iva_porc;
-      strcpy(art->divisa, barra[i].divisa);
-      art->tax_0 = barra[i].tax_0;
-      art->tax_1 = barra[i].tax_1;
-      art->tax_2 = barra[i].tax_2;
-      art->tax_3 = barra[i].tax_3;
-      art->tax_4 = barra[i].tax_4;
-      art->tax_5 = barra[i].tax_5;
+      asign_mem_code(art, i);
+      *es_granel = FALSE;
       return(i);
     }
+    else
+      if (plu_granel && strcmp(plu_granel, barra[i].codigo) == 0) {
+        granel = i;
+      }
+  }
+  /* No se localizo el código como tal, ¿coincide como plu de granel ? */
+  if (granel>=0) {
+    asign_mem_code(art, granel);
+    s_peso = g_strndup(cod+8, 4);
+    art->cant = atof(s_peso)/1000;
+    *es_granel = TRUE;
+    return(granel);
   }
   return(ERROR_DIVERSO);
 }    
 
 /***************************************************************************/
 
-int find_db_code(PGconn *con, char *cod, struct articulos *art, int wday) {
+int find_db_code(PGconn *con, char *cod, struct articulos *art, int wday, short *es_granel) {
   char query[1024];
   PGresult *res;
 
@@ -1494,6 +1525,7 @@ double item_capture(PGconn *con, int *numart, double *util,
   FILE    *f_last_items;
   FILE    *p_impr;
   double  b_double = 0.0;
+  short   es_granel = 0;
 
   *util = 0;
   iva = 0.0;
@@ -1752,10 +1784,10 @@ double item_capture(PGconn *con, int *numart, double *util,
           buff[0] = 0;
           continue;
         }
-        chbuff = find_db_code(con, buff, &articulo[i], fecha.tm_wday);
+        chbuff = find_db_code(con, buff, &articulo[i], fecha.tm_wday, &es_granel);
       }
       else
-        chbuff = find_mem_code(buff, &articulo[i], search_2nd);
+        chbuff = find_mem_code(buff, &articulo[i], search_2nd, &es_granel);
 
       if (chbuff < 0) {
         strncpy(articulo[i].desc, buff, maxdes);
