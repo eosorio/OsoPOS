@@ -37,7 +37,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 
-#define _SERIAL_COMM   /* Se usarán rutinas de comunicación serial */
+//#define _SERIAL_COMM   /* Se usarán rutinas de comunicación serial */
 
 #include "include/pos-curses.h"
 #define _pos_curses
@@ -106,7 +106,7 @@ int corta_papel(char *tipo_miniimp);
 /* Función que reemplaza a ActualizaEx */
 int actualiza_existencia(PGconn *con, struct tm *fecha);
 /* Esta función reemplaza a leebarras */
-int lee_articulos(PGconn *, PGconn *);
+int lee_articulos(PGconn *, PGconn *, short almacen);
 void show_item_list(WINDOW *vent, int i, short cr);
 void show_subtotal(double, double, double);
 void mensaje(char *texto);
@@ -120,10 +120,12 @@ int check_for_journal(char *dir_name);
 int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
                      double tax[maxtax], char *last_sale_fname);
 int aborta_remision(PGconn *con, PGconn *con_s, char *mensaje, char tecla, int senial);
+ifdef _SERIAL_COMM
 //void captura_serial(char *);
 void init_serial(struct sigaction *saio, struct termios *oldtio, struct termios *newtio);
 void signal_handler_IO (int status);
 void close_serial(int fd, struct termios *tio);
+#endif
 int busqueda_articulo(char *);
 void muestra_renglon(WINDOW *, int y, int x, short borra_ven, unsigned renglon, unsigned num_items);
 int datos_renta(int *num_cliente, time_t *f_pedido, time_t *f_entrega);
@@ -204,13 +206,15 @@ int serie;        /* Serie de folios de comprobantes */
 int cnf_registrar_vendedor = 0;
 unsigned caja_virtual = 0; /* Número de caja virtual que se está operando */
 
+#include "include/articulos-bd-func.h"
+
 int init_config()
 {
   home_directory = calloc(1, 255);
   log_name = calloc(1, 255);
 
   strcpy(home_directory, getenv("HOME"));
-  strcpy(log_name, getenv("LOGNAME"));
+  strcpy(log_name, getenv("USER"));
 
   nm_journal = calloc(1, mxbuff);
   nm_orig_journal = calloc(1, strlen(home_directory) + strlen("/.last_items.") + 10);
@@ -272,7 +276,7 @@ int init_config()
   db.hostname = g_strdup("255.255.255.255");
   db.hostport = g_strdup("5432");
   db.name = g_strdup("elpuntodeventa.com");
-  db.user = g_strdup_printf("%s", log_name);
+  db.user = g_ascii_strdown(g_strdup_printf("%s", log_name), -1);
   db.sup_user = g_strdup_printf("scaja");
 
   maxitemr = 6;
@@ -299,8 +303,6 @@ int read_config()
   char *aux = NULL;
   //  struct kbd_struct teclado;
 
-  int i_buf;
-  
   //  setledstate(teclado, VC_NUMLOCK); 
 
   nmconfig = g_strdup_printf("%s/.osopos/remision.config", home_directory);
@@ -321,18 +323,18 @@ int read_config()
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
-        /* Definición de impresora de ticket */
-      if (!strcmp(b,"ticket")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(nm_disp_ticket, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(nm_disp_ticket, buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n", b);
-      }
-      else if (!strcmp(b,"ticket.pie")) {
+        /* OBSOLETO por config. caja virtual. Definición de impresora de ticket */
+/*       if (!strcmp(b,"ticket")) { */
+/*         strncpy(buf, strtok(NULL,"="), mxbuff); */
+/*         aux = realloc(nm_disp_ticket, strlen(buf)+1); */
+/*         if (aux != NULL) { */
+/*           strcpy(nm_disp_ticket, buf); */
+/*           aux = NULL; */
+/*         } */
+/*         else */
+/*           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n", b); */
+/*       } */
+      if (!strcmp(b,"ticket.pie")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nmfpie, strlen(buf)+1);
         if (aux != NULL) {
@@ -441,6 +443,7 @@ int read_config()
        strncpy(buf, strtok(NULL,"="), mxbuff);
        almacen = atoi(buf);
      }
+#ifdef _SERIAL_COMM
      else if(!strcmp(b, "scanner_serie")) {
        lector_serial = 1;
        strncpy(buf, strtok(NULL,"="), mxbuff);
@@ -454,6 +457,7 @@ int read_config()
                  b);
      }
      else if(!strcmp(b, "scanner_velocidad")) {
+       int i_buf;
        strncpy(buf, strtok(NULL,"="), mxbuff);
        i_buf = atoi(buf);
        switch (i_buf) {
@@ -477,6 +481,7 @@ int read_config()
        strncpy(buf, strtok(NULL,"="), mxbuff);
        scan_terminator = atoi(buf);
      }
+#endif
      else if (!strcmp(b,"iva_incluido")) {
        strncpy(buf, strtok(NULL,"="), mxbuff);
        iva_incluido = atoi(buf);
@@ -511,7 +516,6 @@ int read_global_config()
   char buff[mxbuff],buf[mxbuff];
   char *b;
   char *aux = NULL;
-  int i_buf;
   
   nmconfig = g_strdup_printf("/etc/osopos/remision.config");
 
@@ -531,17 +535,17 @@ int read_global_config()
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
-        /* Definición de impresora de ticket */
-      if (!strcmp(b,"ticket")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(nm_disp_ticket, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(nm_disp_ticket, buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n", b);
-      }
+        /* OBSOLETO por config. caja virtual. Definición de impresora de ticket */
+/*       if (!strcmp(b,"ticket")) { */
+/*         strncpy(buf, strtok(NULL,"="), mxbuff); */
+/*         aux = realloc(nm_disp_ticket, strlen(buf)+1); */
+/*         if (aux != NULL) { */
+/*           strcpy(nm_disp_ticket, buf); */
+/*           aux = NULL; */
+/*         } */
+/*         else */
+/*           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n", b); */
+/*       } */
       /* REMPLAZADO POR CATALOGO DE CONFIGURACION EN BASE DE DATOS */
       /*      else if (!strcmp(b, "lp_ticket")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
@@ -555,7 +559,7 @@ int read_global_config()
                   "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
                   }*/
-      else if (!strcmp(b,"ticket.pie")) {
+      if (!strcmp(b,"ticket.pie")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nmfpie, strlen(buf)+1);
         if (aux != NULL) {
@@ -590,7 +594,7 @@ int read_global_config()
           fprintf(stderr,
                   "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
-                  }*/
+      }
       else if (!strcmp(b,"impresion.comando")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(cmd_lp, strlen(buf)+1);
@@ -602,7 +606,7 @@ int read_global_config()
           fprintf(stderr,
                   "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
-      }
+                  }*/
       else if (!strcmp(b,"impresion.autocutter")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         if (atoi(buf) == 1)
@@ -738,6 +742,7 @@ int read_global_config()
         strncpy(buf, strtok(NULL,"="), mxbuff);
         almacen = atoi(buf);
       }
+#ifdef _SERIAL_COMM
       else if(!strcmp(b, "scanner_serie")) {
         lector_serial = 1;
         strncpy(buf, strtok(NULL,"="), mxbuff);
@@ -751,6 +756,7 @@ int read_global_config()
                   b);
       }
       else if(!strcmp(b, "scanner_velocidad")) {
+        int i_buf;
         strncpy(buf, strtok(NULL,"="), mxbuff);
         i_buf = atoi(buf);
         switch (i_buf) {
@@ -770,6 +776,7 @@ int read_global_config()
           serial_bps = B38400;
         }
       }
+#endif
       else if(!strcmp(b, "divisa")) {
         strncpy(buf, strtok(NULL,"="), MX_LON_DIVISA);
         strcpy(s_divisa, buf);
@@ -830,7 +837,6 @@ int read_general_config()
   char buff[mxbuff],buf[mxbuff];
   char *b;
   char *aux = NULL;
-  int i_buf;
   
   nmconfig = g_strdup_printf("/etc/osopos/general.config");
 
@@ -850,17 +856,17 @@ int read_general_config()
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
-        /* Definición de impresora de ticket */
-      if (!strcmp(b,"ticket")) {
-        strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(nm_disp_ticket, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(nm_disp_ticket, buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n", b);
-      }
+        /* Obsoleto por config. caja virtual. Definición de impresora de ticket */
+/*       if (!strcmp(b,"ticket")) { */
+/*         strncpy(buf, strtok(NULL,"="), mxbuff); */
+/*         aux = realloc(nm_disp_ticket, strlen(buf)+1); */
+/*         if (aux != NULL) { */
+/*           strcpy(nm_disp_ticket, buf); */
+/*           aux = NULL; */
+/*         } */
+/*         else */
+/*           fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n", b); */
+/*       } */
       /* REMPLAZADO POR CATALOGO DE CONFIGURACION EN BASE DE DATOS */
       /*      else if (!strcmp(b, "lp_ticket")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
@@ -887,7 +893,7 @@ int read_general_config()
                   "remision. Error de memoria en argumento de configuracion %s\n",
                   b);
                   }*/
-      else if (!strcmp(b,"programa.factur")) {
+      if (!strcmp(b,"programa.factur")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nm_factur, strlen(buf)+1);
         if (aux != NULL) {
@@ -1013,6 +1019,7 @@ int read_general_config()
                   b);
       }
       else if(!strcmp(b, "scanner_velocidad")) {
+        int i_buf;
         strncpy(buf, strtok(NULL,"="), mxbuff);
         i_buf = atoi(buf);
         switch (i_buf) {
@@ -1221,7 +1228,7 @@ gchar *s_peso;
       return(i);
     }
     else
-      if (plu_granel && strcmp(plu_granel, barra[i].codigo) == 0) {
+      if (plu_granel && barra[i].granel == 't' && strcmp(plu_granel, barra[i].codigo) == 0) {
         granel = i;
       }
   }
@@ -1554,8 +1561,10 @@ double item_capture(PGconn *con, int *numart, double *util,
     fclose(f_last_sale);
   }
 
+#ifdef _SERIAL_COMM
   if (lector_serial)
     init_serial(&saio, &oldtio, &newtio);
+#endif
 
   exist_journal = check_for_journal(home_directory);
   if (exist_journal) {
@@ -2011,8 +2020,10 @@ double item_capture(PGconn *con, int *numart, double *util,
 
   free(buff);
   free(buff2);
+#ifdef _SERIAL_COMM
   if (lector_serial)
     close_serial(fd, &oldtio);
+#endif
   return(subtotal+(!iva_incluido*iva));
 }
 
@@ -2597,6 +2608,7 @@ int aborta_remision(PGconn *con, PGconn *con_s, char *mens, char tecla, int seni
 }
 
 /********************************************************/
+#ifdef _SERIAL_COMM
 /********************************************************/
 /*** rutinas de comunicación serial. Basado en el Serial-Programming-HOWTO ***/
 void init_serial(struct sigaction *saio, struct termios *oldtio, struct termios *newtio)
@@ -2649,7 +2661,7 @@ void signal_handler_IO (int status)
 
   wait_flag = FALSE;
 }
-
+#endif
 
 int busqueda_articulo(char *codigo)
 {
@@ -2711,7 +2723,7 @@ int busqueda_articulo(char *codigo)
       }
 
       sprintf(item[j], "%-15s %s %9.2f %.2f", cod[j], b, barra[i].pu, barra[i].exist);
-      mvwprintw(v_busq, v_busq->_cury, 1, "%s\n", item[j]);
+      //      mvwprintw(v_busq, v_busq->_cury, 1, "%s\n", item[j]);
       j++;
     }
   }
@@ -3131,14 +3143,14 @@ int selecciona_caja_virtual(PGconn *con, int num_cajas)
   aux = calloc(1, mxbuff);
 
   show_panel(pan);
-  mvwprintw(v_selecc, 1, 1, "Seleccione la caja virtual para operar:\n");
+  mvwprintw(v_selecc, 1, 1, "Seleccione la caja virtual para operar:");
   wrefresh(v_selecc);
  
   for (j=0; j<num_cajas; j++) {
     item[j] = calloc(1, getmaxx(v_selecc));
     /* Aqui debe ir la consulta al catálogo de nombres de cajas virtuales */
     sprintf(item[j], "Caja %d", j+1);
-    mvwprintw(v_selecc, v_selecc->_cury, 1, "%s", item[j]);
+    mvwprintw(v_selecc, v_selecc->_cury+1, 1, "%s", item[j]);
   }
 
   wrefresh(v_selecc);
@@ -3219,8 +3231,8 @@ int read_pos_config(PGconn *con, unsigned num_caja)
   */
   lp_disp_ticket = g_strdup_printf(lee_config_pos(con, num_caja, "COLA_TICKET"));
   strcpy(tipo_disp_ticket, lee_config_pos(con, num_caja, "MINIIMPRESORA_TIPO"));
-  /*  lee_config_pos(con, num_caja, "IMPRESION_COMANDO");
-  lee_config_pos(con, num_caja, "MINIIMPRESORA_AUTOCUTTER");
+  strcpy(cmd_lp, lee_config_pos(con, num_caja, "IMPRESION_COMANDO"));
+         /*lee_config_pos(con, num_caja, "MINIIMPRESORA_AUTOCUTTER");
   lee_config_pos(con, num_caja, "ALMACEN");
   lee_config_pos(con, num_caja, "SCANNER_PUERTOSERIE");
   lee_config_pos(con, num_caja, "DIVISA");
@@ -3309,7 +3321,7 @@ int main(int argc, char *argv[]) {
   num_venta = obten_num_venta(con);
 
   if (!serial_num_enable && !catalog_search) {
-    numbarras = lee_articulos(con, con_s);
+    numbarras = lee_articulos(con, con_s, almacen);
     if (!numbarras) {
       mensaje("No hay artículos en la base de datos. Use el programa de inventarios primero");
       getch();
