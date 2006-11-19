@@ -1,7 +1,7 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa OsoPOS (C) 1999-2003 E. Israel Osorio H.
+   Sistema OsoPOS (C) 1999-2006 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
@@ -169,7 +169,7 @@ double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
 struct db_data {
   gchar *name;      /* Nombre de la base de datos */
   gchar *user;      /* Nombre del usuario que se conecta a la base de datos */
-  gchar *passwd;    /* Conraseña del usuario */
+  gchar *passwd;    /* Contraseña del usuario */
   gchar *sup_user;  /* Nombre del usuario supervisor */
   gchar *sup_passwd;/* Contraseña del supervisor */
   gchar *hostname;  /* Nombre host con base de datos */
@@ -216,6 +216,7 @@ struct articulos {
   short    unidad_t;           /* Unidad del tiempo de renta (0: minutos, ... 3: semanas ... 5:años*/
   short    garan_t;            /* Tiempo de garantía */
   short    garan_unidad;       /* Unidad de tiempo de garantía */
+  char     granel;             /* Se vende a granel y se usa báscula */
 };
 
 struct proveedor {
@@ -243,4 +244,12 @@ struct divisas {
   char id[MX_LON_DIVISA];
   char descripcion[MX_LON_DIVISA_DES];
   double tc;
+};
+
+struct usuario {
+  unsigned id;
+  gchar *login;
+  gchar *passwd;
+  gchar *nombre;
+  unsigned nivel;
 };
