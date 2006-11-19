@@ -1,8 +1,8 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Remision 1.45 (C) 1999-2006 E. Israel Osorio H.
-   desarrollo@elpuntodeventa.com
+   Programa Remision 1.47 (C) 1999-2006 E. Israel Osorio H.
+   eosorioh en gmail punto com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
 
@@ -53,7 +53,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/print-func.h"
 #define _printfunc
 
-#define vers "1.45"
+#define vers "1.47"
 #define release "ElPunto"
 
 #ifndef maxdes
@@ -97,7 +97,6 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 int forma_de_pago(double *, double *);
 void Termina(PGconn *con, PGconn *con_s, int error);
 //int LeeConfig(char*, char*);
-double item_capture(PGconn *, int *numart, double *util, double tax[maxtax], struct tm fecha);
 void print_ticket_arts(double importe, double cambio);
 void print_ticket_header(char *nm_ticket_header);
 void print_ticket_footer(struct tm fecha, unsigned numvents, long folio, int serie);
@@ -110,13 +109,12 @@ int lee_articulos(PGconn *, PGconn *, short almacen);
 void show_item_list(WINDOW *vent, int i, short cr);
 void show_subtotal(double, double, double);
 void mensaje(char *texto);
-void mensaje_v(char *texto, int t);  /* Abre una ventana con mensaje */
 void aviso_existencia(struct articulos art);
 void switch_pu(WINDOW *, struct articulos *, int, double *, double tax[maxtax], int);
 int journal_last_sale(int i, char *last_sale_fname);
 int journal_marked_items(char *marked_items_fname, char *code, int exist_previous); 
 int clean_journal(char *marked_items_fname);
-int check_for_journal(char *dir_name);
+int check_for_journal(char *dir_name, char *program_name);
 int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
                      double tax[maxtax], char *last_sale_fname);
 int aborta_remision(PGconn *con, PGconn *con_s, char *mensaje, char tecla, int senial);
@@ -134,12 +132,13 @@ void asign_mem_code(struct articulos *art, int item);
 int find_mem_code(char *cod, struct articulos *art, int search_2nd, short *es_granel);
 int find_db_code(PGconn *con, char *cod, struct articulos *art, int wday, short *es_granel);
 int form_virtualize(WINDOW *w, int readchar, int c);
-int busca_art_marcado(char *cod, struct articulos art[maxart], int campo, int ren);
+int busca_art_marcado(char *cod, struct articulos art[maxarts], int campo, int ren);
 int imprime_fechas_renta(PGconn *con, PGconn *con_s, time_t *f_pedido, time_t *f_entrega);
 int print_customer_data(PGconn *con, PGconn *con_s, long int id_cliente);
 int captura_vendedor();
 int selecciona_caja_virtual(PGconn *con, int num_cajas);
-int read_virtual_pos_config(PGconn *con, unsigned num_caja);
+void read_pos_config(PGconn *con, unsigned num_caja);
+int read_db_config(PGconn *con);
 
 volatile int STOP=FALSE; 
 
@@ -148,12 +147,12 @@ double a_pagar;
 int numbarras=0;
 int numdivisas=0;
 /* struct barras barra[mxmembarra];  */
-struct articulos articulo[maxart], barra[mxmembarra]; /* barra se queda siempre en memoria */
+struct articulos articulo[maxarts], barra[mxmembarra]; /* barra se queda siempre en memoria */
 struct divisas divisa[mxmemdivisa];
 int numarts=0;          /* Número de items capturados   */
 short unsigned maxitemr;
 pid_t pid;
-char *program_name;
+short es_remision=1;
 unsigned almacen;
 struct db_data db;
 char   *item[maxitem_busqueda]; /* Líneas de caracteres en ventana de búsqueda */
@@ -206,7 +205,9 @@ int serie;        /* Serie de folios de comprobantes */
 int cnf_registrar_vendedor = 0;
 unsigned caja_virtual = 0; /* Número de caja virtual que se está operando */
 
+#include "include/remision.h"
 #include "include/articulos-bd-func.h"
+#include "include/pos-bd-func.h"
 
 int init_config()
 {
@@ -439,10 +440,10 @@ int read_config()
        strncpy(buf, strtok(NULL,"="), mxbuff);
        id_teller = atoi(buf);
      }
-     else if (!strcmp(b,"almacen.numero")) {
+      /*     else if (!strcmp(b,"almacen.numero")) {
        strncpy(buf, strtok(NULL,"="), mxbuff);
        almacen = atoi(buf);
-     }
+       }*/
 #ifdef _SERIAL_COMM
      else if(!strcmp(b, "scanner_serie")) {
        lector_serial = 1;
@@ -1140,8 +1141,6 @@ gchar *s_peso;
 
 /***************************************************************************/
 
-/***************************************************************************/
-
 double tipo_cambio(char *s_divisa) {
 
 int i;
@@ -1301,521 +1300,6 @@ void switch_pu(WINDOW *v_arts,
 
 /***************************************************************************/
 
-double item_capture(PGconn *con, int *numart, double *util, 
-                    double tax[maxtax],
-                    struct tm fecha)
-{
-  double  subtotal = 0.0;
-  double  iva_articulo;
-  double  tax_item[maxtax];
-  int     i=0,
-          j,k;
-  char    *buff, *buff2, *last_sale_fname;
-  int     chbuff = -1;
-  WINDOW  *v_arts;
-  PANEL   *p_arts;
-  FILE    *f_last_sale;
-  int     exist_journal=0;
-  FILE    *f_last_items;
-  FILE    *p_impr;
-  double  b_double = 0.0;
-  short   es_granel = 0;
-
-  *util = 0;
-  iva = 0.0;
-
-  p_arts = mkpanel(COLOR_BLACK, getmaxy(stdscr)-8, getmaxx(stdscr)-1, 4, 0);
-  v_arts = panel_window(p_arts);
-  //  v_arts = newwin(getmaxy(stdscr)-8, getmaxx(stdscr)-1, 4, 0);
-  scrollok(v_arts, TRUE);
-  buff = calloc(1,mxbuff);
-  buff2 = calloc(1, mxbuff);
-  last_sale_fname = calloc(1, strlen(home_directory) + strlen("/ultima_venta.tmp")+1);
-  if (buff == NULL  || buff2 == NULL || last_sale_fname == NULL) {
-    fprintf(stderr, "remision. FATAL: no puedo apartar %d bytes de memoria\n", mxbuff);
-    /* can't allocate %d memory bytes */
-    return(MEMORY_ERROR);
-  }
-  
-  sprintf(last_sale_fname, "%s/ultima_venta.tmp", home_directory);
-  f_last_sale = fopen(last_sale_fname, "w");
-  if (f_last_sale == NULL)
-    fprintf(stderr, "remision. No puedo escribir al archivo %s\n", last_sale_fname);
-  else {
-    fprintf(f_last_sale, "  %2d/%2d/%2d,  %2d:%2d:%2d hrs.\n",
-            fecha.tm_mday, (fecha.tm_mon)+1, fecha.tm_year, fecha.tm_hour,
-            fecha.tm_min, fecha.tm_sec);
-    fclose(f_last_sale);
-  }
-
-#ifdef _SERIAL_COMM
-  if (lector_serial)
-    init_serial(&saio, &oldtio, &newtio);
-#endif
-
-  exist_journal = check_for_journal(home_directory);
-  if (exist_journal) {
-    sprintf(nm_journal, "%s/.last_items.%d", home_directory, exist_journal);
-    f_last_items = fopen(nm_journal, "r");
-  }
-  else
-    strcpy(nm_journal, nm_orig_journal);
-
-  mvprintw(3,0,
-           "Cant.       Clave                Descripción                 P. Unitario");
-            /* qt.       code                description                 unit cost */
-  articulo[0].cant = 1;
-
-  do {
-    memset(buff, 0, mxbuff);
-    buff2[0] = 0;
-    iva_articulo = 0.0;
-    for (j=0; j<maxtax; j++)
-      tax_item[j] = 0.0;
-    articulo[i].pu = 0;
-    articulo[i].p_costo = 0;
-    mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
-    /* barcode, description or qty. */
-    if (exist_journal) {
-      if (feof(f_last_items)) {
-        articulo[i].cant = 0;
-        continue;
-      }
-      fgets(buff, mxbuff, f_last_items);
-      buff[strlen(buff)-1] = 0;
-    }
-    else {
-      do {
-        switch(chbuff = wgetkeystrokes(stdscr, buff, mxbuff)) {
-          //        case KEY_F(1):
-        case 2: /* F2 */
-          strcpy(buff, "descuento");
-          strcpy(articulo[i].desc, "descuento");
-          chbuff = 0;
-          break;
-        case 3: /* F3 */
-          journal_marked_items(nm_journal, "cancela", 0);
-          cancela_articulo(v_arts, &i, &subtotal, &iva, tax, last_sale_fname);
-          show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
-          mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
-          continue;
-          break;
-        case 4:
-          sprintf(buff2, "%s %s", cmd_lp, lp_disp_ticket);
-          p_impr = popen(buff2, "w");
-          sprintf(buff2, "Eduardo Israel Osorio Hernandez");
-          imprime_razon_social(p_impr, tipo_disp_ticket,
-                               "elpuntodeventa", buff2);
-          pclose(p_impr);
-
-          print_ticket_header(nmfenc);
-          sprintf(buff2, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
-          p_impr = popen(buff2, "w");
-          pclose(p_impr);
-
-          memset(buff, 0, mxbuff);
-
-          break;
-        case 5:
-        case 6:
-        case 7:
-        case 8:
-          if (i) {
-            articulo[i].codigo[0] = 0;
-            articulo[i].desc[0] = 0;
-            switch_pu(v_arts, &articulo[i-1], chbuff-3, &subtotal, tax, i);
-            move(getmaxy(stdscr)-2,0);
-          }
-          break;
-        case 11:
-          if (busqueda_articulo(buff) > 0)
-            chbuff = 0;
-          update_panels();
-          doupdate();
-          wrefresh(stdscr);
-          break;
-        case 12:
-          if (puede_hacer(con, log_name, "caja_cajon_manual"))
-            AbreCajon(tipo_disp_ticket);
-            sprintf(buff2, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
-            p_impr = popen(buff2, "w");
-            pclose(p_impr);
-          break;
-        }
-      }
-      while (chbuff  && !(lector_serial && wait_flag == FALSE));
-      if (lector_serial && wait_flag == FALSE) {
-        strcpy(buff, s_buf);
-        //        printw("%s", buff);
-        wait_flag = TRUE;
-      }
-
-      //    getstr(buff);
-    }
-    chbuff = -1; /* Limpiamos para usar despues */
-
-    if (strstr(articulo[i].desc,"ancela") == NULL)
-      journal_marked_items(nm_journal, buff, exist_journal);
-
-    move(getmaxy(stdscr)-2,0);
-    deleteln();
-
-    /* Sección de multiplicador */
-    if ( ((toupper(buff[0])=='X') || (buff[0]=='*')) && i) {
-      if (!isdigit(buff[1])) {
-        mensaje("Error en multiplicador. Intente de nuevo");
-        continue;
-      }
-      for (j=0; !isdigit(buff[j]) && buff[j]!='.'; j++);
-      for (k=0; (isdigit(buff[j]) || buff[j]=='.') && j<strlen(buff); j++,k++)
-        articulo[i].desc[k] = buff[j];
-      articulo[i].desc[k]=0;
-      articulo[i].cant = atof(articulo[i].desc);
-
-      if (!articulo[i].cant) {
-        f_last_sale = fopen(last_sale_fname, "a");
-        if (f_last_sale != NULL) {
-          fprintf(f_last_sale, "Cancelando renglones previos de %s\n", articulo[i-1].codigo);
-          fclose(f_last_sale);
-        }
-         /* Cancela el último artículo */
-        wmove(v_arts, v_arts->_cury-1,0);
-        wclrtoeol(v_arts);
-        wrefresh(v_arts);
-        --i;
-        subtotal -= (articulo[i].pu * articulo[i].cant);
-        if (iva_incluido)
-          iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
-        else
-          iva_articulo = articulo[i].pu * (articulo[i].iva_porc/100);
-        iva  -= (iva_articulo * articulo[i].cant);
-
-        tax_item[0] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_0/100 + 1);
-        tax_item[1] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_1/100 + 1);
-        tax_item[2] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_2/100 + 1);
-        tax_item[3] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_3/100 + 1);
-        tax_item[4] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_4/100 + 1);
-        tax_item[5] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_5/100 + 1);
-        for (j=0; j<maxtax; j++)
-          tax[j] -= (tax_item[j] * articulo[i].cant);
-      }
-      else {
-        f_last_sale = fopen(last_sale_fname, "a");
-        if (f_last_sale != NULL) {
-          fprintf(f_last_sale, "Nueva cantidad: %.2f\n", articulo[i].cant);
-          fclose(f_last_sale);
-        }
-        if (iva_incluido)
-          iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
-        else
-          iva_articulo = articulo[i-1].pu * articulo[i-1].iva_porc/100;
-        tax_item[0] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_0/100 + 1);
-        tax_item[1] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_1/100 + 1);
-        tax_item[2] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_2/100 + 1);
-        tax_item[3] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_3/100 + 1);
-        tax_item[4] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_4/100 + 1);
-        tax_item[5] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_5/100 + 1);
-
-        subtotal += ((articulo[i].cant-articulo[i-1].cant) * articulo[i-1].pu);
-        iva  += (iva_articulo * (articulo[i].cant-articulo[i-1].cant));
-        for (j=0; j<maxtax; j++)
-          tax[j]  += (tax_item[j] * (articulo[i].cant-articulo[i-1].cant));
-        articulo[i-1].cant = articulo[i].cant;
-      }
-      if (i) {
-        wmove(v_arts, v_arts->_cury-1, v_arts->_curx);
-        show_item_list(v_arts, i-1, TRUE);
-      }
-      show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
-
-      articulo[i].desc[0] = 0;
-      articulo[i].cant = 1;
-      continue;
-    }
-
-    if (strlen(buff) > 1) {
-    /* Si la clave es mayor de 1 caracteres, busca un código o repetición */
-
-        /* Repetición de artículo */
-        /* ¿ No debería de ser && en lugar de || ? */
-      if (i && (!strcmp(buff,articulo[i-1].desc) || !strcmp(buff,articulo[i-1].codigo) || !strcmp(buff,articulo[i-1].codigo2)) ) {
-        f_last_sale = fopen(last_sale_fname, "a");
-        if (f_last_sale != NULL) {
-          fprintf(f_last_sale, "Repitiendo código: %s\n", articulo[i-1].codigo);
-          fclose(f_last_sale);
-        }
-        (articulo[i-1].cant)++;
-        subtotal += articulo[i-1].pu;
-        if (iva_incluido)
-          iva_articulo = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].iva_porc/100 + 1);
-        else
-          iva_articulo = articulo[i-1].pu * (articulo[i-1].iva_porc/100);
-        iva += iva_articulo;
-
-        tax_item[0] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_0/100 + 1);
-        tax_item[1] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_1/100 + 1);
-        tax_item[2] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_2/100 + 1);
-        tax_item[3] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_3/100 + 1);
-        tax_item[4] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_4/100 + 1);
-        tax_item[5] = articulo[i-1].pu - articulo[i-1].pu / (articulo[i-1].tax_5/100 + 1);
-        for (j=0; j<maxtax; j++)
-          tax[j] += tax_item[j];
-
-        wmove(v_arts, v_arts->_cury-1, v_arts->_curx);
-        show_item_list(v_arts, i-1, TRUE);
-        show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
-        continue;
-      }
-
-       /* Reusamos chbuff */
-      if (catalog_search || serial_num_enable) {
-        /***********OJO********* 
-         Colocar aqui una función para revisar que
-         el artículo no se encuentre con status de rentado */
-        /*if (lease_mode && serial_num_enable && esta_rentado(con, buff)) {
-          // El artículo está rentado, mostrar aviso y regresar a captura de codigo
-          }*/
-        if (serial_num_enable && busca_art_marcado(buff, articulo, 1, 1)>=0) {
-          mensaje_v("El articulo ya fué marcado anteriormente", ESC);
-          buff[0] = 0;
-          continue;
-        }
-        chbuff = find_db_code(con, buff, &articulo[i], fecha.tm_wday, &es_granel);
-      }
-      else
-        chbuff = find_mem_code(buff, &articulo[i], search_2nd, &es_granel);
-
-      if (chbuff < 0) {
-        strncpy(articulo[i].desc, buff, maxdes);
-        articulo[i].iva_porc = TAX_PERC_DEF;
-      }
-    }
-
-    /* El artículo no tiene código, puede ser un art. no registrado */
-    /* o un descuento */
-    if (chbuff<0) {
-      if (strlen(buff) <= 1) {
-        articulo[i].cant=0;
-        continue;
-      }
-      if (strstr(articulo[i].desc,"ancela") && i) {
-        cancela_articulo(v_arts, &i, &subtotal, &iva, tax, last_sale_fname);
-        show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
-        continue;
-      }
-      do {
-        wmove(stdscr, getmaxy(stdscr)-3,0);
-        if (strlen(buff2) > 6)
-          printw("Cantidad muy grande... ");   /* Quantity very big */
-        /******************* OJO ***************************/
-        /* Revisar esta parte, porque cuando se hace un descuento de mas de 6 digitos,
-           tambien entra en esta condición */
-        printw("Introduce precio unitario: "); /* Introduce unitary cost */
-        clrtoeol();
-        if (exist_journal) {
-          fgets(buff2, mxbuff, f_last_items);
-          buff2[strlen(buff2)-1] = 0;
-        }
-        else
-          getnstr(buff2, mxbuff);
-        if (strlen(buff2) > 6)
-          continue;
-        //        scanw("%f",&articulo[i].pu);
-        deleteln();
-      }
-      while (strlen(buff2) > 6);
-
-      articulo[i].pu = atof(buff2);
-
-
-      if ( strstr(articulo[i].desc,"escuento") && i && !manual_discount) {
-        journal_last_sale(i, last_sale_fname);
-        journal_marked_items(nm_journal, buff2, exist_journal);
-
-        b_double = 0.0; /* En esta variable vamos a calcular el descuento total en impuestos */
-        if (articulo[i-1].iva_porc) {
-          if (iva_incluido>0 || listar_neto>0)
-            iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i-1].iva_porc/100 + 1);
-          else
-            iva_articulo = articulo[i].pu * (articulo[i-1].iva_porc/100);
-        }
-        else
-          iva_articulo = 0;
-
-        b_double += iva_articulo;
-
-        if (articulo[i-1].tax_0)
-          tax_item[0] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_0/100 + 1);
-        else
-          tax_item[0] = 0;
-        b_double += tax_item[0];
-
-        if (articulo[i-1].tax_1)
-          tax_item[1] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_1/100 + 1);
-        else
-          tax_item[1] = 0;
-        b_double += tax_item[1];
-
-        if (articulo[i-1].tax_2)
-          tax_item[2] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_2/100 + 1);
-        else
-          tax_item[2] = 0;
-        b_double += tax_item[2];
-
-        if (articulo[i-1].tax_3)
-          tax_item[3] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_3/100 + 1);
-        else
-          tax_item[3] = 0;
-        b_double += tax_item[3];
-
-        if (articulo[i-1].tax_4)
-          tax_item[4] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_4/100 + 1);
-        else
-          tax_item[4] = 0;
-        b_double += tax_item[4];
-
-        if (articulo[i-1].tax_5)
-          tax_item[5] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_5/100 + 1);
-        else
-          tax_item[5] = 0;
-        b_double += tax_item[5];
-
-        if (listar_neto>0 && iva_incluido==0)
-          articulo[i].pu = articulo[i].pu-b_double;
-
-        articulo[i-1].pu += articulo[i].pu;
-        articulo[i].codigo[0] = 0;
-        articulo[i].desc[0] = 0;
-
-        subtotal += (articulo[i-1].cant * articulo[i].pu);
-        iva += (iva_articulo * articulo[i-1].cant);
-        for (j=0; j<maxtax; j++)
-          tax[j] += (tax_item[j] * articulo[i-1].cant);
-        wmove(v_arts, v_arts->_cury-1, 0);
-        show_item_list(v_arts, i-1, TRUE);
-        show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
-        continue;
-      }
-      /* Artículo no registrado */
-      strncpy(articulo[i].desc, buff, maxdes);
-      strcpy(articulo[i].codigo,"Sin codigo"); /* No code */
-      buff[0] = 0;
-
-      if (!strstr(articulo[i].desc, "escuento")) {
-        journal_marked_items(nm_journal, buff2, exist_journal);
-        buff2[0] = 0;
-        do {
-          wmove(stdscr, getmaxy(stdscr)-3,0);
-          if (strlen(buff2) > 6)
-            printw("Cantidad muy grande... ");   /* Quantity very big */
-          mvprintw(getmaxy(stdscr)-3,0,"Introduce porcentaje de I.V.A.: "); /* Introd. tax % */
-          clrtoeol();
-          if (exist_journal) {
-            fgets(buff2, mxbuff, f_last_items);
-            buff2[strlen(buff2)-1] = 0;
-          }
-          else
-            getnstr(buff2, mxbuff);
-          if (strlen(buff2) > 6)
-            continue;
-          articulo[i].iva_porc = atof(buff2);
-          //        scanw("%f",&articulo[i].pu);
-          deleteln();
-        }
-        while (strlen(buff2) > 6);
-
-        clrtoeol();
-        deleteln();
-      }
-
-      journal_last_sale(i, last_sale_fname);
-      journal_marked_items(nm_journal, buff2, exist_journal);
-
-      show_item_list(v_arts, i, TRUE);
-
-      if (iva_incluido)
-        iva_articulo = articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
-      else
-        iva_articulo = articulo[i].pu * (articulo[i].iva_porc/100);
-      iva += (iva_articulo * articulo[i].cant);
-
-      tax_item[0] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_0/100 + 1);
-      tax_item[1] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_1/100 + 1);
-      tax_item[2] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_2/100 + 1);
-      tax_item[3] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_3/100 + 1);
-      tax_item[4] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_4/100 + 1);
-      tax_item[5] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_5/100 + 1);
-      for (j=0; j<maxtax; j++)
-        tax[j] += (tax_item[j] * articulo[i].cant);
-
-      subtotal += (articulo[i].pu * articulo[i].cant);
-      show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
-      articulo[++i].cant = 1;
-    }
-    else {  /* Articulo registrado */
-      journal_last_sale(i, last_sale_fname);
-      show_item_list(v_arts, i, TRUE);
-      subtotal += (articulo[i].pu * articulo[i].cant);
-      if (iva_incluido)
-        iva_articulo =  articulo[i].pu - articulo[i].pu / (articulo[i].iva_porc/100 + 1);
-      else
-        iva_articulo = articulo[i].pu * (articulo[i].iva_porc/100);
-      iva += (iva_articulo * articulo[i].cant);
-
-      tax_item[0] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_0/100 + 1);
-      tax_item[1] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_1/100 + 1);
-      tax_item[2] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_2/100 + 1);
-      tax_item[3] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_3/100 + 1);
-      tax_item[4] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_4/100 + 1);
-      tax_item[5] = articulo[i].pu - articulo[i].pu / (articulo[i].tax_5/100 + 1);
-      for (j=0; j<maxtax; j++)
-        tax[j] += (tax_item[j] * articulo[i].cant);
-
-      show_subtotal(subtotal, iva, subtotal+(!iva_incluido*iva));
-      articulo[++i].cant = 1;
-    }
-  }
-  while (i<maxitemr &&  articulo[i].cant);
-  move(getmaxy(stdscr)-2,0);
-  deleteln();
-  if (i && !articulo[i-1].cant)
-    i--;
-  *numart = i;
-  for (j=0; j<(*numart); j++) {
-    articulo[j].utilidad = ((articulo[j].pu - articulo[j].p_costo) * articulo[j].cant);
-    *util += (articulo[j].utilidad);
-    if (iva_incluido)
-      iva_articulo = articulo[j].pu - articulo[j].pu / (articulo[j].iva_porc/100 + 1);
-    else
-      iva_articulo = articulo[j].pu * (articulo[j].iva_porc/100);
-    tax_item[0] = articulo[j].pu - articulo[j].pu / (articulo[j].tax_0/100 + 1);
-    tax_item[1] = articulo[j].pu - articulo[j].pu / (articulo[j].tax_1/100 + 1);
-    tax_item[2] = articulo[j].pu - articulo[j].pu / (articulo[j].tax_2/100 + 1);
-    tax_item[3] = articulo[j].pu - articulo[j].pu / (articulo[j].tax_3/100 + 1);
-    tax_item[4] = articulo[j].pu - articulo[j].pu / (articulo[j].tax_4/100 + 1);
-    tax_item[5] = articulo[j].pu - articulo[j].pu / (articulo[j].tax_5/100 + 1);
-  }
-
-  if (i) {
-    attrset(COLOR_PAIR(amarillo_sobre_negro));
-    attron(A_BOLD);
-    mvprintw(getmaxy(stdscr)-5,0, "Total a pagar: %.2f", subtotal+(!iva_incluido*iva)); /* Sale total */
-    attroff(A_BOLD);
-    attrset(COLOR_PAIR(blanco_sobre_negro));
-    clrtoeol();
-  }
-
-  free(buff);
-  free(buff2);
-#ifdef _SERIAL_COMM
-  if (lector_serial)
-    close_serial(fd, &oldtio);
-#endif
-  return(subtotal+(!iva_incluido*iva));
-}
-
-/****************************************************************************/
-
 int forma_de_pago(double *recibo, double *dar)
 {
   char opcion;
@@ -1967,6 +1451,11 @@ void print_ticket_footer(struct tm fecha, unsigned numventa, long folio, int ser
   fprintf(impr,"  %2d/%2d/%2d a las %2d:%2d:%2d hrs.\n",
         fecha.tm_mday, (fecha.tm_mon)+1, fecha.tm_year, fecha.tm_hour,
         fecha.tm_min, fecha.tm_sec);
+  if (caja_virtual > 0)
+    fprintf(impr, "Caja: %d. ", caja_virtual);
+  else
+    fprintf(impr, "Caja única. ");
+  fprintf(impr, "Cajero %d", id_teller);
   fprintf(impr, "Nota num. %ld, serie %c. Venta %u\n", folio, 'A'+serie-1, numventa);
   fpie = fopen(nmfpie,"r");
   if (!fpie) {
@@ -2011,7 +1500,7 @@ void print_ticket_header(char *nm_ticket_header) {
     fprintf(stderr,"del archivo %s\n", nm_ticket_header);
     fprintf(impr,
      "Sistema OsoPOS, programa Remision %s en\n",vers);
-    fprintf(impr,"un sistema Linux ventas@elpuntodeventa.com\n");
+    fprintf(impr,"un sistema Linux. elpuntodeventa.com\n");
   }
   else {
     do {
@@ -2136,10 +1625,12 @@ void aviso_existencia(struct articulos art)
   }
 }
 
+/************************************************/
 void Termina(PGconn *con, PGconn *con_s, int error)
 {
-  fprintf(stderr, "Error número %d encontrado, abortando...",errno);
-  PQfinish(con);
+  fprintf(stderr, "Error número %d encontrado, abortando...",error);
+  if (con != NULL)
+    PQfinish(con);
   PQfinish(con_s);
   exit(errno);
 }
@@ -2151,34 +1642,6 @@ void mensaje(char *texto)
   mvprintw(getmaxy(stdscr)-1,0, texto);
   attrset(COLOR_PAIR(blanco_sobre_negro));
   clrtoeol();
-}
-
-void mensaje_v(char *texto, int tecla)
-{
-  WINDOW *v_mens;
-  PANEL  *pan = 0;
-
-  int vx = 60;
-  int vy = 5; /* Dimensiones horizontal y vertical de la ventana */
-  int t=0;
-
-  pan = mkpanel(COLOR_BLACK, vy, vx, (getmaxy(stdscr)-vy)/2, (getmaxx(stdscr)-vx)/2);
-  set_panel_userptr(pan, "pan");
-
-  v_mens = panel_window(pan);
-  box(v_mens, 0, 0);
-
-  show_panel(pan);
-
-  attrset(COLOR_PAIR(azul_sobre_blanco));
-  mvwprintw(v_mens, 2,1, texto);
-  attrset(COLOR_PAIR(blanco_sobre_negro));
-  clrtoeol();
-  while (tecla!=t)
-    t = wgetch(v_mens);
-
-  wrefresh(v_mens);
-  rmpanel(pan);
 }
 
 long obten_num_venta(PGconn *base)
@@ -2255,7 +1718,7 @@ int clean_journal(char *marked_items_fname) {
     return(OK);
 }
 
-int  check_for_journal(char *dirname) {
+int  check_for_journal(char *dirname, char *program_name) {
   DIR *dir;
   struct dirent *dir_ent;
   FILE *p_cmd;
@@ -2433,7 +1896,8 @@ int busqueda_articulo(char *codigo)
   int num_items = 0;
   int ch, finished = 0;
   char descr[mxbuff];
-  char *aux, b[255];
+  char *aux;
+  gchar *b;
   char *cod[maxitem_busqueda];
 
   vx = 70;
@@ -2441,6 +1905,7 @@ int busqueda_articulo(char *codigo)
   x = 1;
   y = 1;
   max_v_desc = vx - maxcod - 15;
+  b = g_malloc(255);
   pan = mkpanel(COLOR_BLACK, vy, vx, (getmaxy(stdscr)-vy)/2, (getmaxx(stdscr)-vx)/2);
   set_panel_userptr(pan, "pan");
 
@@ -2470,14 +1935,13 @@ int busqueda_articulo(char *codigo)
       cod[j] = calloc(1, maxcod+1);
       strcpy(cod[j], barra[i].codigo);
 
+      g_snprintf(b, max_v_desc, "%s", barra[i].desc);
       if (strlen(barra[i].desc) >= max_v_desc) {
-        strncpy(b,  barra[i].desc, max_v_desc);
         b[max_v_desc] = 0;
       }
       else {
-        strncpy(b,  barra[i].desc, max_v_desc);
         while (strlen(b) < max_v_desc)
-          strcat(b, " ");
+          b = g_strdup_printf("%s ", b);
       }
 
       sprintf(item[j], "%-15s %s %9.2f %.2f", cod[j], b, barra[i].pu, barra[i].exist);
@@ -2557,6 +2021,7 @@ int busqueda_articulo(char *codigo)
   wrefresh(v_busq);
   rmpanel(pan);
   free(aux);
+  g_free(b);
   echo();
   return(num_items);
 }
@@ -2828,7 +2293,7 @@ int form_virtualize(WINDOW *w, int readchar, int c)
     }
 }
 
-int busca_art_marcado(char *cod, struct articulos art[maxart], int campo, int ren) {
+int busca_art_marcado(char *cod, struct articulos art[maxarts], int campo, int ren) {
   /* Valores posibles de campo:
      0: Búsqueda en art.codigo
      1: Búsqueda en art.serie
@@ -2896,7 +2361,7 @@ int selecciona_caja_virtual(PGconn *con, int num_cajas)
 
 
   scrollok(v_selecc, TRUE);
-  box(v_selecc, 0, 0);
+  //  box(v_selecc, 0, 0);
 
   aux = calloc(1, mxbuff);
 
@@ -2911,13 +2376,14 @@ int selecciona_caja_virtual(PGconn *con, int num_cajas)
     mvwprintw(v_selecc, v_selecc->_cury+1, 1, "%s", item[j]);
   }
 
+  box(v_selecc, 0, 0);
   wrefresh(v_selecc);
 
   if (num_cajas) {
     i = 0;
     noecho();
     keypad(v_selecc, TRUE);
-    muestra_renglon(v_selecc, y, x, FALSE, 0, num_cajas);
+    muestra_renglon(v_selecc, y, x, FALSE, i, num_cajas);
     while (!finished)
       {
         switch(ch = wgetch(v_selecc)) {
@@ -2976,12 +2442,27 @@ int selecciona_caja_virtual(PGconn *con, int num_cajas)
   rmpanel(pan);
   free(aux);
   echo();
-  return(i);
+  return(i+1);
+}
+/********************************************************/   
+
+int read_db_config(PGconn *con)
+{
+  char *buf;
+
+
+  buf = lee_config(con, "ALMACEN");
+  if (buf != NULL)
+    almacen = atoi(buf);
+
+
+
+
 }
 
 /********************************************************/   
 
-int read_pos_config(PGconn *con, unsigned num_caja)
+void read_pos_config(PGconn *con, unsigned num_caja)
 {
   /* Valores aceptados de num_caja
      0:  No existen cajas virtuales se lee configuración general
@@ -2990,7 +2471,8 @@ int read_pos_config(PGconn *con, unsigned num_caja)
   lp_disp_ticket = g_strdup_printf(lee_config_pos(con, num_caja, "COLA_TICKET"));
   strcpy(tipo_disp_ticket, lee_config_pos(con, num_caja, "MINIIMPRESORA_TIPO"));
   strcpy(cmd_lp, lee_config_pos(con, num_caja, "IMPRESION_COMANDO"));
-         /*lee_config_pos(con, num_caja, "MINIIMPRESORA_AUTOCUTTER");
+  almacen = atoi(lee_config_pos(con, num_caja, "ALMACEN"));
+  /*lee_config_pos(con, num_caja, "MINIIMPRESORA_AUTOCUTTER");
   lee_config_pos(con, num_caja, "ALMACEN");
   lee_config_pos(con, num_caja, "SCANNER_PUERTOSERIE");
   lee_config_pos(con, num_caja, "DIVISA");
@@ -3008,7 +2490,7 @@ int read_pos_config(PGconn *con, unsigned num_caja)
 int main(int argc, char *argv[]) {
   static char buffer, buf[255];
   static char encabezado1[mxbuff],
-      encabezado2[mxbuff] = "Eduardo I. Osorio H., 1999-2006 soporte@elpuntodeventa.com";
+      encabezado2[mxbuff] = "Eduardo I. Osorio H., 1999-2006 soporte en elpuntodeventa.com";
   FILE *impr_cmd;
   time_t tiempo;        
   static int dgar;
@@ -3024,8 +2506,13 @@ int main(int argc, char *argv[]) {
   time_t f_entrega, f_pedido; /* Para control de rentas */
   int id_cliente = 0;
   int num_cajas_virtuales = 0;
+  struct usuario usr;
+  char *login, *pass;
 
-  program_name = argv[0];
+  login = calloc(1,mxbuff);
+  pass = calloc(1,mxbuff);
+
+  es_remision = strstr(argv[0], "remision") == NULL ? FALSE : TRUE;
   buf[0] = 0;
 
   tiempo = time(NULL);
@@ -3037,6 +2524,24 @@ int main(int argc, char *argv[]) {
   read_general_config();
   read_global_config();
   read_config();
+
+  for (i=1; i<argc; i++) {
+    if (!strcmp(argv[i], "-h")) {
+      db.hostname =  g_strdup_printf("%s", argv[i+1]);
+      i++;
+    }
+    else if (!strcmp(argv[i], "-p")) {
+      db.hostport =  g_strdup_printf("%s", argv[i+1]);
+      i++;
+    }
+    else if (!strcmp(argv[i], "-m")) {
+      if(!strcmp(argv[i+1], "carrito"))
+        es_remision = FALSE;
+      i++;
+    }
+    else
+      db.name = g_strdup_printf("%s", argv[i]);
+  }    
   initscr();
   if (!has_colors()) {
     aborta("Este equipo no puede producir colores, pulse una tecla para abortar...",
@@ -3058,28 +2563,35 @@ int main(int argc, char *argv[]) {
     aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
             ERROR_SQL);
   }
-  //  con = Abre_Base(db.hostname, db.hostport, NULL, NULL, "osopos", log_name, "");
-  if (db.passwd == NULL) {
-    db.passwd = calloc(1, mxbuff);
-    obten_passwd(db.user, db.passwd);
+
+  usr.login = g_strdup(obten_login());
+  usr.passwd = g_strdup(obten_passwd(usr.login));
+  i = verif_passwd(con_s, usr.login, usr.passwd);
+
+  if (i == FALSE) {
+    aborta("Nombre de usuario/contraseña incorrecto\n", ERROR_DIVERSO);
   }
-  con = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.user, db.passwd); 
+
+  /* Proximamente desapareceremos esta llamada */
+  con = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.sup_user, db.sup_passwd); 
   if (con == NULL) {
     aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
             ERROR_SQL);
   }
 
-  if ((num_cajas_virtuales = atoi(lee_config(con, "CAJAS_VIRTUALES"))) > 0)
-    caja_virtual = selecciona_caja_virtual(con, num_cajas_virtuales);
+  read_db_config(con_s);
+
+  if ((num_cajas_virtuales = atoi(lee_config(con_s, "CAJAS_VIRTUALES"))) > 0)
+    caja_virtual = selecciona_caja_virtual(con_s, num_cajas_virtuales);
   else
     caja_virtual = 0;
-  read_pos_config(con, caja_virtual);
+  read_pos_config(con_s, caja_virtual);
 
   //  num_venta = obten_num_venta(nm_num_venta);
-  num_venta = obten_num_venta(con);
+  num_venta = obten_num_venta(con_s);
 
   if (!serial_num_enable && !catalog_search) {
-    numbarras = lee_articulos(con, con_s, almacen);
+    numbarras = lee_articulos(con_s, con_s, almacen);
     if (!numbarras) {
       mensaje("No hay artículos en la base de datos. Use el programa de inventarios primero");
       getch();
@@ -3091,7 +2603,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  numdivisas = lee_divisas(con);
+  numdivisas = lee_divisas(con_s);
   if (!numdivisas) {
     mensaje("No hay divisas en la base de datos. Use el programa de inventarios primero");
     getch();
@@ -3103,7 +2615,7 @@ int main(int argc, char *argv[]) {
   }
 
   sprintf(encabezado1, "OsoPOS - Módulo POS %s R.%s. Caja ", vers, release);
-  if (caja_virtual==0)
+  if (num_cajas_virtuales==0)
     sprintf(encabezado1, "%s ÚNICA", encabezado1);
   else
     sprintf(encabezado1, "%s %u", encabezado1, caja_virtual);
@@ -3127,21 +2639,26 @@ int main(int argc, char *argv[]) {
     mvprintw(1,(getmaxx(stdscr)-strlen(encabezado2))/2,
              "%s",encabezado2);
     attrset(COLOR_PAIR(blanco_sobre_negro));
-    a_pagar = item_capture(con, &numarts, &utilidad, tax, *fecha);
+    a_pagar = item_capture(con_s, &numarts, &utilidad, tax, *fecha, argv[0]);
 
 
     if (numarts && a_pagar) {
       attron(A_BOLD);
-      if (lease_mode)
-        mvprintw(getmaxy(stdscr)-2,0,"¿Expedir Nota de venta, Factura, Ticket, nota de Renta (N,F,T,R)? T\b");
+      if (es_remision) {
+        if (lease_mode)
+          mvprintw(getmaxy(stdscr)-2,0,"¿Expedir Nota de venta, Factura, Ticket, nota de Renta (N,F,T,R)? T\b");
+        else
+          mvprintw(getmaxy(stdscr)-2,0,"¿Expedir Nota de venta, Factura, Ticket (N,F,T)? T\b");
+      } 
       else
-        mvprintw(getmaxy(stdscr)-2,0,"¿Expedir Nota de venta, Factura, Ticket (N,F,T)? T\b");
+        mvprintw(getmaxy(stdscr)-2,0,"¿Carro virtual ó inventario Físico (C,F)? C\b");
 
       attroff(A_BOLD);
       buffer = toupper(getch());
       if (cnf_registrar_vendedor)
         id_vendedor = captura_vendedor();
-      formadepago = forma_de_pago(&importe_recibido, &cambio);
+      if (es_remision)
+        formadepago = forma_de_pago(&importe_recibido, &cambio);
 
       switch (buffer) {
         case 'N':
@@ -3152,10 +2669,10 @@ int main(int argc, char *argv[]) {
             clrtoeol();
             scanw("%d",&dgar);
           }
-          num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
+          num_venta = sale_register(con_s, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
                          _NOTA_MOSTRADOR, serie, &folio, *fecha, id_teller, 0, articulo, numarts, almacen);
           if (num_venta<0)
-            aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A',
+            aborta_remision(con_s, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A',
                             (int)num_venta);
             
           if (num_venta>0)
@@ -3180,10 +2697,10 @@ int main(int argc, char *argv[]) {
           impr_cmd = popen(buf, "w");
           pclose(impr_cmd);
         }
-        num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
+        num_venta = sale_register(con_s, con_s, "ventas", a_pagar, iva, tax, utilidad, formadepago,
                        _FACTURA, serie, &folio, *fecha, id_teller, 0, articulo, numarts, almacen);
         if (num_venta<0)
-          aborta_remision(con, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A',
+          aborta_remision(con_s, con_s, "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A',
                           (int)num_venta);
             
         if (num_venta>0)
@@ -3206,11 +2723,11 @@ int main(int argc, char *argv[]) {
       case 'R':
         if (lease_mode) {
           datos_renta(&id_cliente, &f_pedido, &f_entrega);
-          registra_renta(con, con_s, "rentas", id_cliente, f_pedido, f_entrega, 
+          registra_renta(con_s, con_s, "rentas", id_cliente, f_pedido, f_entrega, 
                          articulo, numarts);
 
-          imprime_fechas_renta(con, con_s, &f_pedido, &f_entrega);
-          print_customer_data(con, con_s, id_cliente);
+          imprime_fechas_renta(con_s, con_s, &f_pedido, &f_entrega);
+          print_customer_data(con_s, con_s, id_cliente);
           print_ticket_arts(importe_recibido, cambio);
           sprintf(buf, "%s %s %s", cmd_lp, lp_disp_ticket, nm_disp_ticket);
           impr_cmd = popen(buf, "w");
@@ -3261,11 +2778,11 @@ int main(int argc, char *argv[]) {
           pclose(impr_cmd);
           unlink(nm_disp_ticket);
         }
-        num_venta = sale_register(con, con_s, "ventas", a_pagar, iva, tax, utilidad,
+        num_venta = sale_register(con_s, con_s, "ventas", a_pagar, iva, tax, utilidad,
                                    formadepago, _TEMPORAL, serie, &folio, *fecha,
                                    id_teller, id_vendedor, articulo, numarts, almacen);
         if (num_venta<0)
-          aborta_remision(con, con_s,
+          aborta_remision(con_s, con_s,
                           "ERROR AL REGISTRAR VENTA, PRESIONE \'A\' PARA ABORTAR...", 'A',
                           (int)num_venta);
 
@@ -3291,7 +2808,7 @@ int main(int argc, char *argv[]) {
         pclose(impr_cmd);
         break;
       }
-      if (actualiza_existencia(con, fecha)) {
+      if (es_remision && actualiza_existencia(con_s, fecha)) {
         mensaje("Baja existencia de productos. Aprieta una tecla para seguir...");
         getch();
       }

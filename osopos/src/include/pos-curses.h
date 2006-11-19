@@ -37,7 +37,9 @@ int wgetkeystrokes(WINDOW *, char *, int);
 FIELD *CreaEtiqueta(int frow, int fcol, NCURSES_CONST char *label);
 FIELD *CreaCampo(int frow, int fcol, int ren, int cols, int colores);
 int my_form_driver(FORM *form, int c);
-int obten_passwd(char *usuario, char *passwd);
+char *obten_login();
+char *obten_passwd(char *usuario);
+void mensaje_v(char *texto, int colores_txt, int t);  /* Abre una ventana con mensaje */
 
 /*********************************************************************/
 
@@ -248,15 +250,64 @@ rmpanel(PANEL * pan)
 }				/* end of rmpanel */
 
 
-int obten_passwd(char *usuario, char *passwd)
+char *obten_login()
 {
-  char p[mxbuff];
+  char *u;
 
-  mvprintw(getmaxy(stdscr)-3,0, "Contraseña de base de datos para %s: ", usuario);
+  u = calloc(1,mxbuff);
+
+  mvprintw(getmaxy(stdscr)-3,0, "Usuario: ");
   clrtoeol();
   noecho();
-  getnstr(p, mxbuff);
+  getnstr(u, mxbuff-1);
   echo();
-  strcpy(passwd, p);
-  return(OK);
+  return(u);
 }
+
+char *obten_passwd(char *login)
+{
+  char *p;
+
+  p = calloc(1,mxbuff);
+
+  mvprintw(getmaxy(stdscr)-3,0, "Contraseña: ");
+  clrtoeol();
+  noecho();
+  getnstr(p, mxbuff-1);
+  echo();
+  move(getmaxy(stdscr)-3,0);
+  clrtoeol();
+  return(p);
+}
+
+void mensaje_v(char *texto, int txt_colores, int tecla)
+{
+  WINDOW *v_mens;
+  PANEL  *pan = 0;
+  attr_t v_attr;
+  short  v_colores;
+
+  int vx = 70;
+  int vy = 5; /* Dimensiones horizontal y vertical de la ventana */
+  int t=0;
+
+  pan = mkpanel(COLOR_BLACK, vy, vx, (getmaxy(stdscr)-vy)/2, (getmaxx(stdscr)-vx)/2);
+  set_panel_userptr(pan, "pan");
+
+  v_mens = panel_window(pan);
+
+  wattr_get(v_mens, &v_attr, &v_colores, void);
+  wattrset(v_mens, COLOR_PAIR(txt_colores));
+  mvwprintw(v_mens, 2,1, texto);
+  wattrset(v_mens, v_attr);
+  wclrtoeol(v_mens);
+  box(v_mens, 0, 0);
+  show_panel(pan);
+
+  while (tecla!=t)
+    t = wgetch(v_mens);
+
+  wrefresh(v_mens);
+  rmpanel(pan);
+}
+

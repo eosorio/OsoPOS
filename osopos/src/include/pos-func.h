@@ -369,6 +369,10 @@ int lee_venta(PGconn *base,
 
 /*********************************************************************/
 
+/********* PENDIENTE. COLOCAR EN ESTA FUNCIÓN LAS BAJAS DE NUMEROS DE SERIES Y SU REGISTRO
+********** EN LA TABLA ventas_arts_series
+**********************************************************************/
+
 int sale_register(PGconn *base, PGconn *base_sup,
                   char *tabla,
                   double monto,
@@ -1071,7 +1075,10 @@ char *lee_config(PGconn *db_con, char *variable) {
     return(NULL);
   }
 
-  return(PQgetvalue(res, 0, 0));
+  if (PQntuples(res) > 0)
+    return(PQgetvalue(res, 0, 0));
+
+  return(NULL);
 }
 
 char *lee_config_pos(PGconn *db_con, unsigned id_pos, char *variable) {
@@ -1087,6 +1094,8 @@ char *lee_config_pos(PGconn *db_con, unsigned id_pos, char *variable) {
     PQclear(res);
     return(NULL);
   }
+  if (PQntuples(res) > 0)
+    return(PQgetvalue(res, 0, 0));
 
-  return(PQgetvalue(res, 0, 0));
+  return(NULL);
 }

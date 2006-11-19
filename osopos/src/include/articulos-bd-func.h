@@ -23,9 +23,9 @@ int lee_articulos(PGconn *base_inventario, PGconn *con_s, short almacen)
   nCampos = PQnfields(res);
 
   for (i=0; i < PQntuples(res) && i<mxmembarra; i++) {
-    strncpy(barra[i].codigo , PQgetvalue(res,i,0), maxcod);
-    strncpy(barra[i].codigo2 , PQgetvalue(res,i,2), maxcod);
-    strncpy(barra[i].desc, PQgetvalue(res,i,1), maxdes);
+    strncpy(barra[i].codigo , PQgetvalue(res,i,0), maxcod-1);
+    strncpy(barra[i].codigo2 , PQgetvalue(res,i,2), maxcod-1);
+    strncpy(barra[i].desc, PQgetvalue(res,i,1), maxdes-1);
 
     barra[i].pu  = atof(PQgetvalue(res,i, 3));
     barra[i].pu2 = atof(PQgetvalue(res,i, 4));
@@ -110,9 +110,9 @@ int find_db_code(PGconn *con, char *cod, struct articulos *art, int wday, short 
     return(ERR_ITEM);
   }
 
-  strncpy(art->codigo , PQgetvalue(res,0,0), maxcod);
-  strncpy(art->codigo2 , PQgetvalue(res,0,2), maxcod);
-  strncpy(art->desc, PQgetvalue(res,0,1), maxdes);
+  strncpy(art->codigo , PQgetvalue(res,0,0), maxcod-1);
+  strncpy(art->codigo2 , PQgetvalue(res,0,2), maxcod-1);
+  strncpy(art->desc, PQgetvalue(res,0,1), maxdes-1);
 
   art->pu  = atof(PQgetvalue(res,0, 3));
   art->pu2 = atof(PQgetvalue(res,0, 4));
@@ -223,7 +223,7 @@ int actualiza_carrito(PGconn *base_inv, struct tm *fecha) {
     pu = articulo[i].pu;
     if (search_product(base_inv, tabla, "codigo", articulo[i].codigo, TRUE, &articulo[i]) != OK) {
       sprintf(buf, "Artículo %s no existente en almacen", articulo[i].codigo);
-      mensaje_v(buf, ESC);
+      mensaje_v(buf, amarillo_sobre_azul, ESC);
       continue;
     }
 
@@ -233,7 +233,7 @@ int actualiza_carrito(PGconn *base_inv, struct tm *fecha) {
       sprintf(buf, "Error al actualizar artículo %s %s en carrito\n",
               articulo[i].codigo, articulo[i].desc);
       fprintf(stderr, buf);
-      mensaje_v(buf, ESC);
+      mensaje_v(buf, azul_sobre_blanco, ESC);
     }
     PQclear(res);
   }

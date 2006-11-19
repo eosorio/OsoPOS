@@ -221,6 +221,13 @@ CREATE INDEX ventas_detalle_bkey ON ventas_detalle USING BTREE(id_venta,codigo);
 REVOKE ALL ON ventas_detalle FROM PUBLIC;
 GRANT SELECT ON ventas_detalle to GROUP osopos;
 
+CREATE TABLE ventas_arts_series (
+    id              int4 NOT NULL REFERENCES ventas (numero),
+    codigo          varchar(20),
+    serie           varchar(128),
+    UNIQUE(id,codigo,serie)
+);
+
 CREATE TABLE facturas_ingresos (
   "id"              SERIAL PRIMARY KEY,
   "fecha"           DATE,
@@ -300,8 +307,8 @@ GRANT SELECT ON telefonos_proveedores TO GROUP osopos;
 
 CREATE TABLE users (
   "id"           SERIAL PRIMARY KEY NOT NULL,
-  "user"         varchar(10) NOT NULL,
-  "passwd"       varchar(32) DEFAULT '',
+  "user"         varchar(32) NOT NULL,
+  "passwd"       varchar(256) DEFAULT '',
   "level"        int NOT NULL DEFAULT 0,
   "name"         varchar(254)
 );
@@ -337,7 +344,7 @@ CREATE TABLE mov_inv (
   "id"          SERIAL PRIMARY KEY NOT NULL,
   "almacen"     int NOT NULL default 1,
   "tipo_mov"    int NOT NULL,
-  "usuario"     varchar(10) NOT NULL,
+  "usuario"     varchar(32) NOT NULL,
   "fecha_hora"  timestamp NOT NULL DEFAULT current_timestamp,
   "id_prov1"    int
 );
@@ -373,35 +380,59 @@ REVOKE ALL ON modulo_perfil FROM PUBLIC;
 GRANT SELECT ON modulo_perfil TO GROUP osopos;
 GRANT ALL ON modulo_perfil TO "scaja";
 
+CREATE TABLE modulo_grupo (
+  id             SERIAL PRIMARY KEY,
+  nombre         varchar(60)
+);
+COPY modulo_grupo FROM stdin;
+1	Inventarios
+2	Movimientos al inventario
+3	Operacion de caja
+4	Catalogo de clientes
+5	Administracion de usuarios
+\.
+
 CREATE TABLE modulo (
   "id"           SERIAL PRIMARY KEY,
   "nombre"       varchar(30) NOT NULL,
-  "desc"         varchar(60)
+  "desc"         varchar(60),
+  "grupo"        int2,
+  UNIQUE(id,nombre)
 );
 REVOKE ALL ON modulo FROM PUBLIC;
 GRANT SELECT ON modulo TO GROUP osopos;
 
-INSERT INTO modulo (nombre, "desc") VALUES ('invent_ver_pcosto', 'Inventarios. Ver precio de costo');
-INSERT INTO modulo (nombre, "desc") VALUES ('invent_ver_prov', 'Inventarios. Ver proveedores');
-INSERT INTO modulo (nombre, "desc") VALUES ('invent_borrar_item', 'Inventarios. Borrar item');
-INSERT INTO modulo (nombre, "desc") VALUES ('invent_cambiar_item', 'Inventarios. Modificar item');
-INSERT INTO modulo (nombre, "desc") VALUES ('invent_depto_renombrar', 'Inventarios. Renombrar departamento');
-INSERT INTO modulo (nombre, "desc") VALUES ('invent_general', 'Inventarios. Acceso general');
-INSERT INTO modulo (nombre, "desc") VALUES ('movinv_general', 'Mov. al inv. Acceso general');
-INSERT INTO modulo (nombre, "desc") VALUES ('movinv_compra', 'Mov. al inv. Registrar compras');
-INSERT INTO modulo (nombre, "desc") VALUES ('movinv_venta', 'Mov. al inv. Registrar ventas');
-INSERT INTO modulo (nombre, "desc") VALUES ('movinv_devventa', 'Mov. al inv. Registrar dev. de ventas');
-INSERT INTO modulo (nombre, "desc") VALUES ('movinv_devcompra', 'Mov. al inv. Registrar dev. compras');
-INSERT INTO modulo (nombre, "desc") VALUES ('movinv_merma', 'Mov. al inv. Registrar mermas');
-INSERT INTO modulo (nombre, "desc") VALUES ('movinv_tsalida', 'Mov. al inv. Registrar transferencia de salida');
-INSERT INTO modulo (nombre, "desc") VALUES ('movinv_tentrada', 'Mov. al inv. Registrar transferencia de entrada');
-INSERT INTO modulo (nombre, "desc") VALUES ('usuarios_general', 'Admin. de usuarios. Acceso general');
-INSERT INTO modulo (nombre, "desc") VALUES ('caja_cajon_manual', 'Operación de caja. Apertura manual de cajón de efectivo');
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_ver_pcosto', 'Inventarios. Ver precio de costo', 1);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_ver_prov', 'Inventarios. Ver proveedores', 1);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_borrar_item', 'Inventarios. Borrar item', 1);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_cambiar_item', 'Inventarios. Modificar item', 1);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_depto_renombrar', 'Inventarios. Renombrar departamento', 1);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_general', 'Inventarios. Acceso general', 1);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_fisico', 'Modificación directa de existencias (Inv. físico) ', 1);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_general', 'Mov. al inv. Acceso general', 2);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_compra', 'Mov. al inv. Registrar compras', 2);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_venta', 'Mov. al inv. Registrar ventas', 2);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_devventa', 'Mov. al inv. Registrar dev. de ventas', 2);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_devcompra', 'Mov. al inv. Registrar dev. compras', 2);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_merma', 'Mov. al inv. Registrar mermas', 2);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_tsalida', 'Mov. al inv. Registrar transferencia de salida', 2);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_tentrada', 'Mov. al inv. Registrar transferencia de entrada', 2);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('usuarios_general', 'Admin. de usuarios. Acceso general', 5);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('caja_cajon_manual', 'Operación de caja. Apertura manual de cajón de efectivo', 3);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('caja_descuento', 'Aplicar manualmente escala de precios', 3);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('caja_descuento_manual', 'Modificacion directa de precio', 3);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('clientes_consulta', 'Clientes. Consulta de clientes', 4);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('clientes_agregar', 'Clientes. Agregar clientes', 4);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('clientes_eliminar', 'Clientes. Eliminar clientes', 4);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('clientes_modificar', 'Clientes. Modificar datos de clientes', 4);
+
 
 CREATE TABLE modulo_usuarios (
   id           int NOT NULL DEFAULT 0,
-  usuario      VARCHAR(10) NOT NULL
+  usuario      VARCHAR(32) NOT NULL,
+  UNIQUE(id,usuario)
 );
+CREATE INDEX modulo_usuarios_bkey ON modulo_usuarios USING BTREE(id,usuario);
 REVOKE ALL ON modulo_usuarios FROM PUBLIC;
 GRANT SELECT ON modulo_usuarios TO GROUP osopos;
 
@@ -538,7 +569,7 @@ CREATE TABLE folios_notas_1 (
 
 
 CREATE TABLE carro_virtual (
-  usuario     varchar(10) NOT NULL,
+  usuario     varchar(32) NOT NULL,
   codigo      varchar(20) NOT NULL REFERENCES articulos,
   cant        int2 NOT NULL DEFAULT 1
 );
@@ -793,3 +824,24 @@ INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'MODO_RE
 INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'REGISTRAR_VENDEDOR', 'Se lleva registro de vendedores?', '0');
 INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'COLA_TICKET', 'Cola de impresión de tickets', 'ticket');
 
+CREATE TABLE articulos_proveedor (
+	id_prov		int2,
+	codigo		varchar(64),
+	descrip		varchar(256),
+	pu1			real,
+	pu2			real,
+	pu3			real,
+	pu4			real,
+	pu5			real,
+	id_divisa	int2,
+	iva_porc	real,
+	ex			real,
+	linea		int2,
+	cod_osopos  varchar(64)
+);
+
+CREATE TABLE lineas_proveedor (
+	id			int2,
+	id_prov		int2,
+	descrip		varchar(64)
+);
