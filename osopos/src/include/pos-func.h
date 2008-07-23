@@ -1,19 +1,19 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  pos-func.h 0.25-2 Biblioteca de funciones de OsoPOS.
-        Copyright (C) 1999-2002 Eduardo Israel Osorio Hernández
+        Copyright (C) 1999-2002 Eduardo Israel Osorio HernÃ¡ndez
 
         Este programa es un software libre; puede usted redistribuirlo y/o
-modificarlo de acuerdo con los términos de la Licencia Pública General GNU
-publicada por la Free Software Foundation: ya sea en la versión 2 de la
-Licencia, o (a su elección) en una versión posterior.
+modificarlo de acuerdo con los tÃ©rminos de la Licencia PÃºblica General GNU
+publicada por la Free Software Foundation: ya sea en la versiÃ³n 2 de la
+Licencia, o (a su elecciÃ³n) en una versiÃ³n posterior.
 
-        Este programa es distribuido con la esperanza de que sea útil, pero 
-SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
-DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
+        Este programa es distribuido con la esperanza de que sea Ãºtil, pero 
+SIN GARANTIA ALGUNA; incluso sin la garantÃ­a implÃ­cita de COMERCIABILIDAD o
+DE ADECUACION A UN PROPOSITO PARTICULAR. VÃ©ase la Licencia PÃºblica General
 GNU para mayores detalles.
 
-        Debería usted haber recibido una copia de la Licencia Pública General
-GNU junto con este programa; de no ser así, escriba a Free Software
+        DeberÃ­a usted haber recibido una copia de la Licencia PÃºblica General
+GNU junto con este programa; de no ser asÃ­, escriba a Free Software
 Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
  */
 
@@ -50,7 +50,7 @@ int lee_venta(PGconn *base,
               int num_venta,
               struct articulos art[maxarts]);
 
-/* Registra la venta en base de datos y devuelve el número de venta */
+/* Registra la venta en base de datos y devuelve el nÃºmero de venta */
 /* antes: registra_venta */
 int sale_register(PGconn *base, PGconn *base_sup,
                   char *tabla,
@@ -109,7 +109,7 @@ short busca_depto(PGconn *base, char *depto);
 /* Busca el id del departamento */
 
 short busca_id(PGconn *base, char *aguja, char *pajar, char *campo);
-  /* Busca el id de aguja en el catálogo pajar, contenida en campo */
+  /* Busca el id de aguja en el catÃ¡logo pajar, contenida en campo */
 
 PGresult *salida_almacen(PGconn *base, unsigned almacen, struct articulos art, char *usuario, struct tm *fecha);
 
@@ -117,7 +117,7 @@ int puede_hacer(PGconn *base, char *usuario, char *accion);
 /* Revisa si el usuario puede hacer accion */
 
 int checa_descuento(PGconn *base, int num_venta, int almacen);
-/* Revisa si se cobró el precio unitario original o si hubo descuento */
+/* Revisa si se cobrÃ³ el precio unitario original o si hubo descuento */
 
 /*********************************************************************/
 
@@ -173,7 +173,7 @@ char *interp_cant(int u, int d, int c) {
 
   }
 
-	/* Sección de decenas */
+	/* SecciÃ³n de decenas */
   switch (d) {
     case 1: 
       switch (u) { 
@@ -264,12 +264,12 @@ char *str_cant(double total,int *centavos) {
   buffer[0] = 0;
 
 
-  /* Obtención de millones */
+  /* ObtenciÃ³n de millones */
   divis = div(num1,1000000);
   millon = divis.quot;
   num1 = num1 - millon*1000000;
 
-  /* Obtención de centenas de miles */
+  /* ObtenciÃ³n de centenas de miles */
   divis = div(num1,100000);
   mcentena = divis.quot;
   num1 = num1 - mcentena*100000;
@@ -311,7 +311,7 @@ char *str_cant(double total,int *centavos) {
   else
     miles[0]=0;
   if (unidad || decena || centena)
-	/* Ignoro porque se mete basura a unidades cuando se manda como parámetro de función
+	/* Ignoro porque se mete basura a unidades cuando se manda como parÃ¡metro de funciÃ³n
 	   total=1  */
 	strncpy(unidades,interp_cant(unidad,decena,centena), mxchcant);
   else
@@ -369,7 +369,7 @@ int lee_venta(PGconn *base,
 
 /*********************************************************************/
 
-/********* PENDIENTE. COLOCAR EN ESTA FUNCIÓN LAS BAJAS DE NUMEROS DE SERIES Y SU REGISTRO
+/********* PENDIENTE. COLOCAR EN ESTA FUNCIÃ“N LAS BAJAS DE NUMEROS DE SERIES Y SU REGISTRO
 ********** EN LA TABLA ventas_arts_series
 **********************************************************************/
 
@@ -423,7 +423,7 @@ int sale_register(PGconn *base, PGconn *base_sup,
 	  fecha.tm_hour, fecha.tm_min, fecha.tm_sec);
   res = PQexec(base, query);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-    fprintf(stderr,"ERROR: no encuentro registro de la venta a las %d:%d:%d horas del día %d-%d-%d",
+    fprintf(stderr,"ERROR: no encuentro registro de la venta a las %d:%d:%d horas del dÃ­a %d-%d-%d",
 	    fecha.tm_hour, fecha.tm_min, fecha.tm_sec, fecha.tm_year, (fecha.tm_mon)+1, fecha.tm_mday);
     free(query);
     PQclear(res);
@@ -490,7 +490,7 @@ int sale_register(PGconn *base, PGconn *base_sup,
   res = PQexec(base_sup, query);
   /* Comparamos compatibilidad con versiones anteriores */
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr, "Error al registrar ventas. Actualize su versión.\n");
+    fprintf(stderr, "Error al registrar ventas. Actualize su versiÃ³n.\n");
     /* Tratamos de hacerlo al estilo antiguo */
     sprintf(query, "UPDATE ventas SET corte=B'%s' WHERE numero=%d", corte, num_venta);
     res = PQexec(base_sup, query);
@@ -643,7 +643,7 @@ PGresult *Agrega_en_Inventario(PGconn *base, char *tabla, struct articulos art)
           art.p_costo, art.prov_clave, art.iva_porc, art.divisa, art.codigo2);
   resultado = PQexec(base, query);
   if (PQresultStatus(resultado) != PGRES_COMMAND_OK) {
-    fprintf(stderr, "Error al registrar artículos.\n%s\n", query);
+    fprintf(stderr, "Error al registrar artÃ­culos.\n%s\n", query);
     free(query);
     return(resultado);
   }  
@@ -725,7 +725,7 @@ PGresult *Quita_de_Inventario(PGconn *base, char *tabla, char *codigo)
   comando_sql = "BEGIN";
   res = PQexec(base, comando_sql);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr, "Error, no se pudo comenzar la transacción para borrar\n");
+    fprintf(stderr, "Error, no se pudo comenzar la transacciÃ³n para borrar\n");
     fprintf(stderr, "Mensaje de error: %s\n", PQerrorMessage(base));
     return(res);
   }
@@ -741,7 +741,7 @@ PGresult *Quita_de_Inventario(PGconn *base, char *tabla, char *codigo)
 
   res = PQexec(base, "END");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr, "Error, no se pudo terminar la transacción para borrar\n");
+    fprintf(stderr, "Error, no se pudo terminar la transacciÃ³n para borrar\n");
     fprintf(stderr, "Mensaje de error: %s\n", PQerrorMessage(base));
   }
   return(res);
@@ -760,7 +760,7 @@ PGresult *Agrega_en_Carrito(PGconn *base, struct articulos art, char *usuario)
           usuario, art.codigo, art.cant);
   resultado = PQexec(base, query);
   if (PQresultStatus(resultado) != PGRES_COMMAND_OK) {
-    fprintf(stderr, "Error al agregar artículos en carrito.\n%s\n", query);
+    fprintf(stderr, "Error al agregar artÃ­culos en carrito.\n%s\n", query);
     free(query);
     return(resultado);
   }  
@@ -782,7 +782,7 @@ PGresult *search_product(PGconn *base,
 
   res = PQexec(base,"BEGIN");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-   fprintf(stderr,"Falló comando BEGIN al buscar en inventario\n");
+   fprintf(stderr,"FallÃ³ comando BEGIN al buscar en inventario\n");
    return(res);
   }
   PQclear(res);
@@ -797,7 +797,7 @@ PGresult *search_product(PGconn *base,
     sprintf(query, "%s WHERE al.%s~*'%s' AND ar.%s~*'%s'", query, campo, llave, campo, llave);
   res = PQexec(base, query);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr,"Fallo comando DECLARE CURSOR al buscar un artículo\n");
+    fprintf(stderr,"Fallo comando DECLARE CURSOR al buscar un artÃ­culo\n");
     fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
     free(query);
     return(res);
@@ -807,7 +807,7 @@ PGresult *search_product(PGconn *base,
   strcpy(query, "FETCH ALL in cursor_arts");
   res = PQexec(base, query);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-    fprintf(stderr,"comando FETCH ALL no regresó registros apropiadamente\n");
+    fprintf(stderr,"comando FETCH ALL no regresÃ³ registros apropiadamente\n");
     free(query);
     return(res);
   }
@@ -865,7 +865,7 @@ PGconn *Abre_Base( char *host_pg,
 
   con = PQsetdbLogin(host_pg, puerto_pg, opciones_pg, tty_pg, nombre_bd, login, passwd);
   if (PQstatus(con) == CONNECTION_BAD) {
-    msg = g_strdup_printf("Falló la conexión a la base '%s' .\n\r", nombre_bd);
+    msg = g_strdup_printf("FallÃ³ la conexiÃ³n a la base '%s' .\n\r", nombre_bd);
     fprintf(stderr, msg);
     msg = g_strdup_printf("Error: %s\n\r",PQerrorMessage(con));
     fprintf(stderr,msg);
@@ -919,7 +919,7 @@ short busca_proveedor(PGconn *base, char *proveedor) {
   
   res = PQexec(base, query);
   if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
-    fprintf(stderr,"Falló comando %s\n", query);
+    fprintf(stderr,"FallÃ³ comando %s\n", query);
     fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
 	PQclear(res);
     return(ERROR_SQL);
@@ -942,7 +942,7 @@ short busca_depto(PGconn *base, char *depto) {
   
   res = PQexec(base, query);
   if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
-    fprintf(stderr,"Falló comando %s\n", query);
+    fprintf(stderr,"FallÃ³ comando %s\n", query);
     fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
 	PQclear(res);
     return(ERROR_SQL);
@@ -965,7 +965,7 @@ short busca_movinvent(PGconn *base, char *movimiento) {
   
   res = PQexec(base, query);
   if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
-    fprintf(stderr,"Falló comando %s\n", query);
+    fprintf(stderr,"FallÃ³ comando %s\n", query);
     fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
 	PQclear(res);
     return(ERROR_SQL);
@@ -988,7 +988,7 @@ short busca_id(PGconn *base, char *aguja, char *pajar, char *campo) {
   
   res = PQexec(base, query);
   if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
-    fprintf(stderr,"Falló comando %s\n", query);
+    fprintf(stderr,"FallÃ³ comando %s\n", query);
     fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
 	PQclear(res);
     return(ERROR_SQL);
@@ -1050,7 +1050,7 @@ int lee_garantia(PGconn *base, struct articulos art[maxart], int numarts) {
 
     res = PQexec(base, query);
     if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
-      fprintf(stderr, "Error al consultar periodos de garantía\n");
+      fprintf(stderr, "Error al consultar periodos de garantÃ­a\n");
       fprintf(stderr,"Error: %s\n", PQerrorMessage(base));
       PQclear(res);
       return(ERROR_SQL);
@@ -1070,7 +1070,7 @@ char *lee_config(PGconn *db_con, char *variable) {
   sprintf(query, "SELECT valor FROM configuracion WHERE llave='%s'", variable);
   res = PQexec(db_con, query);
   if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
-    fprintf(stderr, "Error al consultar variables de configuración\n");
+    fprintf(stderr, "Error al consultar variables de configuraciÃ³n\n");
     PQclear(res);
     return(NULL);
   }
@@ -1089,7 +1089,7 @@ char *lee_config_pos(PGconn *db_con, unsigned id_pos, char *variable) {
           id_pos, variable);
   res = PQexec(db_con, query);
   if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
-    fprintf(stderr, "Error al consultar variables de configuración de la terminal virtual %u\n",
+    fprintf(stderr, "Error al consultar variables de configuraciÃ³n de la terminal virtual %u\n",
             id_pos);
     PQclear(res);
     return(NULL);
