@@ -1,21 +1,21 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
- Facturación 1.16. Módulo de facturación de OsoPOS.
+ FacturaciÃ³n 1.16. MÃ³dulo de facturaciÃ³n de OsoPOS.
 
-        Copyright (C) 1999-2003 Eduardo Israel Osorio Hernández
+        Copyright (C) 1999-2008 Eduardo Israel Osorio HernÃ¡ndez
 
         Este programa es un software libre; puede usted redistribuirlo y/o
-modificarlo de acuerdo con los términos de la Licencia Pública General GNU
-publicada por la Free Software Foundation: ya sea en la versión 2 de la
-Licencia, o (a su elección) en una versión posterior. 
+modificarlo de acuerdo con los tÃ©rminos de la Licencia PÃºblica General GNU
+publicada por la Free Software Foundation: ya sea en la versiÃ³n 2 de la
+Licencia, o (a su elecciÃ³n) en una versiÃ³n posterior. 
 
-        Este programa es distribuido con la esperanza de que sea útil, pero
-SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
-DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
+        Este programa es distribuido con la esperanza de que sea Ãºtil, pero
+SIN GARANTIA ALGUNA; incluso sin la garantÃ­a implÃ­cita de COMERCIABILIDAD o
+DE ADECUACION A UN PROPOSITO PARTICULAR. VÃ©ase la Licencia PÃºblica General
 GNU para mayores detalles. 
 
-        Debería usted haber recibido una copia de la Licencia Pública General
-GNU junto con este programa; de no ser así, escriba a Free Software
+        DeberÃ­a usted haber recibido una copia de la Licencia PÃºblica General
+GNU junto con este programa; de no ser asÃ­, escriba a Free Software
 Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA. 
 
 */
@@ -25,23 +25,18 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <dirent.h>
 #include <stdio.h>
 #include <termios.h>
-#include "include/pos-curses.h"
-#define _pos_curses
 #include <panel.h>
 #include <time.h>
 #include <values.h>
 #include <fcntl.h>
 #include <sys/signal.h>
 #include <sys/types.h>
+
+#include "include/factur-curses.h"
 #include "include/print-func.h"
 
 //#include "include/linucs.h"
 #include "include/electroh.h"
-
-#ifndef _form
-#include <form.h>
-#define _form
-#endif
 
 #define vers "1.16"
 /*
@@ -51,18 +46,6 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 */
 
 #define mxchcant 50
-
-#define CAMPO_RFC      1
-#define CAMPO_NOMBRE   2
-#define CAMPO_CALLE    4
-#define CAMPO_NEXT     6
-#define CAMPO_EDO     14
-#define CAMPO_CP      16
-#define CAMPO_FOLIO   22
-#define CAMPO_NUMVEN  24
-#define CAMPO_DIA     26
-#define CAMPO_MES     28
-#define CAMPO_ANIO    30
 
 
 #ifndef CTRL
@@ -79,14 +62,9 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define amarillo_sobre_azul 3
 
 
-int   EsEspaniol(char c);
-void  captura_cliente(PGconn *con, unsigned* num_venta, unsigned *folio_fact);
 int   captura_articulos();
 int   CaptObserv();
 void  imprime_factura();
-void  muestra_ayuda_cliente(int ren, int col);
-void  muestra_cliente(int renglon, int columna, struct datoscliente cliente);
-
 
 /* Funciones que usan form.h */
 void  AjustaModoTerminal(void);
@@ -98,24 +76,6 @@ int   obs_form_virtualize(WINDOW *w);
 int   form_virtualize(WINDOW *w, int readchar, int c);
 //int   my_form_driver(FORM *form, int c);
 
-
-
-int EsEspaniol(char c) {
-  return(c=='á' || c=='é' || c== 'í' || c=='ó' ||
-  c=='ú' || c=='ñ' || c=='Ñ' || c=='ü' || c=='Ü');
-}
-
-void muestra_ayuda_cliente(int ren, int col) {
-  mvaddstr(ren,col,
-   "Las teclas de flecha mueven el cursor a traves del campo\n");
-  addstr("<Ctrl-Q>  Terminar de introducir datos    ");
-  addstr("<Ctrl-B>  Busca cliente por su RFC\n");
-  addstr("<Inicio>  Primer campo (rfc)           ");
-  addstr("<Fin>     Ultimo campo (fecha)\n");
-  addstr("<Intro>   Siguiente campo        \n");
-  addstr("<Ctrl-X>  Borra el campo                  ");
-  addstr("<Insert>  Sobreescribir/insertar\n");
-}
 
 int form_virtualize(WINDOW *w, int readchar, int c)
 {
@@ -232,190 +192,7 @@ int obs_form_virtualize(WINDOW *w)
 }
 
 
-void captura_cliente(PGconn *con, unsigned* num_venta, unsigned *folio_fact) {
-   WINDOW *ven;
-   FORM *forma;
-   FIELD *campo[31];
-   char etiqueta[mxbuff];
-   int  finished = 0, c, i;
-   int tam_ren, tam_col, pos_ren, pos_col;
-   char scp[16];
 
-  pos_ren = 1;
-  pos_col = 0;
-  strcpy(etiqueta,"Datos del cliente");
-
-  /* describe la forma */
-  campo[0] = CreaEtiqueta(2, 30, etiqueta);
-  campo[20] = CreaEtiqueta(4, 0, "Nombre o razon social:");
-  campo[CAMPO_NOMBRE] = CreaCampo(5, 0, 1, maxspc-1, amarillo_sobre_azul);
-  campo[3] = CreaEtiqueta(6, 0, "Calle:");
-  campo[CAMPO_CALLE] = CreaCampo(7, 0, 1, maxspcalle-1, amarillo_sobre_azul);
-  campo[5] = CreaEtiqueta(6, maxspcalle, "Num. Ext.:");
-  campo[CAMPO_NEXT] = CreaCampo(7, maxspcalle, 1, maxspext-1, amarillo_sobre_azul);
-  campo[7] = CreaEtiqueta(6, maxspcalle+maxspext+1, "Int");
-  campo[8] = CreaCampo(7, maxspcalle+maxspext+1, 1, maxspint-1, amarillo_sobre_azul);
-  campo[9] = CreaEtiqueta(8, 0, "Colonia:");
-  campo[10] = CreaCampo(9, 0, 1, maxspcol-1, amarillo_sobre_azul);
-  campo[11] = CreaEtiqueta(10, 0, "Ciudad:");
-  campo[12] = CreaCampo(11, 0, 1, maxspcd-1, amarillo_sobre_azul);
-  campo[13] = CreaEtiqueta(10, maxspcd+1, "Estado:");
-  campo[CAMPO_EDO] = CreaCampo(11, maxspcd+1, 1, maxspedo-1, amarillo_sobre_azul);
-  campo[15] = CreaEtiqueta(10, maxspcd+maxspedo+2, "C.P.:");
-  campo[CAMPO_CP] = CreaCampo(11, maxspcd+maxspedo+2, 1, 5, amarillo_sobre_azul);
-  campo[17] = CreaEtiqueta(12, 0, "C.U.R.P.");
-  campo[18] = CreaCampo(13, 0, 1, maxcurp-1, amarillo_sobre_azul);
-  campo[19] = CreaEtiqueta(12, maxcurp+1, "R.F.C.:");
-  campo[CAMPO_RFC] = CreaCampo(13, maxcurp+1, 1, maxrfc-1, amarillo_sobre_azul);
-  campo[21] = CreaEtiqueta(0, 0, "Folio:");
-  campo[CAMPO_FOLIO] = CreaCampo(0, 6, 1, 5, amarillo_sobre_azul);
-  campo[23] = CreaEtiqueta(0, 24, "# venta:");
-  campo[CAMPO_NUMVEN] = CreaCampo(0, 33, 1, 8, amarillo_sobre_azul);
-  campo[25] = CreaEtiqueta(0, 55, "Fecha:");
-  campo[CAMPO_DIA] = CreaCampo(0, 62, 1, 2, amarillo_sobre_azul);
-  campo[27] = CreaEtiqueta(0, 64, "/");
-  campo[CAMPO_MES] = CreaCampo(0, 65, 1, 2, amarillo_sobre_azul);
-  campo[29] = CreaEtiqueta(0, 67, "/");
-  campo[CAMPO_ANIO] = CreaCampo(0, 68, 1, 2, amarillo_sobre_azul);
-  campo[31] = (FIELD *)0;
-
-  set_field_type(campo[CAMPO_DIA], TYPE_INTEGER, 2, 1, 31);
-  set_field_type(campo[CAMPO_MES], TYPE_NUMERIC, 0, 1, 12);
-
-
-  forma = new_form(campo);
-
-  /* Calcula y coloca la etiqueta a la mitad de la forma */
-  scale_form(forma, &tam_ren, &tam_col);
-  campo[0]->fcol = (unsigned) ((tam_col - strlen(etiqueta)) / 2);
-  campo[23]->fcol = (unsigned) ((tam_col - 17) / 2);
-  campo[CAMPO_NUMVEN]->fcol = (unsigned) (campo[23]->fcol + 9);
-  campo[25]->fcol = (unsigned) (tam_col - 15); /* Fecha */
-  campo[CAMPO_DIA]->fcol = (unsigned) (campo[25]->fcol + 7); /* Dia */
-  campo[27]->fcol = (unsigned) (campo[CAMPO_DIA]->fcol + 2); 
-  campo[CAMPO_MES]->fcol = (unsigned) (campo[27]->fcol + 1); /* Mes */
-  campo[29]->fcol = (unsigned) (campo[CAMPO_MES]->fcol + 2);
-  campo[CAMPO_ANIO]->fcol = (unsigned) (campo[29]->fcol + 1); /* Año */
-
-  sprintf(scp, "%2d", fecha.dia);
-  if (scp[0] == ' ') scp[0] = '0';
-  set_field_buffer(campo[CAMPO_DIA], 0, scp);
-  sprintf(scp, "%2d",fecha.mes);
-  if (scp[0] == ' ') scp[0] = '0';
-  set_field_buffer(campo[CAMPO_MES], 0, scp);
-  sprintf(scp, "%2d",fecha.anio-2000);
-  if (scp[0] == ' ') scp[0] = '0';
-  set_field_buffer(campo[CAMPO_ANIO], 0, scp);
-
-  sprintf(scp, "%u", *num_venta);
-  set_field_buffer(campo[CAMPO_NUMVEN], 0, scp);
-  sprintf(scp, "%u", *folio_fact);
-  set_field_buffer(campo[CAMPO_FOLIO], 0, scp);
-
-  muestra_ayuda_cliente(tam_ren+pos_ren+3,0);
-  refresh();
-
-  MuestraForma(forma, pos_ren, pos_col);
-  ven = form_win(forma);
-  raw();
-
-  /* int form_driver(FORM forma, int cod) */
-  /* acepta el código cod, el cual indica la acción a tomar en la forma */
-  /* hay algunos codigos en la función form_virtualize(WINDOW w) */
-
-  while (!finished)
-  {
-    switch(form_driver(forma, c = form_virtualize(ven, TRUE, 0))) {
-    case E_OK:
-      break;
-    case E_UNKNOWN_COMMAND:
-      if (c == CTRL('B')) {
-        strcpy(cliente.rfc,campo[1]->buf);
-        if (!BuscaCliente(cliente.rfc, &cliente, con)) {
-          set_field_buffer(campo[CAMPO_NOMBRE], 0, cliente.nombre);
-          set_field_buffer(campo[4], 0, cliente.dom_calle);
-          set_field_buffer(campo[6], 0, cliente.dom_numero);
-          set_field_buffer(campo[8], 0, cliente.dom_inter);
-          set_field_buffer(campo[10], 0, cliente.dom_col);
-          set_field_buffer(campo[12], 0, cliente.dom_ciudad);
-          set_field_buffer(campo[14], 0, cliente.dom_edo);
-          sprintf(scp, "%5u", cliente.cp);
-          set_field_buffer(campo[16], 0, scp);
-
-          set_field_buffer(campo[18], 0, cliente.curp);
-        }
-        else
-          set_field_buffer(campo[CAMPO_NOMBRE], 0, "Nuevo registro");
-      }
-      else if (!EsEspaniol(c))
-        finished = my_form_driver(forma, c);
-      else
-        waddch(ven, c);
-      break;
-    default:
-
-        beep();
-      break;
-    }
-  }
-
-  BorraForma(forma);
-
-  for (i=2; i<=8; i+=2)
-    if (campo[i]->buf[ strlen(campo[i]->buf)-1 ] == ' ')
-      campo[i]->buf[ strlen(campo[i]->buf)-1 ] = 0;
-
-  strncpy(cliente.nombre, campo[CAMPO_NOMBRE]->buf, maxspc);
-  limpiacad(cliente.nombre, TRUE);
-  strncpy(cliente.dom_calle,campo[CAMPO_CALLE]->buf, maxspcalle);
-  limpiacad(cliente.dom_calle, TRUE);
-  strncpy(cliente.dom_numero,campo[6]->buf, maxspext);
-  limpiacad(cliente.dom_numero, TRUE);
-  strncpy(cliente.dom_inter,campo[8]->buf, maxspint);
-  limpiacad(cliente.dom_inter, TRUE);
-  strncpy(cliente.dom_col,campo[10]->buf, maxspcol);
-  limpiacad(cliente.dom_col, TRUE);
-  strncpy(cliente.dom_ciudad,campo[12]->buf, maxspcd);
-  limpiacad(cliente.dom_ciudad, TRUE);
-  strncpy(cliente.dom_edo,campo[14]->buf, maxspedo);
-  limpiacad(cliente.dom_edo, TRUE);
-  cliente.cp = atoi(campo[16]->buf);
-  strncpy(cliente.curp,campo[18]->buf, maxcurp);
-  limpiacad(cliente.curp, TRUE);
-  strncpy(cliente.rfc,campo[1]->buf, maxrfc);
-  limpiacad(cliente.rfc, TRUE);
-  *folio_fact = atoi(campo[CAMPO_FOLIO]->buf);
-  *num_venta = atoi(campo[CAMPO_NUMVEN]->buf);
-  fecha.dia = atoi(campo[CAMPO_DIA]->buf);
-  fecha.mes = atoi(campo[CAMPO_MES]->buf);
-  fecha.anio = atoi(campo[CAMPO_ANIO]->buf)+2000;
-
-  free_form(forma);
-  for (c = 0; campo[c] != 0; c++)
-      free_field(campo[c]);
-  noraw();
-  echo();
-
-  attrset(COLOR_PAIR(normal));
-  move(5,0);
-  clrtobot();
-  raw();
-}
-
-void muestra_cliente(int renglon, int columna, struct datoscliente cliente)
-{
-  mvprintw(1+renglon, columna, "%s", cliente.nombre);
-  mvprintw(2+renglon, columna, "%s", cliente.dom_calle);
-  mvprintw(2+renglon, columna+maxspcalle+1, "%s", cliente.dom_numero);
-  mvprintw(2+renglon, columna+maxspcalle+maxspext+2, "%s", cliente.dom_inter);
-  mvprintw(3+renglon, columna, "%s", cliente.dom_col);
-  mvprintw(3+renglon, columna+maxspcol+1, "%s", cliente.dom_ciudad);
-  mvprintw(3+renglon, columna+maxspcol+maxspcd+2, "%s", cliente.dom_edo);
-  mvprintw(3+renglon, columna+maxspcol+maxspcd+maxspedo+3, "%5u", cliente.cp);
-  mvprintw(4+renglon, columna, "%s", cliente.curp);
-  mvprintw(4+renglon, columna+maxcurp+1, "%s", cliente.rfc);
-  refresh();
-}
 
 
 /**********************************************************************/
@@ -478,8 +255,8 @@ int captura_articulos() {
   noecho();
 
   /* int form_driver(FORM forma, int cod) */
-  /* acepta el código cod, el cual indica la acción a tomar en la forma */
-  /* hay algunos codigos en la función form_virtualize(WINDOW w) */
+  /* acepta el cÃ³digo cod, el cual indica la acciÃ³n a tomar en la forma */
+  /* hay algunos codigos en la funciÃ³n form_virtualize(WINDOW w) */
 
   while (!finished)
   {
@@ -609,7 +386,7 @@ int CaptObserv(char *obs[maxobs], char *garantia) {
       werase(w_obs);
       box(w_obs, 0, 0);
       wattrset(w_obs, COLOR_PAIR(verde_sobre_negro));
-      mvwprintw(w_obs, 0, 2, "Garantía:");
+      mvwprintw(w_obs, 0, 2, "GarantÃ­a:");
       wattrset(w_obs, COLOR_PAIR(normal));
       wmove(w_obs, 2, 1);
       wgetstr(panel_window(pan_obs), garantia);
@@ -656,7 +433,7 @@ void Muestra_Factura(struct fech fecha,
     mvprintw(i+7+numarticulos, 0, "%s", obs[i]);
 
   if (strlen(garantia))
-    mvprintw(i+8+numarticulos+numobs, 0, "%s de garantía", garantia);
+    mvprintw(i+8+numarticulos+numobs, 0, "%s de garantÃ­a", garantia);
 
   mvprintw(i+10+numarticulos+numobs, 0, "%s--", str_cant(total,&centavos));
   mvprintw(i+11+numarticulos+numobs, 0, "pesos %2d/100 M.N.", centavos);
@@ -673,7 +450,7 @@ void imprime_factura() {
   char *comando;
   char buffer;
 
-  mvprintw(getmaxy(stdscr)-1, 0, "¿Imprimir factura (S/N)? S\b");
+  mvprintw(getmaxy(stdscr)-1, 0, "Â¿Imprimir factura (S/N)? S\b");
   buffer = toupper(getch());
   if ((buffer != 'S') && (buffer != '\n'))
     return;
@@ -697,7 +474,7 @@ void AjustaModoTerminal(void)
   keypad(stdscr, TRUE);
 }
 
-/* Se incluye esta función en pos-curses.h 
+/* Se incluye esta funciÃ³n en pos-curses.h 
 FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta)
 {
     FIELD *f = new_field(1, strlen(etiqueta), pren, pcol, 0, 0);
@@ -810,7 +587,7 @@ int main(int argc, char *argv[]) {
   clear(); */
 
   AjustaModoTerminal();
-  captura_cliente(con, &num_venta, &folio_fact);
+  captura_cliente(con, &num_venta, &folio_fact, fecha, cliente);
   muestra_cliente(0,0,cliente);
   if (num_venta)
     numarticulos = lee_venta(con, num_venta, art);
@@ -837,7 +614,7 @@ int main(int argc, char *argv[]) {
 
 /* BUGS:
 
-* Se puede provocar overflow en captura de descripcion de artículo
+* Se puede provocar overflow en captura de descripcion de artÃ­culo
 * Overflow en observaciones (mismo error)
 
 PENDIENTES:

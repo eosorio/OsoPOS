@@ -26,6 +26,10 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <panel.h>
 #define _panel
 
+#define normal 1
+#define verde_sobre_negro 2
+#define amarillo_sobre_azul 3
+
 char scan_terminator='\n';
 
 int ErrorArchivo(char *nmarch);
