@@ -215,7 +215,7 @@ struct datoscliente captura_cliente(PGconn *con,
   free_form(forma);
   for (c = 0; campo[c] != 0; c++)
       free_field(campo[c]);
-  noraw();
+  //  noraw();
   echo();
 
   attrset(COLOR_PAIR(normal));

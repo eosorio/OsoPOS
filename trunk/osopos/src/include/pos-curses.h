@@ -78,7 +78,7 @@ int wgetkeystrokes(WINDOW *w, char *input_str, int str_len) {
   int wait_flag = 1;
 #endif
 
-  noraw();
+  //  noraw();
   cbreak();
   noecho();
   //  scrollok(w, TRUE);
