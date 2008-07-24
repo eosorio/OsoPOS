@@ -44,6 +44,10 @@ factur: factur.c
 	${CC} -o ${BUILD_BINDIR}/factur.o factur.c ${GLIBLIBS} ${PGLIBS} ${FORMSLIBS}  \
 	${CURSESLIBS} ${PANELLIBS} -D_MOD_FACTUR -ggdb
 
+test-factur: test-captura-cliente.c
+	${CC} -o ${BUILD_BINDIR}/test.o test-captura-cliente.c ${GLIBLIBS} ${PGLIBS} ${FORMSLIBS}  \
+	${CURSESLIBS} ${PANELLIBS} -D_MOD_FACTUR -ggdb
+
 invent: invent.c
 	${CC} -o ${BUILD_BINDIR}/invent.o invent.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
 	${C_OSOPOS} -ggdb

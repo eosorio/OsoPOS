@@ -112,6 +112,7 @@ int init_config()
   db.user = calloc(1, strlen(log_name)+1);
   strcpy(db.user, log_name);
   db.sup_user = calloc(1, strlen("scaja")+1);
+  db.hostport = calloc(1, strlen("54320"));
 
   maxitemr = 6;
 
