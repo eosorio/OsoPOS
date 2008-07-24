@@ -73,108 +73,7 @@ void  AjustaModoTerminal(void);
 //void  MuestraForma(FORM *f, unsigned ren, unsigned col);
 //void  BorraForma(FORM *f);
 int   obs_form_virtualize(WINDOW *w);
-int   form_virtualize(WINDOW *w, int readchar, int c);
 //int   my_form_driver(FORM *form, int c);
-
-
-int form_virtualize(WINDOW *w, int readchar, int c)
-{
-  int  mode = REQ_INS_MODE;
-
-  if (readchar)
-    c = wgetch(w);
-
-  switch(c) {
-    case QUIT:
-    case ESCAPE:
-        return(MAX_FORM_COMMAND + 1);
-
-    case KEY_NEXT:
-    case CTRL('I'):
-    case CTRL('N'):
-    case CTRL('M'):
-    case KEY_ENTER:
-    case ENTER:
-        return(REQ_NEXT_FIELD);
-    case KEY_PREVIOUS:
-    case CTRL('P'):
-        return(REQ_PREV_FIELD);
-
-    case KEY_HOME:
-        return(REQ_FIRST_FIELD);
-    case KEY_END:
-    case KEY_LL:
-        return(REQ_LAST_FIELD);
-
-    case CTRL('L'):
-        return(REQ_LEFT_FIELD);
-    case CTRL('R'):
-        return(REQ_RIGHT_FIELD);
-    case CTRL('U'):
-        return(REQ_UP_FIELD);
-    case CTRL('D'):
-        return(REQ_DOWN_FIELD);
-
-   case CTRL('W'):
-        return(REQ_NEXT_WORD);
-/*    case CTRL('B'):
-        return(REQ_PREV_WORD);*/
-    case CTRL('B'):
-      return(c);
-      break;
-    case CTRL('S'):
-        return(REQ_BEG_FIELD);
-    case CTRL('E'):
-        return(REQ_END_FIELD);
-
-    case KEY_LEFT:
-        return(REQ_LEFT_CHAR);
-    case KEY_RIGHT:
-        return(REQ_RIGHT_CHAR);
-    case KEY_UP:
-        return(REQ_UP_CHAR);
-    case KEY_DOWN:
-        return(REQ_DOWN_CHAR);
-
-/*    case CTRL('M'):
-        return(REQ_NEW_LINE);*/
-    /* case CTRL('I'):
-        return(REQ_INS_CHAR); */
-    case CTRL('O'):
-        return(REQ_INS_LINE);
-    case CTRL('V'):
-        return(REQ_DEL_CHAR);
-
-    case CTRL('H'):
-    case KEY_BACKSPACE:
-        return(REQ_DEL_PREV);
-    case CTRL('Y'):
-        return(REQ_DEL_LINE);
-    case CTRL('G'):
-        return(REQ_DEL_WORD);
-
-    case CTRL('C'):
-        return(REQ_CLR_EOL);
-    case CTRL('K'):
-        return(REQ_CLR_EOF);
-    case CTRL('X'):
-        return(REQ_CLR_FIELD);
-/*  case CTRL('A'):
-        return(REQ_NEXT_CHOICE); */
-    case CTRL('Z'):
-        return(REQ_PREV_CHOICE);
-
-    case 331: /* Insert en teclado para PC */
-    case CTRL(']'):
-        if (mode == REQ_INS_MODE)
-            return(mode = REQ_OVL_MODE);
-        else
-            return(mode = REQ_INS_MODE);
-
-    default:
-        return(c);
-    }
-}
 
 int obs_form_virtualize(WINDOW *w)
 {
@@ -587,7 +486,7 @@ int main(int argc, char *argv[]) {
   clear(); */
 
   AjustaModoTerminal();
-  captura_cliente(con, &num_venta, &folio_fact, fecha, cliente);
+  cliente = captura_cliente(con, &num_venta, &folio_fact, fecha);
   muestra_cliente(0,0,cliente);
   if (num_venta)
     numarticulos = lee_venta(con, num_venta, art);
