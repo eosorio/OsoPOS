@@ -1,34 +1,36 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
-   OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Corte 0.13 (C) 1999-2004 E. Israel Osorio H.
-   desarrollo@elpuntodeventa.com
-   Lea el archivo README, COPYING y LEAME que contienen información
+   OsoPOS Sistema auxiliar en punto de venta para pequeÃ±os negocios
+   Programa Corte 0.14 (C) 1999-2009 E. Israel Osorio H.
+   eduardo.osorio.ict  arr-o-ba  gmail.com
+   Lea el archivo README, COPYING y LEAME que contienen informaciÃ³n
    sobre la licencia de uso de este programa
 
      Este programa es un software libre; puede usted redistribuirlo y/o
-modificarlo de acuerdo con los términos de la Licencia Pública General GNU
-publicada por la Free Software Foundation: ya sea en la versión 2 de la
-Licencia, o (a su elección) en una versión posterior.
+modificarlo de acuerdo con los tÃ©rminos de la Licencia PÃºblica General GNU
+publicada por la Free Software Foundation: ya sea en la versiÃ³n 2 de la
+Licencia, o (a su elecciÃ³n) en una versiÃ³n posterior.
 
-     Este programa es distribuido con la esperanza de que sea útil, pero
-SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
-DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
+     Este programa es distribuido con la esperanza de que sea Ãºtil, pero
+SIN GARANTIA ALGUNA; incluso sin la garantÃ­a implÃ­cita de COMERCIABILIDAD o
+DE ADECUACION A UN PROPOSITO PARTICULAR. VÃ©ase la Licencia PÃºblica General
 GNU para mayores detalles.
 
-     Debería usted haber recibido una copia de la Licencia Pública General
-GNU junto con este programa; de no ser así, escriba a Free Software
+     DeberÃ­a usted haber recibido una copia de la Licencia PÃºblica General
+GNU junto con este programa; de no ser asÃ­, escriba a Free Software
 Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 */
 
 
 #include <stdio.h>
-#include "include/pos-curses.h"
 #include <time.h>
 #include <unistd.h>
+#include <glib.h>
 
-#define VERSION "0.13"
+#include "include/pos-curses.h"
+
+#define VERSION "0.14"
 #define blanco_sobre_negro 1
 #define amarillo_sobre_negro 2
 #define verde_sobre_negro 3
@@ -47,6 +49,17 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #ifndef maxbuf
 #define maxbuf 255
 #endif
+
+#define blanco_sobre_negro       1
+#define amarillo_sobre_negro     2
+#define verde_sobre_negro        3
+#define azul_sobre_blanco        4
+#define cyan_sobre_negro         5
+#define normal                   6
+#define amarillo_sobre_azul      7
+#define inverso                  8
+
+#include "include/pos-bd-func.h"
 
 double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad, double *iva,
                   double tax[maxtax], unsigned cashier_id, unsigned first_sale, unsigned last_sale);
@@ -69,26 +82,26 @@ struct db_data db;
 char *home_directory;
 char *log_name;
 char *nm_disp_ticket,           /* Nombre de impresora de ticket */
-  *lp_disp_ticket,      /* Definición de miniprinter en /etc/printcap */
+  *lp_disp_ticket,      /* DefiniciÃ³n de miniprinter en /etc/printcap */
   *disp_lector_serie,  /* Ruta al scanner de c. de barras serial */
-  *nmfpie,              /* Pie de página de ticket */
+  *nmfpie,              /* Pie de pÃ¡gina de ticket */
   *nmfenc,              /* Archivo de encabezado de ticket */
   *nmtickets,   /* Registro de tickets impresos */
   *tipo_disp_ticket, /* Tipo de miniprinter */
-  *nmimprrem,           /* Ubicación de imprrem */
-  *nm_factur,    /* Nombre del progreama de facturación */
+  *nmimprrem,           /* UbicaciÃ³n de imprrem */
+  *nm_factur,    /* Nombre del progreama de facturaciÃ³n */
   *nm_avisos,    /* Nombre del archivo de avisos */
   *nm_journal,   /* Nombre actual del archivo del diario de marcaje */
   *nm_orig_journal, /* Nombre del archivo del diario original */
   *nm_sendmail,  /* Ruta completa de sendmail */
-  *dir_avisos,   /* email de notificación */
+  *dir_avisos,   /* email de notificaciÃ³n */
   *asunto_avisos, /* Asunto del correo de avisos */
   *cc_avisos;     /* con copia para */
-char   s_divisa[3];       /* Designación de la divisa que se usa para cobrar en la base de datos */
-double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
-short unsigned search_2nd;  /* ¿Buscar código alternativo al mismo tiempo que el primario ? */ 
+char   s_divisa[3];       /* DesignaciÃ³n de la divisa que se usa para cobrar en la base de datos */
+double TAX_PERC_DEF; /* Porcentaje de IVA por omisiÃ³n */
+short unsigned search_2nd;  /* Â¿Buscar cÃ³digo alternativo al mismo tiempo que el primario ? */ 
 int id_teller = 0;
-short unsigned manual_discount; /* Aplicar el descuento manual de precio en la misma línea */
+short unsigned manual_discount; /* Aplicar el descuento manual de precio en la misma lÃ­nea */
 int iva_incluido;
 int listar_neto;
 
@@ -260,7 +273,7 @@ void clean_records(PGconn *base, long f_sale)
     sprintf(mensaje, "SELECT min(numero) FROM corte WHERE (bandera & B'01000000')!=B'01000000' ");
     res = PQexec(base, mensaje);
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-      fprintf(stderr, "Error, no puedo consultar número de primera venta\n");
+      fprintf(stderr, "Error, no puedo consultar nÃºmero de primera venta\n");
       fprintf(stderr, "Mensaje de error: %s\n", PQerrorMessage(base));
       return;
     }
@@ -274,7 +287,7 @@ void clean_records(PGconn *base, long f_sale)
     }
   }
   if (!f_sale) {
-    printw("No hay ventas en el día de hoy\n");
+    printw("No hay ventas en el dÃ­a de hoy\n");
     /* There are no records today */
   }
 
@@ -312,7 +325,7 @@ void marca_revisados(PGconn *base, int num_cajero, long f_sale)
     sprintf(mensaje, "SELECT min(numero) FROM corte WHERE (bandera & B'10000000')!=B'10000000' ");
     res = PQexec(base, mensaje);
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-      fprintf(stderr, "Error, no puedo consultar número de primera venta\n");
+      fprintf(stderr, "Error, no puedo consultar nÃºmero de primera venta\n");
       fprintf(stderr, "Mensaje de error: %s\n", PQerrorMessage(base));
       return;
     }
@@ -325,7 +338,7 @@ void marca_revisados(PGconn *base, int num_cajero, long f_sale)
 
   res = PQexec(base, "BEGIN");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr, "Error, no se pudo comenzar la transacción para actualizar\n");
+    fprintf(stderr, "Error, no se pudo comenzar la transacciÃ³n para actualizar\n");
     fprintf(stderr, "       registros de ventas\n");
     fprintf(stderr, "Mensaje de error: %s\n", PQerrorMessage(base));
     return;
@@ -348,13 +361,13 @@ void marca_revisados(PGconn *base, int num_cajero, long f_sale)
     clear();
     move(getmaxy(stdscr)/2, 0);
     if (strlen(mensaje)) {
-      printw("No se pudieron actualizar los registros del día.\n");
+      printw("No se pudieron actualizar los registros del dÃ­a.\n");
       /* Can't update daily records */
       printw("Mensaje de error: %s\n", mensaje);
       /* Error message: */
     }
     else {
-      printw("Se produjo un error inesperado al actualizar los registros del día...");
+      printw("Se produjo un error inesperado al actualizar los registros del dÃ­a...");
     }
     PQclear(res);
     mvprintw(getmaxy(stdscr)-1, 0, "Presione una tecla para continuar...");
@@ -365,7 +378,7 @@ void marca_revisados(PGconn *base, int num_cajero, long f_sale)
 
   res = PQexec(base, "END");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr, "Error, no se pudo terminar la transacción para actualizar\n");
+    fprintf(stderr, "Error, no se pudo terminar la transacciÃ³n para actualizar\n");
     fprintf(stderr, "Mensaje de error: %s\n", PQerrorMessage(base));
     return;
   }
@@ -492,7 +505,7 @@ char *procesa(char opcion, PGconn *con, FILE *disp)
       if (PQntuples(res))
         first_sale = atoi(PQgetvalue(res, 0, 0));
     genera_corte(FALSE, con, disp, 0, first_sale, 0);
-    sprintf(msg, "Corte de día generado.");
+    sprintf(msg, "Corte de dÃ­a generado.");
     break;
   case '2':
     sprintf(query, "SELECT min(numero) from corte where bandera&B'10000000'!=B'\10000000' ");
@@ -514,7 +527,7 @@ char *procesa(char opcion, PGconn *con, FILE *disp)
     sprintf(msg,  "Corte parcial generado.");
     break;
   case '3':
-    mvprintw(getmaxy(stdscr)-2, 0, "Indique el número del cajero a reportar: ");
+    mvprintw(getmaxy(stdscr)-2, 0, "Indique el nÃºmero del cajero a reportar: ");
     wgetnstr(stdscr, msg, mxbuff-1);
     /****** Catch the user error ******/
     cashier_num = atoi(msg);
@@ -522,10 +535,10 @@ char *procesa(char opcion, PGconn *con, FILE *disp)
     sprintf(msg,  "Corte parcial de cajero %d generado.", cashier_num);
     break;
   case '4':
-    printw("\n Número de primera venta: ");
+    printw("\n NÃºmero de primera venta: ");
     wgetnstr(stdscr, msg, mxbuff-1);
     first_sale = atoi(msg);
-    printw("Última venta (0 para todas las restantes): ");
+    printw("Ãšltima venta (0 para todas las restantes): ");
     wgetnstr(stdscr, msg, mxbuff-1);
     last_sale = atoi(msg);
     genera_corte(2, con, disp, 0, first_sale, last_sale);
@@ -537,7 +550,7 @@ char *procesa(char opcion, PGconn *con, FILE *disp)
   case '6': 
     sprintf(buff, "lpr -P %s %s", lp_printer, nm_file);
     system(buff);
-    sprintf(msg, "El corte se mandó a la cola de impresión %s.",
+    sprintf(msg, "El corte se mandÃ³ a la cola de impresiÃ³n %s.",
              lp_printer);
     break;
   case '7': 
@@ -560,7 +573,7 @@ char *procesa(char opcion, PGconn *con, FILE *disp)
 
 
 int read_config() {
-  char       nmconfig[maxbuf];
+  gchar      *nmconfig;
   FILE       *config;
   char       buf[maxbuf];
   char       *b;
@@ -571,32 +584,32 @@ int read_config() {
 
   strcpy(home_directory, getenv("HOME"));
 
-  sprintf(nmconfig, "%s/.osopos/corte.config", home_directory);
+  nmconfig = g_strdup_printf("%s/.osopos/corte.config", home_directory);
 
   config = fopen(nmconfig,"r");
-  if (!config) { /* No existe archivo de configuración de usuario */
+  if (!config) { /* No existe archivo de configuraciÃ³n de usuario */
     sprintf(nmconfig, "/etc/osopos/corte.config");
     config = fopen(nmconfig,"r");
   }
 
 
-  if (config) {		/* Si existe archivo de configuración */
+  if (config) {		/* Si existe archivo de configuraciÃ³n */
     b = buff;
     fgets(buff,sizeof(buff),config);
     while (!feof(config)) {
       buff [ strlen(buff) - 1 ] = 0;
 
-      if (!strlen(buff) || buff[0] == '#') { /* Linea vacía o coment. */
+      if (!strlen(buff) || buff[0] == '#') { /* Linea vacÃ­a o coment. */
         fgets(buff,sizeof(buff),config);
         continue;
       }
 
       strcpy(buf, strtok(buff,"="));
-	/* La función strtok modifica el contenido de la cadena buff	*/
+	/* La funciÃ³n strtok modifica el contenido de la cadena buff	*/
 	/* remplazando con NULL el argumento divisor (en este caso "=") */
 	/* por lo que b queda apuntando al primer token			*/
 
-	/* Busca parámetros de impresora */
+	/* Busca parÃ¡metros de impresora */
       if (!strcmp(b,"archivo_corte")) {
         strcpy(buf, strtok(NULL,"="));
         strcpy(nm_file,buf);
@@ -611,6 +624,28 @@ int read_config() {
         for (i=0; i<strlen(tipo_imp); i++)
           tipo_imp[i] = toupper(tipo_imp[i]);
       }
+      else if (!strcmp(b,"db.host")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.hostname, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.hostname,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
+      else if (!strcmp(b,"db.port")) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        aux = realloc(db.hostport, strlen(buf)+1);
+        if (aux != NULL) {
+          strcpy(db.hostport,buf);
+          aux = NULL;
+        }
+        else
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
+                  b);
+      }
       else if (!strcmp(b,"db.nombre")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(db.name, strlen(buf)+1);
@@ -622,26 +657,37 @@ int read_config() {
           fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
-      else if (!strcmp(b,"db.usuario")) {
+      else if (!strcmp(b,"db.sup_usuario")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.user, strlen(buf)+1);
+        aux = realloc(db.sup_user, strlen(buf)+1);
         if (aux != NULL) {
-          strcpy(db.user,buf);
+          strcpy(db.sup_user,buf);
           aux = NULL;
         }
         else
           fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
-      else if (!strcmp(b,"db.passwd")) {
+      else if (!strcmp(b,"db.sup_passwd")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        db.passwd = calloc(1, strlen(buf)+1);
-        if (db.passwd != NULL) {
-          strcpy(db.passwd,buf);
+        db.sup_passwd = calloc(1, strlen(buf)+1);
+        if (db.sup_passwd  != NULL) {
+          strcpy(db.sup_passwd,buf);
+          aux = NULL;
         }
         else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
+          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
                   b);
+      }
+      else if (!strcmp(b,"db.usuario")) {
+        g_free(db.user);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        db.user = g_strdup_printf("%s", buf);
+      }
+      else if (!strcmp(b,"db.passwd")) {
+        g_free(db.passwd);
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        db.passwd =  g_strdup_printf("%s", buf);
       }
       if (!feof(config))
         fgets(buff,mxbuff,config);
@@ -665,7 +711,7 @@ int read_global_config()
   strncpy(nmconfig, "/etc/osopos/corte.config", 255);
 
   config = fopen(nmconfig,"r");
-  if (config) {         /* Si existe archivo de configuración */
+  if (config) {         /* Si existe archivo de configuraciÃ³n */
     b = buff;
     fgets(buff,mxbuff,config);
     while (!feof(config)) {
@@ -676,11 +722,11 @@ int read_global_config()
         continue;
       }
       strncpy(buf, strtok(buff,"="), mxbuff);
-        /* La función strtok modifica el contenido de la cadena buff    */
+        /* La funciÃ³n strtok modifica el contenido de la cadena buff    */
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
-        /* Definición de impresora de ticket */
+        /* DefiniciÃ³n de impresora de ticket */
       if (!strcmp(b,"ticket")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nm_disp_ticket, strlen(buf)+1);
@@ -855,18 +901,17 @@ int read_global_config()
 
 int read_general_config()
 {
-  char *nmconfig;
+  gchar *nmconfig;
   FILE *config;
   char buff[mxbuff],buf[mxbuff];
   char *b;
   char *aux = NULL;
 
   
-  nmconfig = calloc(1, 255);
-  strncpy(nmconfig, "/etc/osopos/general.config", 255);
+  nmconfig = g_strdup_printf("/etc/osopos/general.config");
 
   config = fopen(nmconfig,"r");
-  if (config) {         /* Si existe archivo de configuración */
+  if (config) {         /* Si existe archivo de configuraciÃ³n */
     b = buff;
     fgets(buff,mxbuff,config);
     while (!feof(config)) {
@@ -877,11 +922,11 @@ int read_general_config()
         continue;
       }
       strncpy(buf, strtok(buff,"="), mxbuff);
-        /* La función strtok modifica el contenido de la cadena buff    */
+        /* La funciÃ³n strtok modifica el contenido de la cadena buff    */
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
-        /* Definición de impresora de ticket */
+        /* DefiniciÃ³n de impresora de ticket */
       if (!strcmp(b,"ticket")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nm_disp_ticket, strlen(buf)+1);
@@ -939,48 +984,24 @@ int read_general_config()
                   b);
       }
       else if (!strcmp(b,"db.port")) {
+        g_free(db.hostport);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.hostport, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(db.hostport,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.hostport =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"db.nombre")) {
+        g_free(db.name);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.name, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(db.name,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.name =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"db.sup_usuario")) {
+        g_free(db.sup_user);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.sup_user, strlen(buf)+1);
-        if (aux != NULL) {
-          strcpy(db.sup_user,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "remision. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.sup_user =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"db.sup_passwd")) {
+        g_free(db.sup_passwd);
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        db.sup_passwd = calloc(1, strlen(buf)+1);
-        if (db.sup_passwd  != NULL) {
-          strcpy(db.sup_passwd,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "corte. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.sup_passwd =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"porcentaje_iva")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
@@ -1053,13 +1074,13 @@ int read_general_config()
     fclose(config);
     if (aux != NULL)
       aux = NULL;
-    free(nmconfig);
+    g_free(nmconfig);
     b = NULL;
     return(0);
   }
   if (aux != NULL)
     aux = NULL;
-  free(nmconfig);
+  g_free(nmconfig);
   b = NULL;
   return(1);
 }
@@ -1103,7 +1124,13 @@ int main()
   PGconn    *con, *con_s;
   char      opcion;
   FILE      *disp;
+  struct usuario usr;
+  short i=0;
 
+  init_config();
+  read_general_config();
+  read_global_config();
+  read_config();
   initscr();
   if (!has_colors()) {
     mvprintw(getmaxy(stdscr)/2,0,
@@ -1115,55 +1142,69 @@ int main()
   }
   msg[0]=0;
 
-  init_config();
-  read_general_config();
-  read_global_config();
-  read_config();
+  start_color();
+  init_pair(blanco_sobre_negro, COLOR_WHITE, COLOR_BLACK);
+  init_pair(amarillo_sobre_negro, COLOR_YELLOW, COLOR_BLACK);
+  init_pair(verde_sobre_negro, COLOR_GREEN, COLOR_BLACK);
+  init_pair(azul_sobre_blanco, COLOR_BLUE, COLOR_WHITE);
+  init_pair(cyan_sobre_negro, COLOR_CYAN, COLOR_BLACK);
+  init_pair(amarillo_sobre_azul, COLOR_YELLOW, COLOR_BLUE);
+  init_pair(normal, COLOR_WHITE, COLOR_BLACK);
+  init_pair(inverso, COLOR_BLACK, COLOR_WHITE);
 
   con_s = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.sup_user, db.sup_passwd);
   if (con_s == NULL) {
     aborta("FATAL: Problemas al accesar la base de datos. Pulse una tecla para abortar...",
             ERROR_SQL);
   }
-  //  con = Abre_Base(db.hostname, db.hostport, NULL, NULL, "osopos", log_name, "");
-  if (db.passwd == NULL) {
-    db.passwd = calloc(1, mxbuff);
-    obten_passwd(db.user, db.passwd);
+  usr.login = g_strdup(obten_login());
+  usr.passwd = g_strdup(obten_passwd(usr.login));
+  i = verif_passwd(con_s, usr.login, usr.passwd);
+
+  if (i == FALSE) {
+    aborta("Nombre de usuario/contraseÃ±a incorrecto\n", ERROR_DIVERSO);
   }
 
-  con = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.user, db.passwd); 
+/*   con = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.user, db.passwd);  */
 
- if (!con) {
-    mvprintw(getmaxy(stdscr)/2, 0,
-      "ERROR FATAL: No se puede abrir la base de datos. Pulse una tecla para abortar...");
-    getch();
-    exit(SQL_ERROR);
+/*  if (!con) { */
+/*     mvprintw(getmaxy(stdscr)/2, 0, */
+/*       "ERROR FATAL: No se puede abrir la base de datos. Pulse una tecla para abortar..."); */
+/*     getch(); */
+/*     exit(SQL_ERROR); */
+/*   } */
+
+  if (!puede_hacer(con_s, usr.login, "caja_corte")) {
+    mensaje_v("No esta autorizado para hacer corte de caja. <Esc>", 
+              azul_sobre_blanco, ESC);
+    PQfinish(con_s);
+    exit(ERROR_DIVERSO);   
   }
 
-  mvprintw(getmaxy(stdscr)-2, 0, "\"corte\" se brinda SIN GARANTIA. Presione V para más información");
+  mvprintw(getmaxy(stdscr)-2, 0, "\"corte\" se brinda SIN GARANTIA. Presione V para mÃ¡s informaciÃ³n");
   move(0, 0);
   do {
-    printw("Programa de corte de caja, v. %s. (C) 1999-2004. E. Israel Osorio H.\n",
+    printw("Programa de corte de caja, v. %s. (C) 1999-2009. E. Israel Osorio H.\n",
            VERSION);
-    printw("soporte@elpuntodeventa.com\n\n");
+    printw("elpuntodeventa.com\n\n");
     mvprintw(getmaxy(stdscr)-1, 0, msg);
-    mvprintw( 3,1,"Indique la operación a realizar:");
+    mvprintw( 3,1,"Indique la operaciÃ³n a realizar:");
     mvprintw( 5,3,"1. Corte de dia");
     mvprintw( 6,3,"2. Corte parcial de ventas en general");
     mvprintw( 7,3,"3. Corte parcial por cajero");
-    mvprintw( 8,3,"4. Resumen general de ventas por número");
+    mvprintw( 8,3,"4. Resumen general de ventas por nÃºmero");
     mvprintw( 9,3,"5. Ver los reportes generados");
     mvprintw(11,3,"6. Imprimir los reportes generados");
     mvprintw(12,3,"7. Editar los reportes generados");
-    mvprintw(13,3,"8. Limpiar todos los registros de ventas (iniciar nuevo día)");
+    mvprintw(13,3,"8. Limpiar todos los registros de ventas (iniciar nuevo dÃ­a)");
     mvprintw(15,3,"V. Ver licencia de uso");
     mvprintw(18,3,"S. Salir");
-    mvprintw(20,1,"Opción: ");
+    mvprintw(20,1,"OpciÃ³n: ");
 
     msg[0] = 0;
     opcion = toupper(getch());
     if (opcion != 'S') {
-      strcpy(msg, procesa(opcion, con, disp));
+      strcpy(msg, procesa(opcion, con_s, disp));
       clear();
     }
   }
