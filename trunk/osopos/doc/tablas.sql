@@ -308,7 +308,7 @@ GRANT SELECT ON telefonos_proveedores TO GROUP osopos;
 CREATE TABLE users (
   "id"           SERIAL PRIMARY KEY NOT NULL,
   "user"         varchar(32) NOT NULL,
-  "passwd"       varchar(256) DEFAULT '',
+  "passwd"       varchar(512) DEFAULT '',
   "level"        int NOT NULL DEFAULT 0,
   "name"         varchar(254)
 );
