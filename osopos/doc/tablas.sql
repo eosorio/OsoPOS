@@ -1,3 +1,9 @@
+CREATE GROUP osopos;
+CREATE USER supervisor IN GROUP osopos;
+CREATE USER scaja IN GROUP osopos;
+
+CREATE USER osopos_p;
+
 CREATE TABLE articulos (
   codigo        varchar(20) PRIMARY KEY NOT NULL,
   descripcion   varchar(50) NOT NULL,
@@ -145,7 +151,7 @@ REVOKE ALL ON article_desc FROM PUBLIC;
 GRANT SELECT ON article_desc to GROUP osopos;
 GRANT ALL ON article_desc TO "scaja";
 
--- Cat·logo para el carrito de compras
+-- Cat√°logo para el carrito de compras
 
 CREATE TABLE compras (
   codigo        varchar(20) NOT NULL REFERENCES articulos,
@@ -172,7 +178,7 @@ CREATE TABLE forma_pago (
 );
 
 INSERT INTO forma_pago VALUES ( 1, 'Tarjeta');
-INSERT INTO forma_pago VALUES ( 2, 'CrÈdito');
+INSERT INTO forma_pago VALUES ( 2, 'Cr√©dito');
 INSERT INTO forma_pago VALUES (20, 'Efectivo');
 INSERT INTO forma_pago VALUES (21, 'Cheque');
 REVOKE ALL ON forma_pago FROM PUBLIC;
@@ -246,10 +252,18 @@ CREATE TABLE facturas_ingresos (
   "tax_2"           real not null default 0,
   "tax_3"           real not null default 0,
   "tax_4"           real not null default 0,
-  "tax_5"           real not null default 0
+  "tax_5"           real not null default 0,
+  "customer_id"	    int
 );
 REVOKE ALL ON facturas_ingresos FROM PUBLIC;
 GRANT SELECT ON facturas_ingresos to GROUP osopos;
+
+CREATE TABLE factura_ingresos_obs (
+       id              int NOT NULL PRIMARY KEY,
+       observaciones   varchar(512)
+);
+REVOKE ALL ON factura_ingresos_obs FROM PUBLIC;
+GRANT SELECT ON factura_ingresos_obs to GROUP osopos;
 
 CREATE TABLE fact_ingresos_detalle (
   id_factura        int4 not null,
@@ -303,7 +317,7 @@ CREATE TABLE telefonos_proveedor (
   "fax"          bool DEFAULT 'f'
 );
 REVOKE ALL ON telefonos_proveedor FROM PUBLIC;
-GRANT SELECT ON telefonos_proveedores TO GROUP osopos;
+GRANT SELECT ON telefonos_proveedor TO GROUP osopos;
 
 CREATE TABLE users (
   "id"           SERIAL PRIMARY KEY NOT NULL,
@@ -334,8 +348,8 @@ REVOKE ALL ON tipo_mov_inv FROM PUBLIC;
 GRANT SELECT ON tipo_mov_inv TO GROUP osopos;
 INSERT INTO tipo_mov_inv (nombre, entrada) VALUES ('Venta', 'F');
 INSERT INTO tipo_mov_inv (nombre, entrada) VALUES ('Compra', 'T');
-INSERT INTO tipo_mov_inv (nombre, entrada) VALUES ('DevoluciÛn de venta', 'T');
-INSERT INTO tipo_mov_inv (nombre, entrada) VALUES ('DevoluciÛn de compra', 'F');
+INSERT INTO tipo_mov_inv (nombre, entrada) VALUES ('Devoluci√≥n de venta', 'T');
+INSERT INTO tipo_mov_inv (nombre, entrada) VALUES ('Devoluci√≥n de compra', 'F');
 INSERT INTO tipo_mov_inv (nombre, entrada) VALUES ('Merma', 'F');
 INSERT INTO tipo_mov_inv (nombre, entrada) VALUES ('Transferencia (salida)', 'F');
 INSERT INTO tipo_mov_inv (nombre, entrada) VALUES ('Transferencia (entrada)', 'T');
@@ -371,15 +385,6 @@ REVOKE ALL ON perfiles FROM PUBLIC;
 GRANT SELECT ON perfiles TO GROUP osopos;
 GRANT ALL ON perfiles TO "scaja";
 
-CREATE TABLE modulo_perfil (
-  perfil       VARCHAR(30),
-  nombre       VARCHAR(30)
-);
-CREATE INDEX modulo_perfil_bkey ON modulo_perfil USING BTREE(perfil);
-REVOKE ALL ON modulo_perfil FROM PUBLIC;
-GRANT SELECT ON modulo_perfil TO GROUP osopos;
-GRANT ALL ON modulo_perfil TO "scaja";
-
 CREATE TABLE modulo_grupo (
   id             SERIAL PRIMARY KEY,
   nombre         varchar(60)
@@ -391,6 +396,15 @@ COPY modulo_grupo FROM stdin;
 4	Catalogo de clientes
 5	Administracion de usuarios
 \.
+
+CREATE TABLE modulo_perfil (
+  perfil       VARCHAR(30),
+  nombre       VARCHAR(30)
+);
+CREATE INDEX modulo_perfil_bkey ON modulo_perfil USING BTREE(perfil);
+REVOKE ALL ON modulo_perfil FROM PUBLIC;
+GRANT SELECT ON modulo_perfil TO GROUP osopos;
+GRANT ALL ON modulo_perfil TO "supervisor";
 
 CREATE TABLE modulo (
   "id"           SERIAL PRIMARY KEY,
@@ -408,7 +422,7 @@ INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_borrar_item', 'Invent
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_cambiar_item', 'Inventarios. Modificar item', 1);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_depto_renombrar', 'Inventarios. Renombrar departamento', 1);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_general', 'Inventarios. Acceso general', 1);
-INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_fisico', 'ModificaciÛn directa de existencias (Inv. fÌsico) ', 1);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('invent_fisico', 'Modificaci√≥n directa de existencias (Inv. f√≠sico) ', 1);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_general', 'Mov. al inv. Acceso general', 2);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_compra', 'Mov. al inv. Registrar compras', 2);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_venta', 'Mov. al inv. Registrar ventas', 2);
@@ -418,14 +432,13 @@ INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_merma', 'Mov. al inv.
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_tsalida', 'Mov. al inv. Registrar transferencia de salida', 2);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('movinv_tentrada', 'Mov. al inv. Registrar transferencia de entrada', 2);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('usuarios_general', 'Admin. de usuarios. Acceso general', 5);
-INSERT INTO modulo (nombre, "desc", grupo) VALUES ('caja_cajon_manual', 'OperaciÛn de caja. Apertura manual de cajÛn de efectivo', 3);
+INSERT INTO modulo (nombre, "desc", grupo) VALUES ('caja_cajon_manual', 'Operaci√≥n de caja. Apertura manual de caj√≥n de efectivo', 3);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('caja_descuento', 'Aplicar manualmente escala de precios', 3);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('caja_descuento_manual', 'Modificacion directa de precio', 3);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('clientes_consulta', 'Clientes. Consulta de clientes', 4);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('clientes_agregar', 'Clientes. Agregar clientes', 4);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('clientes_eliminar', 'Clientes. Eliminar clientes', 4);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('clientes_modificar', 'Clientes. Modificar datos de clientes', 4);
-
 
 CREATE TABLE modulo_usuarios (
   id           int NOT NULL DEFAULT 0,
@@ -467,7 +480,7 @@ CREATE TABLE articulos_rentas (
   pu5      float not null default 0,
   tiempo   float not null default 1, -- tiempo otorgado de renta, en unidades unidad_t
   unidad_t int NOT NULL default 2,
-  -- unidad_t: 0 = minutos, 1 = horas, 2 = dÌas, 3 = semanas, 4 = meses, 5 = aÒos
+  -- unidad_t: 0 = minutos, 1 = horas, 2 = d√≠as, 3 = semanas, 4 = meses, 5 = a√±os
   UNIQUE(codigo, dia)
 );
 REVOKE ALL ON articulos_rentas FROM PUBLIC;
@@ -475,7 +488,7 @@ REVOKE ALL ON articulos_rentas FROM PUBLIC;
 
 
 CREATE TABLE rentas_detalle (
-  id        int4 NOT NULL,           -- N˙mero de renta
+  id        int4 NOT NULL,           -- N√∫mero de renta
   serie     varchar(20) NOT NULL,    -- serie del producto
   f_entrega timestamp NOT NULL DEFAULT current_timestamp,      -- Fecha de entrega
   costo     float,
@@ -483,8 +496,8 @@ CREATE TABLE rentas_detalle (
   entregado   timestamp
 );
 
--- Cat·logo que define el significado de los bits "status"
--- en el cat·logo artÌculos_rentados
+-- Cat√°logo que define el significado de los bits "status"
+-- en el cat√°logo art√≠culos_rentados
 CREATE TABLE status_rentas_detalle (
   id       int2 PRIMARY KEY,
   nick     varchar(40),
@@ -535,14 +548,14 @@ CREATE TABLE cliente_trabajo (
   dom_tel_ext int2
 );
 
--- Cat·logo que define el significado de los bits "status"
--- en el cat·logo cliente
+-- Cat√°logo que define el significado de los bits "status"
+-- en el cat√°logo cliente
 CREATE TABLE status_cliente (
   id       int2 PRIMARY KEY,
   nick     varchar(40),
   descr    varchar(80)
 );
-INSERT INTO status_cliente (id, nick, descr) VALUES (1, 'Renta', 'Cuenta con artÌculos rentados sin devolver');
+INSERT INTO status_cliente (id, nick, descr) VALUES (1, 'Renta', 'Cuenta con art√≠culos rentados sin devolver');
 
 CREATE TABLE recup_costo (
   id          varchar(20),      -- Serie del producto
@@ -575,10 +588,93 @@ CREATE TABLE carro_virtual (
 );
 CREATE INDEX carro_virtual_bkey ON carro_virtual USING BTREE(usuario);
 
--- Cat·logo de compras y pedidos a proveedor (y posiblemente a clientes)
+CREATE TABLE articulos_garantias (
+  codigo   varchar(20) NOT NULL REFERENCES articulos,
+  tiempo   int NOT NULL,  -- unidad de tiempo de la garantia
+  unidad_t int NOT NULL default 2,
+  UNIQUE(codigo)
+);
+  
+-- Clientes
+CREATE SEQUENCE cliente_tipo_id_seq
+    START 1
+    INCREMENT 1
+    MAXVALUE 2147483647
+    MINVALUE 1
+    CACHE 1;
+
+CREATE TABLE cliente_tipo (
+  id    int2 DEFAULT nextval('cliente_tipo_id_seq'::text) PRIMARY KEY NOT NULL,
+  tipo  varchar(32)
+);
+
+CREATE SEQUENCE clientes_id_seq
+    START 1
+    INCREMENT 1
+    MAXVALUE 2147483647
+    MINVALUE 1
+    CACHE 1;
+                                                                                
+CREATE TABLE clientes (
+  id           int4 DEFAULT nextval('clientes_id_seq'::text) PRIMARY KEY NOT NULL,
+  nombres      varchar(64) NOT NULL,
+  ap_paterno   varchar(32),
+  ap_materno   varchar(32),
+  tipo_cliente int2 REFERENCES cliente_tipo (id),
+  sexo         char(1),
+  nombre_comer varchar(64),
+  rfc          varchar(13),
+  dom_principal int4,
+  email        varchar(128),
+  url          varchar(128),
+  telefono1    varchar(32),
+  telefono2    varchar(32),
+  fax          varchar(32),
+  contacto     varchar(128),
+  observaciones varchar(128)
+);
+
+-- Domicilios
+CREATE SEQUENCE domicilio_paises_id_seq
+    START 1
+    INCREMENT 1
+    MAXVALUE 2147483647
+    MINVALUE 1
+    CACHE 1;
+
+CREATE TABLE domicilio_paises (
+  id     int2 DEFAULT nextval('domicilio_paises_id_seq'::text) PRIMARY KEY NOT NULL,
+  nombre varchar(32) NOT NULL
+);
+INSERT INTO domicilio_paises (nombre) VALUES ('M√©xico');
+
+CREATE TABLE domicilio_estados (
+  id     int2 PRIMARY KEY NOT NULL,
+  nombre varchar(32) NOT NULL
+);
+
+CREATE TABLE domicilios (
+  id            SERIAL PRIMARY KEY NOT NULL,
+  id_cliente    int4 NOT NULL REFERENCES clientes(id),
+  dom_nombre    varchar(32),
+  dom_calle     varchar(64),
+  dom_numero    varchar(15),
+  dom_inter     varchar(25),
+  dom_col       varchar(64),
+  dom_mpo       varchar(32),
+  dom_ciudad    varchar(30) NOT NULL,
+  dom_edo_id    int2 REFERENCES domicilio_estados(id),
+  dom_cp        int4,
+  dom_pais_id   int2 REFERENCES domicilio_paises(id),
+  dom_telefono  varchar(32),
+  dom_contacto  varchar(32),
+  dom_notas     varchar(64)
+);
+
+-- Cat√°logo de compras y pedidos a proveedor (y posiblemente a clientes)
 CREATE TABLE pedido_p_cabecera (
   id          SERIAL PRIMARY KEY,
-  docto       int4 NOT NULL DEFAULT 0,
+  docto       varchar(20),
   id_prov     int2 NOT NULL,
   dom_entrega int4 NOT NULL REFERENCES domicilios,
   subtotal    float NOT NULL,
@@ -589,7 +685,7 @@ CREATE TABLE pedido_p_cabecera (
   id_usuario  int2 NOT NULL,
   fecha       timestamp NOT NULL DEFAULT current_timestamp,
   fecha_envio timestamp,
-  almacen     int2 NOT NULL DEFAULT 1, --Almacen en el que se recibe Û entrega
+  almacen     int2 NOT NULL DEFAULT 1, --Almacen en el que se recibe √≥ entrega
   tipo        int2 NOT NULL DEFAULT 1,
   fecha_pedido date NOT NULL,
   tipo_pago   int2 NOT NULL DEFAULT 1 REFERENCES forma_pago(id),
@@ -603,7 +699,8 @@ CREATE TABLE pedido_p_detalle(
   pu          float NOT NULL,
   descuento   float NOT NULL DEFAULT 0,
   iva         float NOT NULL DEFAULT 15,
-  guia        varchar(64)
+  guia        varchar(64),
+  UNIQUE (id,codigo)
 );
 CREATE INDEX pedido_p_detalle_bkey ON pedido_p_detalle USING BTREE(id);
 
@@ -636,88 +733,6 @@ CREATE TABLE pedido_c_detalle(
   guia        varchar(64)
 );
 CREATE INDEX pedido_c_detalle_bkey ON pedido_c_detalle USING BTREE(id);
-
-CREATE TABLE articulos_garantias (
-  codigo   varchar(20) NOT NULL REFERENCES articulos,
-  tiempo   int NOT NULL,  -- unidad de tiempo de la garantia
-  unidad_t int NOT NULL default 2,
-  UNIQUE(codigo)
-);
-  
-CREATE SEQUENCE domicilio_paises_id_seq
-    START 1
-    INCREMENT 1
-    MAXVALUE 2147483647
-    MINVALUE 1
-    CACHE 1;
-
-CREATE TABLE domicilio_paises (
-  id     int2 DEFAULT nextval('domicilio_paises_id_seq'::text) PRIMARY KEY NOT NULL,
-  nombre varchar(32) NOT NULL
-);
-INSERT INTO domicilio_paises (nombre) VALUES ('MÈxico');
-
-CREATE TABLE domicilio_estados (
-  id     int2 PRIMARY KEY NOT NULL,
-  nombre varchar(32) NOT NULL
-);
-
-CREATE TABLE domicilios (
-  id            SERIAL PRIMARY KEY NOT NULL,
-  id_cliente    int4 NOT NULL REFERENCES clientes(id),
-  dom_nombre    varchar(32),
-  dom_calle     varchar(64),
-  dom_numero    varchar(15),
-  dom_inter     varchar(25),
-  dom_col       varchar(64),
-  dom_mpo       varchar(32),
-  dom_ciudad    varchar(30) NOT NULL,
-  dom_edo_id    int2 REFERENCES domicilio_estados(id),
-  dom_cp        int4,
-  dom_pais_id   int2 REFERENCES domicilio_paises(id),
-  dom_telefono  varchar(32),
-  dom_contacto  varchar(32),
-  dom_notas     varchar(64)
-);
-
-CREATE SEQUENCE cliente_tipo_id_seq
-    START 1
-    INCREMENT 1
-    MAXVALUE 2147483647
-    MINVALUE 1
-    CACHE 1;
-                                                                                
-
-CREATE TABLE cliente_tipo (
-  id    int2 DEFAULT nextval('cliente_tipo_id_seq'::text) PRIMARY KEY NOT NULL,
-  tipo  varchar(32)
-);
-
-CREATE SEQUENCE clientes_id_seq
-    START 1
-    INCREMENT 1
-    MAXVALUE 2147483647
-    MINVALUE 1
-    CACHE 1;
-                                                                                
-CREATE TABLE clientes (
-  id           int4 DEFAULT nextval('clientes_id_seq'::text) PRIMARY KEY NOT NULL,
-  nombres      varchar(64) NOT NULL,
-  ap_paterno   varchar(32),
-  ap_materno   varchar(32),
-  tipo_cliente int2 REFERENCES cliente_tipo (id),
-  sexo         char(1),
-  nombre_comer varchar(64),
-  rfc          varchar(13),
-  dom_principal int4,
-  email        varchar(128),
-  url          varchar(128),
-  telefono1    varchar(32),
-  telefono2    varchar(32),
-  fax          varchar(32),
-  contacto     varchar(128),
-  observaciones varchar(128)
-);
 
 CREATE TABLE arts_lineas (
   id       SERIAL PRIMARY KEY NOT NULL,
@@ -770,8 +785,9 @@ CREATE TABLE "configuracion_grupo" (
   "visible" int2 default '1',
   PRIMARY KEY  ("id")
 );
-INSERT INTO configuracion_grupo VALUES (1, 'Directorios', 'InformaciÛn de la ruta de los directorios que usa OsoPOS', 1, 1);
-INSERT INTO configuracion_grupo VALUES (2, 'Impresoras', 'Colas de impresiÛn para emitir los diferentes documentos', 1, 1);
+INSERT INTO configuracion_grupo VALUES (1, 'Directorios', 'Informaci√≥n de la ruta de los directorios que usa OsoPOS', 1, 1);
+INSERT INTO configuracion_grupo VALUES (2, 'Impresoras', 'Colas de impresi√≥n para emitir los diferentes documentos', 1, 1);
+INSERT INTO configuracion_grupo VALUES (3, 'Facturaci√≥n', 'Par√°metros del m√≥dulo de facturaci√≥n', 1, 1);
 
 CREATE TABLE configuracion (
   id SERIAL NOT NULL,
@@ -786,43 +802,43 @@ CREATE TABLE configuracion (
   PRIMARY KEY (id)
 );
 
-INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Directorio principal', 'PWD_DIR', '/var/www/html/desarrollo/osopos-web', 'Directorio donde se instalÛ el sistema OsoPOS', 1);
+INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Directorio principal', 'PWD_DIR', '/var/www/html/desarrollo/osopos-web', 'Directorio donde se instal√≥ el sistema OsoPOS', 1);
 INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Dir. temporal', 'TMP_DIR', '/tmp', 'Directorio donde se generan los archivos temporales', 1);
-INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Directorio de im·genes', 'IMG_DIR', 'imagenes/articulos', 'Directorio de imagenes', 1);
+INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Directorio de im√°genes', 'IMG_DIR', 'imagenes/articulos', 'Directorio de imagenes', 1);
 
-INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Tickets', 'COLA_TICKET', 'ticket', 'Cola de impresiÛn para emisiÛn de tickets', 2);
-INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Notas de venta', 'COLA_NOTA', 'facturas', 'Cola de impresiÛn para emisiÛn de notas de venta', 2);
-INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Facturas', 'COLA_FACTUR', 'facturas', 'Cola de impresiÛn para emisiÛn de facturas', 2);
-INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Etiquetas', 'COLA_ETIQUETA', 'etiquetas', 'Cola de impresiÛn para impresora tÈrmica de etiquetas', 2);
-INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Predeterminada', 'COLA_DEFAULT', 'facturas', 'Cola de impresiÛn predeterminada', 2);
-INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Comando de impresiÛn', 'CMD_IMPRESION', 'lpr -l ', 'Comando de impresiÛn', 2);
-INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES
-('AlmacÈn por omisiÛn', 'ALM_DEF', 1, 'AlmacÈn por omisiÛn', 3);
+INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Tickets', 'COLA_TICKET', 'ticket', 'Cola de impresi√≥n para emisi√≥n de tickets', 2);
+INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Notas de venta', 'COLA_NOTA', 'facturas', 'Cola de impresi√≥n para emisi√≥n de notas de venta', 2);
+INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Facturas', 'COLA_FACTUR', 'facturas', 'Cola de impresi√≥n para emisi√≥n de facturas', 2);
+INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Etiquetas', 'COLA_ETIQUETA', 'etiquetas', 'Cola de impresi√≥n para impresora t√©rmica de etiquetas', 2);
+INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Predeterminada', 'COLA_DEFAULT', 'facturas', 'Cola de impresi√≥n predeterminada', 2);
+INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Comando de impresi√≥n', 'CMD_IMPRESION', 'lpr -l ', 'Comando de impresi√≥n', 2);
+INSERT into configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Facturas. Observaciones', 'FACTUR_OBS_DEFAULT', '30 d√≠as de garant√≠a', 'Observaciones por omisi√≥n en facturas', 3);
+INSERT INTO configuracion (titulo, llave, valor, descripcion, id_grupo) VALUES ('Almac√©n por omisi√≥n', 'ALM_DEF', 1, 'Almac√©n por omisi√≥n', 3);
 
 CREATE TABLE configuracion_pos (
   id_pos int4 NOT NULL default '0',
   llave varchar(64) NOT NULL default '',
   titulo varchar(64) NOT NULL default '',
   valor varchar(255) NOT NULL default '',
-  fecha_modificado timestamp default NULL default current_timestamp,
+  fecha_modificado timestamp DEFAULT current_timestamp,
   fecha_agregado timestamp NOT NULL default current_timestamp,
   UNIQUE(llave, id_pos)
 );
 CREATE INDEX configuracion_pos_bkey ON configuracion_pos USING BTREE(id_pos, llave);
 
-INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'MINIIMPRESORA_TIPO', 'Tipo de emulaciÛn de miniprinter', 'EPSON');
+INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'MINIIMPRESORA_TIPO', 'Tipo de emulaci√≥n de miniprinter', 'EPSON');
 INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'IMPRESION_COMANDO', 'Comando del sistema para imprimir', 'lpr -P ');
-INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'MINIIMPRESORA_AUTOCUTTER', 'Se usar· el corte autom·tico?', '0');
-INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'ALMACEN', 'N˙mero de almacÈn del que proviene la mercancÌa', '1');
+INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'MINIIMPRESORA_AUTOCUTTER', 'Se usar√° el corte autom√°tico?', '0');
+INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'ALMACEN', 'N√∫mero de almac√©n del que proviene la mercanc√≠a', '1');
 INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'SCANNER_PUERTOSERIE', 'En que puerto serial se encuentra el scanner?', '');
-INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'DIVISA', 'Divisa por omisiÛn', 'MXP');
+INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'DIVISA', 'Divisa por omisi√≥n', 'MXP');
 INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'LISTAR_PRECIO_NETO', 'Se muestra en pantalla el precio con impuestos incluidos?', '1');
 INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'DESGLOSAR_DESCUENTO', '', '0');
-INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'CAPTURAR_SERIE', 'Captura de n˙mero de serie en lugar de id. de producto?', '0');
-INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'CONSULTA_CATALOGO', 'Consulta producto de memoria o de cat·logo', '0');
+INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'CAPTURAR_SERIE', 'Captura de n√∫mero de serie en lugar de id. de producto?', '0');
+INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'CONSULTA_CATALOGO', 'Consulta producto de memoria o de cat√°logo', '0');
 INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'MODO_RENTA', 'En lugar de vender, se renta?', '0');
 INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'REGISTRAR_VENDEDOR', 'Se lleva registro de vendedores?', '0');
-INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'COLA_TICKET', 'Cola de impresiÛn de tickets', 'ticket');
+INSERT INTO configuracion_pos (id_pos, llave, titulo, valor) VALUES (0, 'COLA_TICKET', 'Cola de impresi√≥n de tickets', 'ticket');
 
 CREATE TABLE articulos_proveedor (
 	id_prov		int2,
