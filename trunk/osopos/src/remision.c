@@ -74,14 +74,15 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 #define blanco_sobre_negro       1
 #define amarillo_sobre_negro     2
-#define verde_sobre_negro        3
+//#define verde_sobre_negro        3
 #define azul_sobre_blanco        4
 #define cyan_sobre_negro         5
-#define normal                   6
-#define amarillo_sobre_azul      7
+//#define normal                   6
+//#define amarillo_sobre_azul      7
 #define inverso                  8
 
-/* Códigos de impresora */
+
+/* Printer codes */
 #define abre_cajon_star 7
 #ifndef ESC
 #define ESC 27
@@ -2568,7 +2569,10 @@ int main(int argc, char *argv[]) {
   usr.passwd = g_strdup(obten_passwd(usr.login));
   i = verif_passwd(con_s, usr.login, usr.passwd);
 
-  if (i == FALSE) {
+  if (i == ERROR_SQL) {
+    aborta("Error al consultar usuarios\n", ERROR_DIVERSO);
+  }
+  else if (i == FALSE) {
     aborta("Nombre de usuario/contraseña incorrecto\n", ERROR_DIVERSO);
   }
 

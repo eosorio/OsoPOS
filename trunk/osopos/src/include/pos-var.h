@@ -24,7 +24,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 
 #include <sys/types.h>
-#include <glib.h>
+//#include <glib.h>
 
 #if !defined(OK) || ((OK) != 0)
 #define OK      (0)

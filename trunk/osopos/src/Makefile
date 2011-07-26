@@ -5,7 +5,7 @@ CC = gcc -g -Wall
 
 PGLIBS = -lpq
 
-CRYPTLIBS = -lcrypt
+CRYPTLIBS = -lssl -lcrypto
 
 CURSESLIBS = -lncurses
 
