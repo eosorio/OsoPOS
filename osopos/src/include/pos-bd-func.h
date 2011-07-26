@@ -14,7 +14,7 @@ int verif_passwd(PGconn *con, gchar *login, gchar *passwd) {
   query = g_strdup_printf("SELECT passwd FROM users WHERE \"user\"='%s'", login);
   db_r = PQexec(con, query);
   if (PQresultStatus(db_r) !=  PGRES_TUPLES_OK) {
-    fprintf(stderr, "ERROR: no puedo consultar contraseñas.\n");
+    fprintf(stderr, "ERROR: El usuario %s no puede consultar usuarios.\n", PQuser(con));
     PQclear(db_r);
     return(ERROR_SQL);
   }
