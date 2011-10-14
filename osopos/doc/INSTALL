@@ -1,0 +1,16 @@
+How to install
+
+* Be sure to have running a postrgesql server and accepting TCP connections
+* If the server is a remote server, make sure there is a line in pg_hba.conf
+  for user scaja, database osopos and the IP address for the clients
+* Create database group osopos
+* Create user scaja in group osopos
+* Create database osopos with ownership scaja
+* Create tables with the command
+  	 psql osopos < tablas.sql
+	-- OR --
+	psql -h servername -U scaja osopos < tablas.sql
+* Make the general config files under /etc/osopos
+  (check the manuales section)
+* Insert a privileged user into table users. This user will do updates on tables
+  in the field password insert a SHA1 encoded string
