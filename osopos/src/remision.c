@@ -1,23 +1,23 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
-   OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
+   OsoPOS Sistema auxiliar en punto de venta para pequeÃ±os negocios
    Programa Remision 1.47 (C) 1999-2006 E. Israel Osorio H.
    eosorioh en gmail punto com
-   Lea el archivo README, COPYING y LEAME que contienen información
+   Lea el archivo README, COPYING y LEAME que contienen informaciÃ³n
    sobre la licencia de uso de este programa
 
      Este programa es un software libre; puede usted redistribuirlo y/o
-modificarlo de acuerdo con los términos de la Licencia Pública General GNU
-publicada por la Free Software Foundation: ya sea en la versión 2 de la
-Licencia, o (a su elección) en una versión posterior.
+modificarlo de acuerdo con los tÃ©rminos de la Licencia PÃºblica General GNU
+publicada por la Free Software Foundation: ya sea en la versiÃ³n 2 de la
+Licencia, o (a su elecciÃ³n) en una versiÃ³n posterior.
 
-     Este programa es distribuido con la esperanza de que sea útil, pero
-SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
-DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
+     Este programa es distribuido con la esperanza de que sea Ãºtil, pero
+SIN GARANTIA ALGUNA; incluso sin la garantÃ­a implÃ­cita de COMERCIABILIDAD o
+DE ADECUACION A UN PROPOSITO PARTICULAR. VÃ©ase la Licencia PÃºblica General
 GNU para mayores detalles.
 
-     Debería usted haber recibido una copia de la Licencia Pública General
-GNU junto con este programa; de no ser así, escriba a Free Software
+     DeberÃ­a usted haber recibido una copia de la Licencia PÃºblica General
+GNU junto con este programa; de no ser asÃ­, escriba a Free Software
 Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 */
@@ -34,10 +34,11 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <sys/signal.h>
 #include <sys/types.h>
 #include <glib.h>
+#include <locale.h>
 
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 
-//#define _SERIAL_COMM   /* Se usarán rutinas de comunicación serial */
+//#define _SERIAL_COMM   /* Se usarÃ¡n rutinas de comunicaciÃ³n serial */
 
 #include "include/pos-curses.h"
 #define _pos_curses
@@ -103,9 +104,9 @@ void print_ticket_header(char *nm_ticket_header);
 void print_ticket_footer(struct tm fecha, unsigned numvents, long folio, int serie);
 int AbreCajon(char *tipo_miniimp);
 int corta_papel(char *tipo_miniimp);
-/* Función que reemplaza a ActualizaEx */
+/* FunciÃ³n que reemplaza a ActualizaEx */
 int actualiza_existencia(PGconn *con, struct tm *fecha);
-/* Esta función reemplaza a leebarras */
+/* Esta funciÃ³n reemplaza a leebarras */
 int lee_articulos(PGconn *, PGconn *, short almacen);
 void show_item_list(WINDOW *vent, int i, short cr);
 void show_subtotal(double, double, double);
@@ -150,48 +151,48 @@ int numdivisas=0;
 /* struct barras barra[mxmembarra];  */
 struct articulos articulo[maxarts], barra[mxmembarra]; /* barra se queda siempre en memoria */
 struct divisas divisa[mxmemdivisa];
-int numarts=0;          /* Número de items capturados   */
+int numarts=0;          /* NÃºmero de items capturados   */
 short unsigned maxitemr;
 pid_t pid;
 short es_remision=1;
 unsigned almacen;
 struct db_data db;
-char   *item[maxitem_busqueda]; /* Líneas de caracteres en ventana de búsqueda */
+char   *item[maxitem_busqueda]; /* LÃ­neas de caracteres en ventana de bÃºsqueda */
 
-  /* Variables de configuración */
+  /* Variables de configuraciÃ³n */
 char *home_directory;
 char *log_name;
 char *nm_disp_ticket,           /* Nombre de impresora de ticket */
   *cmd_lp,              /* Comando usado para imprimir */
   *disp_lector_serie,  /* Ruta al scanner de c. de barras serial */
-  *nmfpie,              /* Pie de página de ticket */
+  *nmfpie,              /* Pie de pÃ¡gina de ticket */
   *nmfenc,              /* Archivo de encabezado de ticket */
   *nmtickets,   /* Registro de tickets impresos */
   *tipo_disp_ticket, /* Tipo de miniprinter */
-  *nmimprrem,           /* Ubicación de imprrem */
-  *nm_factur,    /* Nombre del programa de facturación */
+  *nmimprrem,           /* UbicaciÃ³n de imprrem */
+  *nm_factur,    /* Nombre del programa de facturaciÃ³n */
   *nm_avisos,    /* Nombre del archivo de avisos */
   *nm_journal,   /* Nombre actual del archivo del diario de marcaje */
   *nm_orig_journal, /* Nombre del archivo del diario original */
   *nm_sendmail,  /* Ruta completa de sendmail */
-  *dir_avisos,   /* email de notificación */
+  *dir_avisos,   /* email de notificaciÃ³n */
   *asunto_avisos, /* Asunto del correo de avisos */
   *cc_avisos;     /* con copia para */
 
-gchar  *lp_disp_ticket;      /* Definición de miniprinter en /etc/printcap */
+gchar  *lp_disp_ticket;      /* DefiniciÃ³n de miniprinter en /etc/printcap */
 
-char   s_divisa[MX_LON_DIVISA];       /* Designación de la divisa que se usa para cobrar en la base de datos */
-short unsigned search_2nd;  /* ¿Buscar código alternativo al mismo tiempo que el primario ? */ 
-int id_teller = 0;              /* Número de cajero */
-int id_vendedor = 0;            /* Número de agente de ventas */
-short unsigned manual_discount; /* Aplicar el descuento manual de precio en la misma línea */
+char   s_divisa[MX_LON_DIVISA];       /* DesignaciÃ³n de la divisa que se usa para cobrar en la base de datos */
+short unsigned search_2nd;  /* Â¿Buscar cÃ³digo alternativo al mismo tiempo que el primario ? */ 
+int id_teller = 0;              /* NÃºmero de cajero */
+int id_vendedor = 0;            /* NÃºmero de agente de ventas */
+short unsigned manual_discount; /* Aplicar el descuento manual de precio en la misma lÃ­nea */
 int iva_incluido;
 int listar_neto;
 short unsigned autocutter = 0;
 
 int lector_serial; /* Cierto si se usa un scanner serial */
 int serial_crlf=1; /* 1 si el scanner envia CRLF, 0 si solamente LF */
-tcflag_t serial_bps=B38400; /* bps por omisión */
+tcflag_t serial_bps=B38400; /* bps por omisiÃ³n */
 int wait_flag=TRUE;                    /* TRUE while no signal received */
 char s_buf[255];    /* Buffer de puerto serie */
 struct termios oldtio,newtio;  /* Parametros anteriores y nuevos de terminal serie */
@@ -204,7 +205,7 @@ int lease_mode = 0;
 int cnf_impresion_garantia = 1;
 int serie;        /* Serie de folios de comprobantes */
 int cnf_registrar_vendedor = 0;
-unsigned caja_virtual = 0; /* Número de caja virtual que se está operando */
+unsigned caja_virtual = 0; /* NÃºmero de caja virtual que se estÃ¡ operando */
 
 #include "include/remision.h"
 #include "include/articulos-bd-func.h"
@@ -310,7 +311,7 @@ int read_config()
   nmconfig = g_strdup_printf("%s/.osopos/remision.config", home_directory);
 
   config = fopen(nmconfig,"r");
-  if (config) {         /* Si existe archivo de configuración */
+  if (config) {         /* Si existe archivo de configuraciÃ³n */
     b = buff;
     fgets(buff,mxbuff,config);
     while (!feof(config)) {
@@ -321,11 +322,11 @@ int read_config()
         continue;
       }
       strncpy(buf, strtok(buff,"="), mxbuff);
-        /* La función strtok modifica el contenido de la cadena buff    */
+        /* La funciÃ³n strtok modifica el contenido de la cadena buff    */
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
-        /* OBSOLETO por config. caja virtual. Definición de impresora de ticket */
+        /* OBSOLETO por config. caja virtual. DefiniciÃ³n de impresora de ticket */
 /*       if (!strcmp(b,"ticket")) { */
 /*         strncpy(buf, strtok(NULL,"="), mxbuff); */
 /*         aux = realloc(nm_disp_ticket, strlen(buf)+1); */
@@ -522,7 +523,7 @@ int read_global_config()
   nmconfig = g_strdup_printf("/etc/osopos/remision.config");
 
   config = fopen(nmconfig,"r");
-  if (config) {         /* Si existe archivo de configuración */
+  if (config) {         /* Si existe archivo de configuraciÃ³n */
     b = buff;
     fgets(buff,mxbuff,config);
     while (!feof(config)) {
@@ -533,11 +534,11 @@ int read_global_config()
         continue;
       }
       strncpy(buf, strtok(buff,"="), mxbuff);
-        /* La función strtok modifica el contenido de la cadena buff    */
+        /* La funciÃ³n strtok modifica el contenido de la cadena buff    */
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
-        /* OBSOLETO por config. caja virtual. Definición de impresora de ticket */
+        /* OBSOLETO por config. caja virtual. DefiniciÃ³n de impresora de ticket */
 /*       if (!strcmp(b,"ticket")) { */
 /*         strncpy(buf, strtok(NULL,"="), mxbuff); */
 /*         aux = realloc(nm_disp_ticket, strlen(buf)+1); */
@@ -843,7 +844,7 @@ int read_general_config()
   nmconfig = g_strdup_printf("/etc/osopos/general.config");
 
   config = fopen(nmconfig,"r");
-  if (config) {         /* Si existe archivo de configuración */
+  if (config) {         /* Si existe archivo de configuraciÃ³n */
     b = buff;
     fgets(buff,mxbuff,config);
     while (!feof(config)) {
@@ -854,11 +855,11 @@ int read_general_config()
         continue;
       }
       strncpy(buf, strtok(buff,"="), mxbuff);
-        /* La función strtok modifica el contenido de la cadena buff    */
+        /* La funciÃ³n strtok modifica el contenido de la cadena buff    */
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
-        /* Obsoleto por config. caja virtual. Definición de impresora de ticket */
+        /* Obsoleto por config. caja virtual. DefiniciÃ³n de impresora de ticket */
 /*       if (!strcmp(b,"ticket")) { */
 /*         strncpy(buf, strtok(NULL,"="), mxbuff); */
 /*         aux = realloc(nm_disp_ticket, strlen(buf)+1); */
@@ -1101,7 +1102,7 @@ double tc=1;
 
 int find_mem_code(char *cod, struct articulos *art, int search_2nd, short *es_granel) {
 //int busca_precio(char *cod, struct articulos *art) {
-/* Busca el código de barras en la memoria y devuelve la posicion */
+/* Busca el cÃ³digo de barras en la memoria y devuelve la posicion */
 /* del producto en la matriz de productos en memoria. */
 int i;
 int exit=0; /* falso si hay que salirse */
@@ -1111,7 +1112,7 @@ gchar *s_peso;
 
   plu_granel = NULL;
   if (strlen(cod) == 13) /* longitud de EAN13 */
-    /* Se asigna un max. de 6 digitos en el código de barras para el PLU */
+    /* Se asigna un max. de 6 digitos en el cÃ³digo de barras para el PLU */
     plu_granel = g_strndup(cod+1, 6);
 
   for (i=0; (i<numbarras); ++i) {
@@ -1129,7 +1130,7 @@ gchar *s_peso;
         granel = i;
       }
   }
-  /* No se localizo el código como tal, ¿coincide como plu de granel ? */
+  /* No se localizo el cÃ³digo como tal, Â¿coincide como plu de granel ? */
   if (granel>=0) {
     asign_mem_code(art, granel);
     s_peso = g_strndup(cod+8, 4);
@@ -1170,7 +1171,7 @@ int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
   FILE *f_last_sale;
   FILE *f_last_items;
 
-  mvprintw(getmaxy(stdscr)-3,0,"Código del(los) artículo(s) a cancelar: ");
+  mvprintw(getmaxy(stdscr)-3,0,"CÃ³digo del(los) artÃ­culo(s) a cancelar: ");
   clrtoeol();
   getstr(codigo);
 
@@ -1213,7 +1214,7 @@ int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
     tax[j]  -=  (articulo[i].cant * tax_item[j]);
 
   (*subtotal) -= (articulo[i].cant * articulo[i].pu);
-  /* Desplaza los artículos a una posición inferior */
+  /* Desplaza los artÃ­culos a una posiciÃ³n inferior */
   for (; i<*reng; i++) {
     memcpy(&articulo[i], &articulo[i+1], sizeof(articulo[i+1]));
   }
@@ -1230,7 +1231,7 @@ int cancela_articulo(WINDOW *vent, int *reng, double *subtotal, double *iva,
     for (i=0; i<*reng && i<vent->_maxy; i++)
       show_item_list(vent, i, TRUE);
 
-  mvprintw(getmaxy(stdscr)-3,0,"Código de barras, descripción o cantidad:\n");
+  mvprintw(getmaxy(stdscr)-3,0,"CÃ³digo de barras, descripciÃ³n o cantidad:\n");
   wrefresh(vent);
   return(num_item);
 }
@@ -1310,7 +1311,7 @@ int forma_de_pago(double *recibo, double *dar)
   clrtoeol();
 
   do {
-    mvprintw(getmaxy(stdscr)-2, 0, "¿Forma de pago (Efectivo/Tarjeta/Credito/cHeque)? E");
+    mvprintw(getmaxy(stdscr)-2, 0, "Â¿Forma de pago (Efectivo/Tarjeta/Credito/cHeque)? E");
     clrtoeol();
     attrset(COLOR_PAIR(azul_sobre_blanco)); /* Resalta las opciones */
     if (recibo) {
@@ -1369,7 +1370,7 @@ int captura_vendedor()
   move(getmaxy(stdscr)-3, 0);
   clrtoeol();
 
-  mvprintw(getmaxy(stdscr)-2, 0, "¿Número de vendedor? ");
+  mvprintw(getmaxy(stdscr)-2, 0, "Â¿NÃºmero de vendedor? ");
   clrtoeol();
   wgetstr(stdscr, id);
   return(atoi(id));
@@ -1414,16 +1415,16 @@ void print_ticket_arts(double importe, double cambio) {
       switch (articulo[i].garan_unidad) {
         case 0:
        default:
-          fputs("días ", impr);
+          fputs("dÃ­as ", impr);
           break;
         case 1:
           fputs("meses ", impr);
           break;
         case 2:
-          fputs("año(s) ", impr);
+          fputs("aÃ±o(s) ", impr);
           break;
       }
-      fputs("de garantía\n", impr);
+      fputs("de garantÃ­a\n", impr);
     }
   }
 
@@ -1455,7 +1456,7 @@ void print_ticket_footer(struct tm fecha, unsigned numventa, long folio, int ser
   if (caja_virtual > 0)
     fprintf(impr, "Caja: %d. ", caja_virtual);
   else
-    fprintf(impr, "Caja única. ");
+    fprintf(impr, "Caja Ãºnica. ");
   fprintf(impr, "Cajero %d", id_teller);
   fprintf(impr, "Nota num. %ld, serie %c. Venta %u\n", folio, 'A'+serie-1, numventa);
   fpie = fopen(nmfpie,"r");
@@ -1553,7 +1554,7 @@ int AbreCajon(char *tipo_miniimp) {
   impr = fopen(nm_disp_ticket,"w");
   if (!impr) {
     fprintf(stderr,
-      "OsoPOS(Remision): No se puede activar el cajón de dinero\n\r");
+      "OsoPOS(Remision): No se puede activar el cajÃ³n de dinero\n\r");
     fprintf(stderr,"operado por %s\n",nm_disp_ticket);
     return(0);
   }
@@ -1612,7 +1613,7 @@ void aviso_existencia(struct articulos art)
 
   arch = popen(nm_sendmail, "w");
   if (!arch) {
-    mensaje("No puedo escribir al programa de envío de mensajes");
+    mensaje("No puedo escribir al programa de envÃ­o de mensajes");
     getch();
   }
   else {
@@ -1629,7 +1630,7 @@ void aviso_existencia(struct articulos art)
 /************************************************/
 void Termina(PGconn *con, PGconn *con_s, int error)
 {
-  fprintf(stderr, "Error número %d encontrado, abortando...",error);
+  fprintf(stderr, "Error nÃºmero %d encontrado, abortando...",error);
   if (con != NULL)
     PQfinish(con);
   PQfinish(con_s);
@@ -1654,7 +1655,7 @@ long obten_num_venta(PGconn *base)
   sprintf(query, "SELECT max(numero) FROM ventas");
   res = PQexec(base, query);
   if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
-    fprintf(stderr, "ERROR: no puedo obtener el número de la venta");
+    fprintf(stderr, "ERROR: no puedo obtener el nÃºmero de la venta");
     PQclear(res);
     return(0);
   }
@@ -1665,7 +1666,7 @@ long obten_num_venta(PGconn *base)
 
 /********************************************************/
 
-/* Rutinas de recuperación de ventas */
+/* Rutinas de recuperaciÃ³n de ventas */
 int journal_last_sale(int i, char *last_sale_fname) {
 
   FILE *f_last_sale;
@@ -1832,7 +1833,7 @@ int aborta_remision(PGconn *con, PGconn *con_s, char *mens, char tecla, int seni
 /********************************************************/
 #ifdef _SERIAL_COMM
 /********************************************************/
-/*** rutinas de comunicación serial. Basado en el Serial-Programming-HOWTO ***/
+/*** rutinas de comunicaciÃ³n serial. Basado en el Serial-Programming-HOWTO ***/
 void init_serial(struct sigaction *saio, struct termios *oldtio, struct termios *newtio)
 {
   /* open the device to be non-blocking (read will return immediatly) */
@@ -1891,7 +1892,7 @@ int busqueda_articulo(char *codigo)
   PANEL  *pan = 0;
 
   int vx, vy; /* Dimensiones horizontal y vertical de la ventana */
-  int x, y;   /* Coordenadas del primer elemento del menú */
+  int x, y;   /* Coordenadas del primer elemento del menÃº */
   int max_v_desc;
   int i,j,k;
   int num_items = 0;
@@ -1919,12 +1920,12 @@ int busqueda_articulo(char *codigo)
   aux = calloc(1, mxbuff);
 
   show_panel(pan);
-  mvwprintw(v_busq, 1, 1, "Indique parte de la descripción: ");
+  mvwprintw(v_busq, 1, 1, "Indique parte de la descripciÃ³n: ");
   wgetstr(v_busq,descr);
   for (i=0; i<strlen(descr); i++)
     descr[i] = toupper(descr[i]);
 
-  /* Desde aqui comienza búsqueda en memoria */
+  /* Desde aqui comienza bÃºsqueda en memoria */
   for (i=0, j=0; i<numbarras && j<maxitem_busqueda; i++) {
     strncpy(aux, barra[i].desc, maxdes-1);
     aux[mxbuff-1] = 0;
@@ -1951,7 +1952,7 @@ int busqueda_articulo(char *codigo)
     }
   }
 
-  /* aqui termina código de búsqueda */
+  /* aqui termina cÃ³digo de bÃºsqueda */
 
   num_items = j;
   if (num_items) {
@@ -2151,7 +2152,7 @@ int datos_renta(int *num_cliente, time_t *f_pedido, time_t *f_entrega) {
   fecha = localtime(&tiempo);
 
   show_panel(pan);
-  mvwprintw(v, 1, 1, "Número de cliente: ");
+  mvwprintw(v, 1, 1, "NÃºmero de cliente: ");
   wgetstr(v, b);
   *num_cliente = atoi(b);
 
@@ -2160,7 +2161,7 @@ int datos_renta(int *num_cliente, time_t *f_pedido, time_t *f_entrega) {
 
   mvwprintw(v, 2, 1, "Fecha de entrega");
 
-  mvwprintw(v, 3, 1, "Día: ");
+  mvwprintw(v, 3, 1, "DÃ­a: ");
   wgetstr(v, b);
   fecha->tm_mday = atoi(b);
 
@@ -2168,7 +2169,7 @@ int datos_renta(int *num_cliente, time_t *f_pedido, time_t *f_entrega) {
   wgetstr(v, b);
   fecha->tm_mon = atoi(b)-1;
 
-  mvwprintw(v, 5, 1, "Año: ");
+  mvwprintw(v, 5, 1, "AÃ±o: ");
   wgetstr(v, b);
   fecha->tm_year = atoi(b);
   if (fecha->tm_year<2000)
@@ -2296,8 +2297,8 @@ int form_virtualize(WINDOW *w, int readchar, int c)
 
 int busca_art_marcado(char *cod, struct articulos art[maxarts], int campo, int ren) {
   /* Valores posibles de campo:
-     0: Búsqueda en art.codigo
-     1: Búsqueda en art.serie
+     0: BÃºsqueda en art.codigo
+     1: BÃºsqueda en art.serie
   */
 
   int i;
@@ -2352,7 +2353,7 @@ int selecciona_caja_virtual(PGconn *con, int num_cajas)
 
   vx = 70;
   vy = 15;
-  y = 2;  /* Coordenadas de la primera línea de menu de selección */
+  y = 2;  /* Coordenadas de la primera lÃ­nea de menu de selecciÃ³n */
   x = 1;
 
   pan = mkpanel(COLOR_BLACK, vy, vx, (getmaxy(stdscr)-vy)/2, (getmaxx(stdscr)-vx)/2);
@@ -2372,7 +2373,7 @@ int selecciona_caja_virtual(PGconn *con, int num_cajas)
  
   for (j=0; j<num_cajas; j++) {
     item[j] = calloc(1, getmaxx(v_selecc));
-    /* Aqui debe ir la consulta al catálogo de nombres de cajas virtuales */
+    /* Aqui debe ir la consulta al catÃ¡logo de nombres de cajas virtuales */
     sprintf(item[j], "Caja %d", j+1);
     mvwprintw(v_selecc, v_selecc->_cury+1, 1, "%s", item[j]);
   }
@@ -2466,8 +2467,8 @@ int read_db_config(PGconn *con)
 void read_pos_config(PGconn *con, unsigned num_caja)
 {
   /* Valores aceptados de num_caja
-     0:  No existen cajas virtuales se lee configuración general
-     >0: Representa el número de caja virtual
+     0:  No existen cajas virtuales se lee configuraciÃ³n general
+     >0: Representa el nÃºmero de caja virtual
   */
   lp_disp_ticket = g_strdup_printf(lee_config_pos(con, num_caja, "COLA_TICKET"));
   strcpy(tipo_disp_ticket, lee_config_pos(con, num_caja, "MINIIMPRESORA_TIPO"));
@@ -2490,6 +2491,7 @@ void read_pos_config(PGconn *con, unsigned num_caja)
 
 int main(int argc, char *argv[]) {
   static char buffer, buf[255];
+  static char *s_buf;
   static char encabezado1[mxbuff],
       encabezado2[mxbuff] = "Eduardo I. Osorio H., 1999-2006 soporte en elpuntodeventa.com";
   FILE *impr_cmd;
@@ -2573,7 +2575,7 @@ int main(int argc, char *argv[]) {
     aborta("Error al consultar usuarios\n", ERROR_DIVERSO);
   }
   else if (i == FALSE) {
-    aborta("Nombre de usuario/contraseña incorrecto\n", ERROR_DIVERSO);
+    aborta("Nombre de usuario/contraseÃ±a incorrecto\n", ERROR_DIVERSO);
   }
 
   /* Proximamente desapareceremos esta llamada */
@@ -2585,10 +2587,17 @@ int main(int argc, char *argv[]) {
 
   read_db_config(con_s);
 
-  if ((num_cajas_virtuales = atoi(lee_config(con_s, "CAJAS_VIRTUALES"))) > 0)
-    caja_virtual = selecciona_caja_virtual(con_s, num_cajas_virtuales);
-  else
+  s_buf = lee_config(con_s, "CAJAS_VIRTUALES");
+  if (s_buf) 
+    if ((num_cajas_virtuales = atoi(s_buf)) > 0)
+      caja_virtual = selecciona_caja_virtual(con_s, num_cajas_virtuales);
+    else
+      caja_virtual = 0;
+  else {
+    num_cajas_virtuales = 0;
     caja_virtual = 0;
+  }
+
   read_pos_config(con_s, caja_virtual);
 
   //  num_venta = obten_num_venta(nm_num_venta);
@@ -2597,11 +2606,11 @@ int main(int argc, char *argv[]) {
   if (!serial_num_enable && !catalog_search) {
     numbarras = lee_articulos(con_s, con_s, almacen);
     if (!numbarras) {
-      mensaje("No hay artículos en la base de datos. Use el programa de inventarios primero");
+      mensaje("No hay artÃ­culos en la base de datos. Use el programa de inventarios primero");
       getch();
     }
     else if (numbarras == SQL_ERROR) {
-      mensaje("Error al leer base de datos, búsqueda de artículos deshabilitada.");
+      mensaje("Error al leer base de datos, bÃºsqueda de artÃ­culos deshabilitada.");
       getch();
       numbarras = 0;
     }
@@ -2613,14 +2622,14 @@ int main(int argc, char *argv[]) {
     getch();
   }
   else if (numdivisas == SQL_ERROR) {
-    mensaje("Error al leer base de datos, búsqueda de divisas deshabilitada.");
+    mensaje("Error al leer base de datos, bÃºsqueda de divisas deshabilitada.");
     getch();
     numbarras = 0;
   }
 
-  sprintf(encabezado1, "OsoPOS - Módulo POS %s R.%s. Caja ", vers, release);
+  sprintf(encabezado1, "OsoPOS - MÃ³dulo POS %s R.%s. Caja ", vers, release);
   if (num_cajas_virtuales==0)
-    sprintf(encabezado1, "%s ÚNICA", encabezado1);
+    sprintf(encabezado1, "%s UNICA", encabezado1);
   else
     sprintf(encabezado1, "%s %u", encabezado1, caja_virtual);
 
@@ -2650,12 +2659,12 @@ int main(int argc, char *argv[]) {
       attron(A_BOLD);
       if (es_remision) {
         if (lease_mode)
-          mvprintw(getmaxy(stdscr)-2,0,"¿Expedir Nota de venta, Factura, Ticket, nota de Renta (N,F,T,R)? T\b");
+          mvprintw(getmaxy(stdscr)-2,0,"Â¿Expedir Nota de venta, Factura, Ticket, nota de Renta (N,F,T,R)? T\b");
         else
-          mvprintw(getmaxy(stdscr)-2,0,"¿Expedir Nota de venta, Factura, Ticket (N,F,T)? T\b");
+          mvprintw(getmaxy(stdscr)-2,0,"Â¿Expedir Nota de venta, Factura, Ticket (N,F,T)? T\b");
       } 
       else
-        mvprintw(getmaxy(stdscr)-2,0,"¿Carro virtual ó inventario Físico (C,F)? C\b");
+        mvprintw(getmaxy(stdscr)-2,0,"Â¿Carro virtual Ã³ inventario FÃ­sico (C,F)? C\b");
 
       attroff(A_BOLD);
       buffer = toupper(getch());
@@ -2668,7 +2677,7 @@ int main(int argc, char *argv[]) {
         case 'N':
           attron(A_BOLD);
           if (cnf_impresion_garantia) {
-            mvprintw(getmaxy(stdscr)-1,0,"¿Días de garantía? : ");
+            mvprintw(getmaxy(stdscr)-1,0,"Â¿DÃ­as de garantÃ­a? : ");
             attroff(A_BOLD);
             clrtoeol();
             scanw("%d",&dgar);
@@ -2882,7 +2891,7 @@ int main(int argc, char *argv[]) {
 
 /* Pendientes:
 
-- Optimizar la funcion busca_precio para que solo devuelva el indice del código buscado y
+- Optimizar la funcion busca_precio para que solo devuelva el indice del cÃ³digo buscado y
   posteriormente se haga una copia de registro a registro
 
   */

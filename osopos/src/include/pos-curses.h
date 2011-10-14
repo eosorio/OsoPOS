@@ -1,19 +1,19 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
  pos-func.h 0.23-1 Biblioteca de funciones de OsoPOS.
-        Copyright (C) 1999,2000,2004 Eduardo Israel Osorio Hernández
+        Copyright (C) 1999,2000,2004 Eduardo Israel Osorio HernÃ¡ndez
 
         Este programa es un software libre; puede usted redistribuirlo y/o
-modificarlo de acuerdo con los términos de la Licencia Pública General GNU
-publicada por la Free Software Foundation: ya sea en la versión 2 de la
-Licencia, o (a su elección) en una versión posterior.
+modificarlo de acuerdo con los tÃ©rminos de la Licencia PÃºblica General GNU
+publicada por la Free Software Foundation: ya sea en la versiÃ³n 2 de la
+Licencia, o (a su elecciÃ³n) en una versiÃ³n posterior.
 
-        Este programa es distribuido con la esperanza de que sea útil, pero 
-SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
-DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
+        Este programa es distribuido con la esperanza de que sea Ãºtil, pero 
+SIN GARANTIA ALGUNA; incluso sin la garantÃ­a implÃ­cita de COMERCIABILIDAD o
+DE ADECUACION A UN PROPOSITO PARTICULAR. VÃ©ase la Licencia PÃºblica General
 GNU para mayores detalles.
 
-        Debería usted haber recibido una copia de la Licencia Pública General
-GNU junto con este programa; de no ser así, escriba a Free Software
+        DeberÃ­a usted haber recibido una copia de la Licencia PÃºblica General
+GNU junto con este programa; de no ser asÃ­, escriba a Free Software
 Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
  */
 
@@ -36,7 +36,7 @@ int ErrorArchivo(char *nmarch);
 /* Reporta errores en apertura de archivo y termina el programa */
 
 int wgetkeystrokes(WINDOW *, char *, int);
-/* Captura una secuencia de teclas o teclas de función */
+/* Captura una secuencia de teclas o teclas de funciÃ³n */
 
 FIELD *CreaEtiqueta(int frow, int fcol, NCURSES_CONST char *label);
 FIELD *CreaCampo(int frow, int fcol, int ren, int cols, int colores);
@@ -90,7 +90,7 @@ int wgetkeystrokes(WINDOW *w, char *input_str, int str_len) {
     if (!wait_flag)
       ungetch(ch);
     if (ch == ERR) {
-    /* Probablemente se produjo una interrupción del signal handler */
+    /* Probablemente se produjo una interrupciÃ³n del signal handler */
       i--;
       continue;
     }
@@ -136,8 +136,8 @@ int wgetkeystrokes(WINDOW *w, char *input_str, int str_len) {
         case 237: /* i acentuada */
         case 243: /* o acentuada */
         case 250: /* u acentuada */
-        case 209: /* Ñ mayuscula */
-        case 241: /* ñ minuscula */
+        case 209: /* Ã‘ mayuscula */
+        case 241: /* Ã± minuscula */
         case '/':
         case '.':
           input_str[i+1] = 0;
@@ -274,7 +274,7 @@ char *obten_passwd(char *login)
 
   p = calloc(1,mxbuff);
 
-  mvprintw(getmaxy(stdscr)-3,0, "Contraseña: ");
+  mvprintw(getmaxy(stdscr)-3,0, "ContraseÃ±a: ");
   clrtoeol();
   noecho();
   getnstr(p, mxbuff-1);
