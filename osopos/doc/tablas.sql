@@ -440,12 +440,21 @@ INSERT INTO modulo (nombre, "desc", grupo) VALUES ('clientes_agregar', 'Clientes
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('clientes_eliminar', 'Clientes. Eliminar clientes', 4);
 INSERT INTO modulo (nombre, "desc", grupo) VALUES ('clientes_modificar', 'Clientes. Modificar datos de clientes', 4);
 
-CREATE TABLE modulo_usuarios (
+/*CREATE TABLE modulo_usuarios (
   id           int NOT NULL DEFAULT 0,
   usuario      VARCHAR(32) NOT NULL,
   UNIQUE(id,usuario)
 );
 CREATE INDEX modulo_usuarios_bkey ON modulo_usuarios USING BTREE(id,usuario);
+REVOKE ALL ON modulo_usuarios FROM PUBLIC;
+GRANT SELECT ON modulo_usuarios TO GROUP osopos;*/
+
+CREATE TABLE modulo_usuarios (
+  mod_id     int NOT NULL DEFAULT 0,
+  usr_id     VARCHAR(32) NOT NULL,
+  UNIQUE(mod_id,usr_id)
+);
+CREATE INDEX modulo_usuarios_bkey ON modulo_usuarios USING BTREE(mod_id,usr_id);
 REVOKE ALL ON modulo_usuarios FROM PUBLIC;
 GRANT SELECT ON modulo_usuarios TO GROUP osopos;
 
@@ -607,6 +616,7 @@ CREATE TABLE cliente_tipo (
   id    int2 DEFAULT nextval('cliente_tipo_id_seq'::text) PRIMARY KEY NOT NULL,
   tipo  varchar(32)
 );
+INSERT INTO cliente_tipo (tipo) VALUES ('Menudeo');
 
 CREATE SEQUENCE clientes_id_seq
     START 1
@@ -617,7 +627,7 @@ CREATE SEQUENCE clientes_id_seq
                                                                                 
 CREATE TABLE clientes (
   id           int4 DEFAULT nextval('clientes_id_seq'::text) PRIMARY KEY NOT NULL,
-  nombres      varchar(64) NOT NULL,
+  nombres      varchar(128) NOT NULL,
   ap_paterno   varchar(32),
   ap_materno   varchar(32),
   tipo_cliente int2 REFERENCES cliente_tipo (id),
