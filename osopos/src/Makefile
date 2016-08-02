@@ -17,6 +17,8 @@ FORMSLIBS = -lform
 
 GLIBLIBS = `pkg-config --cflags --libs glib-2.0`
 
+CFLAGS=-I/usr/include/pgsql/internal -I/usr/include/pgsql/server
+
 C_REMISION = -Dmxmembarra=8000 -Dmxmemdivisa=5 -Dmaxitem_busqueda=100 -D_SERIAL_COMM
 
 C_OSOPOS = -Dmaxspc=70 -Dmaxart=30 -Dmaxarts=6000 -Dmaxdepto=500
@@ -33,39 +35,39 @@ DIR_BIN = /usr/bin
 BUILD_BINDIR = ../bin
 
 remision: remision.c
-	${CC} -o ${BUILD_BINDIR}/remision.o remision.c ${PGLIBS} ${FORMSLIBS} \
+	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/remision.o remision.c ${PGLIBS} ${FORMSLIBS} \
 	${PANELLIBS} ${CURSESLIBS} ${GLIBLIBS} ${CRYPTLIBS} \
 	${C_REMISION} ${C_OSOPOS} -ggdb
 
 carrito: carrito.c
-	${CC} -o ${BUILD_BINDIR}/carrito.o carrito.c ${PGLIBS} ${FORMSLIBS} \
+	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/carrito.o carrito.c ${PGLIBS} ${FORMSLIBS} \
 	${PANELLIBS} ${CURSESLIBS} ${GLIBLIBS} ${CRYPTLIBS} \
 	${C_REMISION} ${C_OSOPOS} -ggdb
 
 factur: factur.c
-	${CC} -o ${BUILD_BINDIR}/factur.o factur.c ${PGLIBS} ${FORMSLIBS} ${PANELLIBS} \
+	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/factur.o factur.c ${PGLIBS} ${FORMSLIBS} ${PANELLIBS} \
 	${CURSESLIBS} -D_MOD_FACTUR -ggdb
 
 invent: invent.c
-	${CC} -o ${BUILD_BINDIR}/invent.o invent.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
-	${C_OSOPOS} -ggdb
+	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/invent.o invent.c ${PGLIBS} ${FORMSLIBS} ${PANELLIBS} \
+	${CURSESLIBS} ${GLIBLIBS} ${C_OSOPOS} -ggdb
 
 movinvent: mov_invent.c
-	${CC} -o ${BUILD_BINDIR}/movinvent.o mov_invent.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
+	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/movinvent.o mov_invent.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
 	${C_OSOPOS} -ggdb
 
 corte: corte.c
-	${CC} -o ${BUILD_BINDIR}/corte.o corte.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
+	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/corte.o corte.c ${PGLIBS} ${FORMSLIBS} ${CURSESLIBS} \
 	${CRYPTLIBS} ${PANELLIBS} ${GLIBLIBS} -ggdb
 
 osopos: osopos.c
-	${CC} -o ${BUILD_BINDIR}/osopos.o osopos.c ${CURSESLIBS}
+	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/osopos.o osopos.c ${CURSESLIBS}
 
 imprrem: imprrem.c
-	${CC} -o ${BUILD_BINDIR}/imprrem.o imprrem.c ${CURSESLIBS} ${PGLIBS} ${C_IMPRREM} -ggdb
+	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/imprrem.o imprrem.c ${CURSESLIBS} ${PGLIBS} ${C_IMPRREM} -ggdb
 
 gtk_invent: gtk_invent.c
-	${CC} -o ${BUILD_BINDIR}/gtk_invent gtk_invent.c ${GTKLIBS} \
+	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/gtk_invent gtk_invent.c ${GTKLIBS} \
         ${PGLIBS} ${C_OSOPOS}
 
 install_remision:

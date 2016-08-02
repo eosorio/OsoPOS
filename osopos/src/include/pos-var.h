@@ -1,30 +1,30 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
-   OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
+   OsoPOS Sistema auxiliar en punto de venta para pequeï¿½os negocios
    Sistema OsoPOS (C) 1999-2006 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
-   Lea el archivo README, COPYING y LEAME que contienen información
+   Lea el archivo README, COPYING y LEAME que contienen informaciï¿½n
    sobre la licencia de uso de este programa
 
      Este programa es un software libre; puede usted redistribuirlo y/o
-modificarlo de acuerdo con los términos de la Licencia Pública General GNU
-publicada por la Free Software Foundation: ya sea en la versión 2 de la
-Licencia, o (a su elección) en una versión posterior.
+modificarlo de acuerdo con los tï¿½rminos de la Licencia Pï¿½blica General GNU
+publicada por la Free Software Foundation: ya sea en la versiï¿½n 2 de la
+Licencia, o (a su elecciï¿½n) en una versiï¿½n posterior.
 
-     Este programa es distribuido con la esperanza de que sea útil, pero
-SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
-DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
+     Este programa es distribuido con la esperanza de que sea ï¿½til, pero
+SIN GARANTIA ALGUNA; incluso sin la garantï¿½a implï¿½cita de COMERCIABILIDAD o
+DE ADECUACION A UN PROPOSITO PARTICULAR. Vï¿½ase la Licencia Pï¿½blica General
 GNU para mayores detalles.
 
-     Debería usted haber recibido una copia de la Licencia Pública General
-GNU junto con este programa; de no ser así, escriba a Free Software
+     Deberï¿½a usted haber recibido una copia de la Licencia Pï¿½blica General
+GNU junto con este programa; de no ser asï¿½, escriba a Free Software
 Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 */
 
 
 #include <sys/types.h>
-//#include <glib.h>
+#include <glib.h>
 
 #if !defined(OK) || ((OK) != 0)
 #define OK      (0)
@@ -42,7 +42,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define PROCESS_ERROR  -3
 #define ERROR_DIVERSO  -5
 #define OTHER_ERROR    -5
-#define ERR_ITEM       -6  /* El producto no está disponible */
+#define ERR_ITEM       -6  /* El producto no estï¿½ disponible */
 
 #ifndef mxchcant
 #define mxchcant 50
@@ -65,7 +65,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #endif
 
 #ifndef maxpreciolong
-#define maxpreciolong 10 /* Máxima longitud de precio */
+#define maxpreciolong 10 /* Mï¿½xima longitud de precio */
 #endif
 
 #ifndef maxexistlong
@@ -73,11 +73,11 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #endif
 
 #ifndef maxarts
-#define maxarts 80       /* Máximo de artículos en remisiones */
+#define maxarts 80       /* Mï¿½ximo de artï¿½culos en remisiones */
 #endif
 
 #ifndef maxart
-#define maxart  30  /* Máximo de artículos */
+#define maxart  30  /* Mï¿½ximo de artï¿½culos */
 #endif
 
 #ifndef maxrfc
@@ -136,7 +136,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define maxnmdepto   25
 #endif
 
-#ifndef maxtax /* Número máximo de impuestos por PLU*/
+#ifndef maxtax /* Nï¿½mero mï¿½ximo de impuestos por PLU*/
 #define maxtax 6
 #endif
 
@@ -164,18 +164,18 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define _FACTURA         2
 #define _TEMPORAL        5
 
-double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
+double TAX_PERC_DEF; /* Porcentaje de IVA por omisiï¿½n */
 
- /* Códigos de impresora */
+ /* Cï¿½digos de impresora */
 #define ESC 27
 #define FF 12
 
 struct db_data {
   gchar *name;      /* Nombre de la base de datos */
   gchar *user;      /* Nombre del usuario que se conecta a la base de datos */
-  gchar *passwd;    /* Contraseña del usuario */
+  gchar *passwd;    /* Contraseï¿½a del usuario */
   gchar *sup_user;  /* Nombre del usuario supervisor */
-  gchar *sup_passwd;/* Contraseña del supervisor */
+  gchar *sup_passwd;/* Contraseï¿½a del supervisor */
   gchar *hostname;  /* Nombre host con base de datos */
   gchar *hostport;  /* Puerto en el que acepta conexiones */
 };
@@ -209,18 +209,18 @@ struct articulos {
   unsigned id_prov, id_prov2;  /* Id de los dos principales proveedores */
   unsigned id_depto;
   double   exist_min, exist_max;
-  double   iva_porc;          /*  Gravamen de IVA del artículo */
+  double   iva_porc;          /*  Gravamen de IVA del artï¿½culo */
   double   tax_0;             /* I.E.P.S. (impuesto suntuario) */
   double   tax_1, tax_2, tax_3, tax_4, tax_5;
   char     prov_clave[maxcod]; /* Clave del articulo con proveedor */
-  char     serie[MX_LON_NUMSERIE]; /* Número de serie */
-  char     tiene_serie;        /* El artículo tiene control de num. serie */
+  char     serie[MX_LON_NUMSERIE]; /* Nï¿½mero de serie */
+  char     tiene_serie;        /* El artï¿½culo tiene control de num. serie */
   unsigned almacen;            /* Almacen de origen */
   unsigned t_renta;            /* Tiempo proporcionado en renta */
-  short    unidad_t;           /* Unidad del tiempo de renta (0: minutos, ... 3: semanas ... 5:años*/
-  short    garan_t;            /* Tiempo de garantía */
-  short    garan_unidad;       /* Unidad de tiempo de garantía */
-  char     granel;             /* Se vende a granel y se usa báscula */
+  short    unidad_t;           /* Unidad del tiempo de renta (0: minutos, ... 3: semanas ... 5:aï¿½os*/
+  short    garan_t;            /* Tiempo de garantï¿½a */
+  short    garan_unidad;       /* Unidad de tiempo de garantï¿½a */
+  char     granel;             /* Se vende a granel y se usa bï¿½scula */
 };
 
 struct proveedor {

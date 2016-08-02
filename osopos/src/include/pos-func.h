@@ -24,6 +24,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <time.h>
 #include <crypt.h>
 #include <libpq-fe.h>
+#include <libpq-int.h>
 #include <err.h>
 #include <errno.h>
 

@@ -4,17 +4,17 @@ OsoPOS - Programa de inventario 1999,2003 E. Israel Osorio
    soporte@elpuntodeventa.com
 
      Este programa es un software libre; puede usted redistribuirlo y/o
-modificarlo de acuerdo con los términos de la Licencia Pública General GNU
-publicada por la Free Software Foundation: ya sea en la versión 2 de la
-Licencia, o (a su elección) en una versión posterior.
+modificarlo de acuerdo con los tï¿½rminos de la Licencia Pï¿½blica General GNU
+publicada por la Free Software Foundation: ya sea en la versiï¿½n 2 de la
+Licencia, o (a su elecciï¿½n) en una versiï¿½n posterior.
 
-     Este programa es distribuido con la esperanza de que sea útil, pero
-SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
-DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
+     Este programa es distribuido con la esperanza de que sea ï¿½til, pero
+SIN GARANTIA ALGUNA; incluso sin la garantï¿½a implï¿½cita de COMERCIABILIDAD o
+DE ADECUACION A UN PROPOSITO PARTICULAR. Vï¿½ase la Licencia Pï¿½blica General
 GNU para mayores detalles.
 
-     Debería usted haber recibido una copia de la Licencia Pública General
-GNU junto con este programa; de no ser así, escriba a Free Software
+     Deberï¿½a usted haber recibido una copia de la Licencia Pï¿½blica General
+GNU junto con este programa; de no ser asï¿½, escriba a Free Software
 Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 */
 
@@ -96,7 +96,7 @@ int form_virtualize(WINDOW *w);
 
 int inicializa_lista(PGconn *base, char *campo_orden);
 
-/* Muestra el detalle del artículo */
+/* Muestra el detalle del artï¿½culo */
 int fill_form(FIELD *campo[35], unsigned i, PGconn *base);
 
 /***************************************************************************/
@@ -165,7 +165,7 @@ int read_general_config()
   strncpy(nmconfig, "/etc/osopos/general.config", 255);
 
   config = fopen(nmconfig,"r");
-  if (config) {         /* Si existe archivo de configuración */
+  if (config) {         /* Si existe archivo de configuraciï¿½n */
     b = buff;
     fgets(buff,mxbuff,config);
     while (!feof(config)) {
@@ -176,7 +176,7 @@ int read_general_config()
         continue;
       }
       strncpy(buf, strtok(buff,"="), mxbuff);
-        /* La función strtok modifica el contenido de la cadena buff    */
+        /* La funciï¿½n strtok modifica el contenido de la cadena buff    */
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
@@ -288,23 +288,23 @@ int read_config() {
   strcpy(nminvent, "osopos");
 
   config = fopen(nmconfig,"r");
-  if (config) {         /* Si existe archivo de configuración */
+  if (config) {         /* Si existe archivo de configuraciï¿½n */
     b = buff;
     fgets(buff,sizeof(buff),config);
     while (!feof(config)) {
       buff [ strlen(buff) - 1 ] = 0;
 
-      if (!strlen(buff) || buff[0] == '#') { /* Linea vacía o coment. */
+      if (!strlen(buff) || buff[0] == '#') { /* Linea vacï¿½a o coment. */
         fgets(buff,sizeof(buff),config);
         continue;
       }
 
       strncpy(buf, strtok(buff,"="), mxbuff);
-        /* La función strtok modifica el contenido de la cadena buff    */
+        /* La funciï¿½n strtok modifica el contenido de la cadena buff    */
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
-        /* Busca parámetros de operación */
+        /* Busca parï¿½metros de operaciï¿½n */
       if (!strcmp(b,"base.datos")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nminvent, strlen(buf+1));
@@ -347,9 +347,9 @@ int read_config() {
     return(OK);
   }
   else {
-    fprintf(stderr, "No encuentro el archivo de configuración en %s,\n",
+    fprintf(stderr, "No encuentro el archivo de configuraciï¿½n en %s,\n",
             nmconfig);
-    fprintf(stderr, "usando datos por omisión...\n");
+    fprintf(stderr, "usando datos por omisiï¿½n...\n");
   }
   return(1);
 }
@@ -363,13 +363,13 @@ int inicializa_lista(PGconn *base, char *campo_orden)
   char str_aux[255];
 
   v_arts =  newwin(getmaxy(stdscr)-12,getmaxx(stdscr), 9,0);
-/* Los parámetros anteriores causan un SIGSEGV y los posteriores no */
+/* Los parï¿½metros anteriores causan un SIGSEGV y los posteriores no */
 /*  v_arts = newwin (LINES-4, COLS-1, 4,0); */
   scrollok(v_arts, TRUE);
 
   res = PQexec(base,"BEGIN");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-   fprintf(stderr,"Falló comando BEGIN al buscar en inventario\n");
+   fprintf(stderr,"Fallï¿½ comando BEGIN al buscar en inventario\n");
    return(ERROR_SQL);
   }
   PQclear(res);
@@ -380,7 +380,7 @@ int inicializa_lista(PGconn *base, char *campo_orden)
 	campo_orden);
   res = PQexec(base, comando);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr,"Falló comando DECLARE CURSOR al buscar artículos\n");
+    fprintf(stderr,"Fallï¿½ comando DECLARE CURSOR al buscar artï¿½culos\n");
     fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
     free(comando);
     return(ERROR_SQL);
@@ -390,7 +390,7 @@ int inicializa_lista(PGconn *base, char *campo_orden)
   strcpy(comando, "FETCH ALL in cursor_arts");
   res = PQexec(base, comando);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-    fprintf(stderr,"comando FETCH ALL no regresó registros apropiadamente\n");
+    fprintf(stderr,"comando FETCH ALL no regresï¿½ registros apropiadamente\n");
     free(comando);
     return(ERROR_SQL);
   }
@@ -408,13 +408,13 @@ int inicializa_lista(PGconn *base, char *campo_orden)
     strcpy(item[i], str_aux);
 
     if (maxdes+maxcod+maxpreciolong+maxexistlong+3 > getmaxx(stdscr)-1) {
-       /* Código */
+       /* Cï¿½digo */
       strncpy(comando, PQgetvalue(res,i,0), maxcod);
       if (strlen(comando)>16)
         comando[16] = 0;
       memcpy(&item[i][0], comando, strlen(comando));
 
-       /* Descripción */
+       /* Descripciï¿½n */
       strncpy(comando, PQgetvalue(res,i,1), maxdes);
       if (strlen(comando)>31)
         comando[31] = 0;
@@ -468,13 +468,13 @@ void modifica_item(struct articulos art, int i)
 
     aux = calloc(1, mxbuff);
     if (maxdes+maxcod+maxpreciolong+maxexistlong+3 > getmaxx(stdscr)-1) {
-       /* Código */
+       /* Cï¿½digo */
       strncpy(aux, art.codigo, maxcod);
       if (strlen(aux)>16)
         aux[16] = 0;
       memcpy(&item[i][0], aux, strlen(aux));
 
-       /* Descripción */
+       /* Descripciï¿½n */
       strncpy(aux, art.desc, maxdes);
       if (strlen(aux)>31)
         aux[31] = 0;
@@ -522,7 +522,7 @@ void modifica_item(struct articulos art, int i)
     return(f);
 }*/
 
-/* función agregada a pos-curses.h 
+/* funciones agregadas a pos-curses.h 
 FIELD *CreaCampo(int frow, int fcol, int ren, int cols)
 {
     FIELD *f = new_field(ren, cols, frow, fcol, 0, 0);
@@ -530,7 +530,7 @@ FIELD *CreaCampo(int frow, int fcol, int ren, int cols)
     if (f)
         set_field_back(f,COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
     return(f);
-}*/
+}
 
 void MuestraForma(FORM *f, unsigned pos_ren, unsigned pos_col)
 {
@@ -563,7 +563,6 @@ void BorraForma(FORM *f)
     delwin(w);
 }
 
-/* función agregada a pos-curses.h
 int my_form_driver(FORM *form, int c)
 {
     if (c == (MAX_FORM_COMMAND + 1)
@@ -736,7 +735,7 @@ int fill_form(FIELD *campo[35], unsigned i, PGconn *base)
             art.id_prov);
     res = PQexec(base, comando);
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-      fprintf(stderr,"Falló comando %s\n", comando);
+      fprintf(stderr,"Fallï¿½ comando %s\n", comando);
       sleep(5);
       free(aux);
       free(comando);
@@ -752,7 +751,7 @@ int fill_form(FIELD *campo[35], unsigned i, PGconn *base)
             art.id_depto);
     res = PQexec(base, comando);
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-      fprintf(stderr,"Falló comando %s\n", comando);
+      fprintf(stderr,"Fallï¿½ comando %s\n", comando);
       sleep(5);
       free(aux);
       free(comando);
@@ -987,7 +986,7 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   comando = "SELECT nombre from departamento ORDER BY id ASC";
   res = PQexec(base, comando);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-   fprintf(stderr,"Falló comando SELECT al buscar departamento en inventario\n");
+   fprintf(stderr,"Fallï¿½ comando SELECT al buscar departamento en inventario\n");
    sleep(5);
    PQclear(res);
    return(ERROR_SQL);
@@ -1013,7 +1012,7 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   comando = "SELECT nick from proveedores ORDER BY id ASC";
   res = PQexec(base, comando);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-   fprintf(stderr,"Falló comando %s\n", comando);
+   fprintf(stderr,"Fallï¿½ comando %s\n", comando);
    sleep(5);
    return(ERROR_SQL);
    PQclear(res);
@@ -1109,8 +1108,8 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   noecho();
 
   /* int form_driver(FORM forma, int cod) */
-  /* acepta el código cod, el cual indica la acción a tomar en la forma */
-  /* hay algunos codigos en la función form_virtualize(WINDOW w) */
+  /* acepta el cï¿½digo cod, el cual indica la acciï¿½n a tomar en la forma */
+  /* hay algunos codigos en la funciï¿½n form_virtualize(WINDOW w) */
 
   i = 0;
   wattrset(v_arts, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
@@ -1126,12 +1125,12 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
     case E_UNKNOWN_COMMAND:
       switch (c) {
       case CTRL('A'):
-        /* Añade artículo */
+        /* Aï¿½ade artï¿½culo */
         agrega_articulo(campo, base, num_items);
         i = *num_items-1;
         break;
       case CTRL('B'):
-        /* Busca artículo */
+        /* Busca artï¿½culo */
         c = busca_articulo(campo[CAMPO_COD], *num_items);
         if (c<0) {
           beep();
@@ -1286,11 +1285,11 @@ int imprime_lista(PGconn *con, char *campo_orden)
   int  i,j;
   int   nCampos;
   PGresult* res;
-  FILE *disp;        /* dispositivo de impresión */
+  FILE *disp;        /* dispositivo de impresiï¿½n */
 
   res = PQexec(con,"BEGIN");
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-   fprintf(stderr, "falló comando BEGIN\n");
+   fprintf(stderr, "fallï¿½ comando BEGIN\n");
    PQclear(res);
    return(ERROR_SQL);
   }
@@ -1304,7 +1303,7 @@ int imprime_lista(PGconn *con, char *campo_orden)
 	  campo_orden);
   res = PQexec(con, comando);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-    fprintf(stderr, "comando DECLARE CURSOR falló\n");
+    fprintf(stderr, "comando DECLARE CURSOR fallï¿½\n");
     fprintf(stderr, "Error: %s\n",PQerrorMessage(con));
     PQclear(res);
     free(comando);
@@ -1315,7 +1314,7 @@ int imprime_lista(PGconn *con, char *campo_orden)
   sprintf(comando, "FETCH ALL in cursor_arts");
   res = PQexec(con, comando);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-    fprintf(stderr, "comando FETCH ALL no regresó registros apropiadamente\n");
+    fprintf(stderr, "comando FETCH ALL no regresï¿½ registros apropiadamente\n");
     PQclear(res);
     free(comando);
     return(ERROR_SQL);
@@ -1372,14 +1371,14 @@ int main() {
   }
   //  con = Abre_Base(db.hostname, db.hostport, NULL, NULL, "osopos", log_name, "");
   if (db.passwd == NULL) {
-    db.passwd = calloc(1, mxbuff);
-    obten_passwd(db.user, db.passwd);
+    db.passwd = g_strdup(obten_passwd(db.user));
+    //obten_passwd(db.user, db.passwd);
   }
 
   con = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.user, db.passwd); 
 
   if (PQstatus(con) == CONNECTION_BAD) {
-    printw("FATAL: Falló la conexión a la base de datos %s\n", nminvent);
+    printw("FATAL: Fallï¿½ la conexiï¿½n a la base de datos %s\n", nminvent);
     printw("Presione <Intro> para terminar...");
     getch();
     endwin();
@@ -1397,13 +1396,13 @@ int main() {
   num_items = inicializa_lista(con, "codigo");
 
   if (num_items<0) {
-    mvprintw(getmaxy(stdscr)/2, 0, "Error al incializar la lista de artículos");
+    mvprintw(getmaxy(stdscr)/2, 0, "Error al incializar la lista de artï¿½culos");
     mvprintw(getmaxy(stdscr)-2, 0, "Pulse una tecla para salir...");
     clrtoeol();
     getch();
     clear();
     endwin();
-    fprintf(stderr, "Error al incializar la lista de artículos\n");
+    fprintf(stderr, "Error al incializar la lista de artï¿½culos\n");
     exit(ERROR_SQL);
   }
   ajusta_ventana_forma();
@@ -1427,7 +1426,7 @@ int main() {
 - Hacer que despliegue un mensaje de error al no poder abrir un
   archivo
 - Hacer que haga un refresh del renglon al actualizar un articulo, en caso de que
-  sea representado en la pantalla al momento de la modificaciòn
+  sea representado en la pantalla al momento de la modificaciï¿½n
 */
 
 /* BUGS:
