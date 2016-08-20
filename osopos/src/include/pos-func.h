@@ -250,7 +250,7 @@ char *str_cant(double total,int *centavos) {
   div_t divis;
   char *cantletra;
 
-  tot = total;
+  //tot = total;
   unidades[0] = 0;
   miles[0] = 0;
   millones[0] = 0;
