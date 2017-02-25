@@ -211,12 +211,19 @@ unsigned caja_virtual = 0; /* Número de caja virtual que se está operando */
 #include "include/articulos-bd-func.h"
 #include "include/pos-bd-func.h"
 
+double item_capture(PGconn *, int *numart, double *util, double tax[maxtax],
+		    struct tm fecha, char *program_name);
+
 int init_config()
 {
-  home_directory = calloc(1, 255);
-  log_name = calloc(1, 255);
+  int strSize;
 
+  strSize = strlen(getenv("HOME"));
+  home_directory = calloc(1, strSize);
   strcpy(home_directory, getenv("HOME"));
+
+  strSize = strlen(getenv("USER"));
+  log_name = calloc(1, strSize);
   strcpy(log_name, getenv("USER"));
 
   nm_journal = calloc(1, mxbuff);

@@ -26,9 +26,9 @@ void imprime_razon_social(FILE *disp, char *miniprinter_type, char *s1, char *s2
 int imprime(char *nmimpre, struct articulos art[maxart], int numart);
 
 int imprime(char *nmimpre, struct articulos art[maxart], int numart) {
-  extern unsigned maxitem;
-  extern unsigned ajuste_microv, ajuste_v, ajuste_h;
-  extern unsigned desglose_iva;
+  extern short unsigned maxitem;
+  extern short unsigned ajuste_microv, ajuste_v, ajuste_h;
+  extern short unsigned desglose_iva;
   extern char *lp_printer;
   extern short unsigned price_pos[3];
   extern unsigned total_price_pos, desc_pos, desc_len, code_len, qt_pos, code_pos;

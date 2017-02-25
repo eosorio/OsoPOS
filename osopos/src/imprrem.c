@@ -58,7 +58,7 @@ char *cmd_lp; /* Comando de impresión */
 int numarts, dgaran=-1;
 short unsigned maxitem;
 int iva_incluido;
-int desglose_iva;
+short unsigned desglose_iva;
 short unsigned ajuste_microv, ajuste_v, ajuste_h;
 short unsigned price_pos[3];
 unsigned total_price_pos, desc_pos, desc_len, code_len, qt_pos, code_pos;

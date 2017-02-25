@@ -1,4 +1,4 @@
-all: invent remision carrito factur corte imprrem osopos
+all: invent remision factur corte imprrem osopos
 install: install_invent install_remision install_factur install_corte install_imprrem install_osopos
 
 CC = gcc -g -Wall 
@@ -39,14 +39,15 @@ remision: remision.c
 	${PANELLIBS} ${CURSESLIBS} ${GLIBLIBS} ${CRYPTLIBS} \
 	${C_REMISION} ${C_OSOPOS} -ggdb
 
-carrito: carrito.c
-	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/carrito.o carrito.c ${PGLIBS} ${FORMSLIBS} \
-	${PANELLIBS} ${CURSESLIBS} ${GLIBLIBS} ${CRYPTLIBS} \
-	${C_REMISION} ${C_OSOPOS} -ggdb
+#carrito: carrito.c
+#	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/carrito.o carrito.c ${PGLIBS} ${FORMSLIBS} \
+#	${PANELLIBS} ${CURSESLIBS} ${GLIBLIBS} ${CRYPTLIBS} \
+#	${C_REMISION} ${C_OSOPOS} -ggdb
 
 factur: factur.c
-	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/factur.o factur.c ${PGLIBS} ${FORMSLIBS} ${PANELLIBS} \
-	${CURSESLIBS} -D_MOD_FACTUR -ggdb
+	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/factur.o factur.c ${PGLIBS} ${FORMSLIBS} \
+	${PANELLIBS} ${CURSESLIBS} ${GLIBLIBS} \
+	-D_MOD_FACTUR -ggdb
 
 invent: invent.c
 	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/invent.o invent.c ${PGLIBS} ${FORMSLIBS} ${PANELLIBS} \
@@ -64,7 +65,8 @@ osopos: osopos.c
 	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/osopos.o osopos.c ${CURSESLIBS}
 
 imprrem: imprrem.c
-	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/imprrem.o imprrem.c ${CURSESLIBS} ${PGLIBS} ${C_IMPRREM} -ggdb
+	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/imprrem.o imprrem.c \
+	${GLIBLIBS} ${CURSESLIBS} ${PGLIBS} ${C_IMPRREM} -ggdb
 
 gtk_invent: gtk_invent.c
 	${CC} ${CFLAGS} -o ${BUILD_BINDIR}/gtk_invent gtk_invent.c ${GTKLIBS} \

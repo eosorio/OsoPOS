@@ -1,6 +1,3 @@
-double item_capture(PGconn *, int *numart, double *util, double tax[maxtax],
-		    struct tm fecha, char *program_name);
-
 double item_capture(PGconn *con, int *numart, double *util, 
                     double tax[maxtax],
                     struct tm fecha, char *program_name)

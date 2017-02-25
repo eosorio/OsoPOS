@@ -1346,8 +1346,8 @@ int imprime_lista(PGconn *con, char *campo_orden)
 
 
 int main() {
-  int    i,
-         num_items;
+  int    i;
+  unsigned  num_items;
   WINDOW *v_forma;
 /*         *v_mensaje; */
 
@@ -1393,7 +1393,7 @@ int main() {
   mvprintw(getmaxy(stdscr)-2, 0, "Ctrl: A-Agrega B-Busca ");
   printw("D-moDifica Q-termina R-impRime U-qUita <Alt-Enter>Muestra");
 
-  num_items = inicializa_lista(con, "codigo");
+  num_items = (unsigned) inicializa_lista(con, "codigo");
 
   if (num_items<0) {
     mvprintw(getmaxy(stdscr)/2, 0, "Error al incializar la lista de art�culos");
