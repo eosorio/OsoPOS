@@ -8,7 +8,7 @@ COPY domicilio_estados FROM stdin;
 7	Coahuila de Zaragoza
 8	Colima
 9	Durango
-10	Distrito Federal
+10	Ciudad de México
 11	Guanajuato
 12	Guerrero
 13	Hidalgo
