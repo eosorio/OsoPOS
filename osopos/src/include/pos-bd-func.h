@@ -1,7 +1,5 @@
 #include <openssl/sha.h>
 
-int verif_passwd(PGconn *con, gchar *login, gchar *passwd);
-
 int verif_passwd(PGconn *con, gchar *login, gchar *passwd) {
   gchar *query, *us_passwd;
   unsigned char hash[20];
