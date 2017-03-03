@@ -2,7 +2,7 @@
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
    Programa Remision 1.47 (C) 1999-2006 E. Israel Osorio H.
-   eosorioh en gmail punto com
+   eduardo.osorio.ti en gmail punto com
    Lea el archivo README, COPYING y LEAME que contienen información
    sobre la licencia de uso de este programa
 
@@ -95,6 +95,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define _PAGO_CHEQUE    21
 
 #include "include/minegocio-remis.h"
+#include "include/common.h"
 
 int forma_de_pago(double *, double *);
 void Termina(PGconn *con, PGconn *con_s, int error);
@@ -141,6 +142,7 @@ int captura_vendedor();
 int selecciona_caja_virtual(PGconn *con, int num_cajas);
 void read_pos_config(PGconn *con, unsigned num_caja);
 int read_db_config(PGconn *con);
+int strToUpper(char *strOrigin);
 
 volatile int STOP=FALSE; 
 
@@ -1929,8 +1931,9 @@ int busqueda_articulo(char *codigo)
   show_panel(pan);
   mvwprintw(v_busq, 1, 1, "Indique parte de la descripción: ");
   wgetstr(v_busq,descr);
-  for (i=0; i<strlen(descr); i++)
-    descr[i] = toupper(descr[i]);
+  //for (i=0; i<strlen(descr); i++)
+  //  descr[i] = toupper(descr[i]);
+  strToUpper(descr);
 
   /* Desde aqui comienza búsqueda en memoria */
   for (i=0, j=0; i<numbarras && j<maxitem_busqueda; i++) {
