@@ -143,6 +143,7 @@ int selecciona_caja_virtual(PGconn *con, int num_cajas);
 void read_pos_config(PGconn *con, unsigned num_caja);
 int read_db_config(PGconn *con);
 int strToUpper(char *strOrigin);
+int verif_passwd(PGconn *con, gchar *login, gchar *passwd);
 
 volatile int STOP=FALSE; 
 

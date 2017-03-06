@@ -1,27 +1,23 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
    OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
-   Programa Corte 0.14 (C) 1999-2009 E. Israel Osorio H.
-   eduardo.osorio.ict  arr-o-ba  gmail.com
-   Lea el archivo README, COPYING y LEAME que contienen información
-   sobre la licencia de uso de este programa
+   Programa Corte 0.14 (C) 1999-2009,2017 E. Israel Osorio H.
+   eduardo.osorio.ti@gmail.com
 
-     Este programa es un software libre; puede usted redistribuirlo y/o
-modificarlo de acuerdo con los términos de la Licencia Pública General GNU
-publicada por la Free Software Foundation: ya sea en la versión 2 de la
-Licencia, o (a su elección) en una versión posterior.
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
-     Este programa es distribuido con la esperanza de que sea útil, pero
-SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
-DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
-GNU para mayores detalles.
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-     Debería usted haber recibido una copia de la Licencia Pública General
-GNU junto con este programa; de no ser así, escriba a Free Software
-Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
-
 
 #include <stdio.h>
 #include <time.h>
@@ -60,6 +56,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define inverso                  8
 
 #include "include/pos-bd-func.h"
+#include "include/common.h"
 
 double suma_pagos(PGconn *base, int tipo_pago, bool parcial, double *utilidad, double *iva,
                   double tax[maxtax], unsigned cashier_id, unsigned first_sale, unsigned last_sale);
@@ -72,6 +69,8 @@ void   clean_records(PGconn *base, long f_sale);
 char *procesa(char opcion, PGconn *con, FILE *disp);
 int read_config();
 int init_config();
+int strToUpper(char *strOrigin);
+int verif_passwd(PGconn *con, gchar *login, gchar *passwd);
 
 char buff[maxbuf];
 char nm_file[maxbuf];
@@ -621,8 +620,9 @@ int read_config() {
       else if (!strcmp(b,"impresora.tipo")) {
         strcpy(buf, strtok(NULL,"="));
         strcpy(tipo_imp,buf);
-        for (i=0; i<strlen(tipo_imp); i++)
-          tipo_imp[i] = toupper(tipo_imp[i]);
+        strToUpper(tipo_imp);
+        //~ for (i=0; i<strlen(tipo_imp); i++)
+          //~ tipo_imp[i] = toupper(tipo_imp[i]);
       }
       else if (!strcmp(b,"db.host")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
