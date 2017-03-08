@@ -19,3 +19,7 @@ Mediana prioridad
   en programas factur, remision e invent.
 * En invent: cachar error cuando el usuario modifica o agrega articulo y 
   quiere colocar un departamento que no esta dado de alta en la tabla
+
+Baja prioridad
+--------------
+* Revisar uso de mensaje_v (debugear)

@@ -23,8 +23,6 @@ void imprime_razon_social(FILE *disp, char *miniprinter_type, char *s1, char *s2
 }
 
 #ifdef _IMPRREM
-int imprime(char *nmimpre, struct articulos art[maxart], int numart);
-
 int imprime(char *nmimpre, struct articulos art[maxart], int numart) {
   extern short unsigned maxitem;
   extern short unsigned ajuste_microv, ajuste_v, ajuste_h;

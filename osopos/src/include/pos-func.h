@@ -334,7 +334,7 @@ int lee_venta(PGconn *base,
   PGresult *res;
   int i;
 
-  query = calloc(1, 1024);
+  query = (char *)calloc(1, 1024);
   if (query == NULL)
     return (ERROR_MEMORIA);
 
@@ -399,7 +399,7 @@ int sale_register(PGconn *base, PGconn *base_sup,
   int descto_aplicado=0;
   PGresult *res;
 
-  query = calloc(1, 1024);
+  query = (char *)calloc(1, 1024);
   if (query == NULL)
     return (ERROR_MEMORIA);
 
@@ -525,9 +525,9 @@ long int registra_renta(PGconn *base, PGconn *base_sup,
 
   PGresult *db_res;
 
-  query = calloc(1, mxbuff);
-  s_pedido = calloc(1, mxbuff*2);
-  s_entrega = calloc(1, mxbuff*2);
+  query = (char *)calloc(1, mxbuff);
+  s_pedido = (char *)calloc(1, mxbuff*2);
+  s_entrega = (char *)calloc(1, mxbuff*2);
 
   strcpy(s_pedido, ctime(&f_pedido));
   s_pedido[strlen(s_pedido)-1] = 0;
@@ -636,7 +636,7 @@ PGresult *Agrega_en_Inventario(PGconn *base, char *tabla, struct articulos art)
   char *query;
   PGresult *resultado;
 
-  query = calloc(1,mxbuff);
+  query = (char *)calloc(1,mxbuff);
   sprintf(query,
           "INSERT INTO %s VALUES ('%s', '%s', %u, %u, %.2f, '%s', %.2f, '%3s', '%s')", 
           tabla, art.codigo, art.desc, 
@@ -667,7 +667,7 @@ PGresult *Modifica_en_Inventario(PGconn *base, char *tabla, struct articulos art
     strncat(art.desc, tok_descr, maxdes-strlen(art.desc));
   }
   tok_descr = NULL;
-  comando_sql = calloc(1,mxbuff*2);
+  comando_sql = (char *)calloc(1,mxbuff*2);
   sprintf(comando_sql,
          "UPDATE %s SET descripcion='%s', pu=%.2f, descuento=%.2f, cant=%f, min=%f, max=%f, id_prov1=%u, id_depto=%u, p_costo=%.2f, prov_clave='%s', iva_porc=%.2f, divisa='%3s', codigo2='%s', pu2=%.2f, pu3=%.2f, pu4=%.2f, pu5=%.2f WHERE codigo='%s'",
 		  tabla, art.desc, art.pu, art.disc, art.exist,
@@ -701,7 +701,7 @@ PGresult *salida_almacen(PGconn *base, unsigned almacen, struct articulos art, c
     if (dia[i] == ' ')
       dia[i] = '0';
 
-  comando_sql = calloc(1,mxbuff*2);
+  comando_sql = (char *)calloc(1,mxbuff*2);
   sprintf(comando_sql,
          "UPDATE almacen_1 SET cant=%f WHERE id_alm=%d AND codigo='%s'",
 		  art.exist, almacen, art.codigo);
@@ -732,7 +732,7 @@ PGresult *Quita_de_Inventario(PGconn *base, char *tabla, char *codigo)
   }
   PQclear(res);
 
-  comando_sql = calloc(1,mxbuff);
+  comando_sql = (char *)calloc(1,mxbuff);
   sprintf(comando_sql, "DELETE FROM %s WHERE codigo='%s'", tabla, codigo);
   res = PQexec(base, comando_sql);
   if (PQresultStatus(res) != PGRES_COMMAND_OK)
@@ -755,7 +755,7 @@ PGresult *Agrega_en_Carrito(PGconn *base, struct articulos art, char *usuario)
   char *query;
   PGresult *resultado;
 
-  query = calloc(1,mxbuff);
+  query = (char *)calloc(1,mxbuff);
   sprintf(query,
           "INSERT INTO carro_virtual (usuario, codigo, cant) VALUES ('%s', '%s', %f) ",
           usuario, art.codigo, art.cant);
@@ -788,7 +788,7 @@ PGresult *search_product(PGconn *base,
   }
   PQclear(res);
 
-  query = calloc(1,mxbuff*2);
+  query = (char *)calloc(1,mxbuff*2);
   sprintf(query, "DECLARE cursor_arts CURSOR FOR SELECT ar.codigo, ar.descripcion, al.pu, al.pu2, al.pu3, al.pu4, al.pu5, al.cant, al.c_min, al.c_max, ar.id_prov1, ar.id_depto, ar.p_costo, ar.prov_clave, ar.iva_porc, ar.divisa, ar.codigo2 ");
   sprintf(query, "%s FROM %s al, articulos ar ",
           query, tabla);
@@ -895,7 +895,7 @@ char *buff;
     return(ERROR_ARCHIVO_2);
   }
 
-  buff = calloc(1,mxbuff);
+  buff = (char *)calloc(1,mxbuff);
   fgets(buff, mxbuff, arch);
 
   while (!feof(arch)) {

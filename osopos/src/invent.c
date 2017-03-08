@@ -106,8 +106,8 @@ int init_config()
   FILE *env_process;
   char *log_name;
 
-  home_directory = calloc(1, 255);
-  log_name = calloc(1, 255);
+  home_directory = (char *)calloc(1, 255);
+  log_name = (char *)calloc(1, 255);
 
   if (!(env_process = popen("printenv HOME", "r"))) {
     free(log_name);
@@ -141,12 +141,12 @@ int init_config()
   db.hostport = NULL;
   db.hostname = NULL;
 
-  db.hostname = calloc(1, strlen("255.255.255.255"));
-  db.name = calloc(1, strlen("elpuntodeventa.com"));
-  db.user = calloc(1, strlen(log_name)+1);
+  db.hostname = (char *)calloc(1, strlen("255.255.255.255"));
+  db.name = (char *)calloc(1, strlen("elpuntodeventa.com"));
+  db.user = (char *)calloc(1, strlen(log_name)+1);
   strcpy(db.user, log_name);
 
-  db.sup_user = calloc(1, strlen("scaja")+1);
+  db.sup_user = (char *)calloc(1, strlen("scaja")+1);
   return(0);
 }
 
@@ -161,7 +161,7 @@ int read_general_config()
   char *aux = NULL;
 
   
-  nmconfig = calloc(1, 255);
+  nmconfig = (char *)calloc(1, 255);
   strncpy(nmconfig, "/etc/osopos/general.config", 255);
 
   config = fopen(nmconfig,"r");
@@ -182,7 +182,7 @@ int read_general_config()
 
       if (!strcmp(b,"db.host")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.hostname, strlen(buf)+1);
+        aux = (char *)realloc(db.hostname, strlen(buf)+1);
         if (aux != NULL) {
           strcpy(db.hostname,buf);
           aux = NULL;
@@ -193,7 +193,7 @@ int read_general_config()
       }
       else if (!strcmp(b,"db.port")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.hostport, strlen(buf)+1);
+        aux = (char *)realloc(db.hostport, strlen(buf)+1);
         if (aux != NULL) {
           strcpy(db.hostport,buf);
           aux = NULL;
@@ -204,7 +204,7 @@ int read_general_config()
       }
       else if (!strcmp(b,"db.nombre")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.name, strlen(buf)+1);
+        aux = (char *)realloc(db.name, strlen(buf)+1);
         if (aux != NULL) {
           strcpy(db.name,buf);
           aux = NULL;
@@ -215,7 +215,7 @@ int read_general_config()
       }
       else if (!strcmp(b,"db.sup_usuario")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.sup_user, strlen(buf)+1);
+        aux = (char *)realloc(db.sup_user, strlen(buf)+1);
         if (aux != NULL) {
           strcpy(db.sup_user,buf);
           aux = NULL;
@@ -226,7 +226,7 @@ int read_general_config()
       }
       else if (!strcmp(b,"db.sup_passwd")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        db.sup_passwd = calloc(1, strlen(buf)+1);
+        db.sup_passwd = (char *)calloc(1, strlen(buf)+1);
         if (db.sup_passwd  != NULL) {
           strcpy(db.sup_passwd,buf);
           aux = NULL;
@@ -270,8 +270,8 @@ int read_config() {
   int i;
 
   for (i=0; i<mxbuff; buff[i]=0, buf[i++]=0);
-  home_directory = calloc(1, 255);
-  nmconfig = calloc(1, 255);
+  home_directory = (char *)calloc(1, 255);
+  nmconfig = (char *)calloc(1, 255);
   config = popen("printenv HOME", "r");
   fgets(home_directory, 255, config);
   home_directory[strlen(home_directory)-1] = 0;
@@ -281,8 +281,8 @@ int read_config() {
   strcat(nmconfig, "/.osopos/invent.config");
 
 
-  nmdisp = calloc(1, strlen("/tmp/scaja_invent")+1);
-  nminvent = calloc(1, 9);
+  nmdisp = (char *)calloc(1, strlen("/tmp/scaja_invent")+1);
+  nminvent = (char *)calloc(1, 9);
 
   strcpy(nmdisp, "/tmp/scaja_invent");
   strcpy(nminvent, "osopos");
@@ -307,7 +307,7 @@ int read_config() {
         /* Busca par�metros de operaci�n */
       if (!strcmp(b,"base.datos")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(nminvent, strlen(buf+1));
+        aux = (char *)realloc(nminvent, strlen(buf+1));
         if (aux != NULL)
           strncpy(nminvent,buf, mxbuff);
         else
@@ -316,7 +316,7 @@ int read_config() {
       }
       else if (!strcmp(b,"impresion.salida")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(nmdisp, strlen(buf+1));
+        aux = (char *)realloc(nmdisp, strlen(buf+1));
         if (aux != NULL)
           strncpy(nmdisp, buf, strlen(buf));
         else
@@ -325,7 +325,7 @@ int read_config() {
       }
       else if (!strcmp(b,"db.host")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.hostname, strlen(buf)+1);
+        aux = (char *)realloc(db.hostname, strlen(buf)+1);
         if (aux != NULL)
           strncpy(db.hostname,buf, strlen(buf));
         else
@@ -334,7 +334,7 @@ int read_config() {
       }
       else if (!strcmp(b,"db.port")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.hostport, strlen(buf)+1);
+        aux = (char *)realloc(db.hostport, strlen(buf)+1);
         if (aux != NULL)
           strncpy(db.hostport,buf, strlen(buf));
         else
@@ -374,7 +374,7 @@ int inicializa_lista(PGconn *base, char *campo_orden)
   }
   PQclear(res);
 
-  comando = calloc(1,mxbuff);
+  comando = (char *)calloc(1,mxbuff);
   snprintf(comando, mxbuff,
       "DECLARE cursor_arts CURSOR FOR SELECT codigo,descripcion,pu,cant FROM articulos ORDER BY \"%s\"",
 	campo_orden);
@@ -404,7 +404,7 @@ int inicializa_lista(PGconn *base, char *campo_orden)
   str_aux[j] = 0;
 
   for (i=0; i<PQntuples(res) && i<maxitemlista; i++) {
-    item[i] = calloc(1,getmaxx(stdscr));
+    item[i] = (char *)calloc(1,getmaxx(stdscr));
     strcpy(item[i], str_aux);
 
     if (maxdes+maxcod+maxpreciolong+maxexistlong+3 > getmaxx(stdscr)-1) {
@@ -466,7 +466,7 @@ void modifica_item(struct articulos art, int i)
 {
   char *aux;
 
-    aux = calloc(1, mxbuff);
+    aux = (char *)calloc(1, mxbuff);
     if (maxdes+maxcod+maxpreciolong+maxexistlong+3 > getmaxx(stdscr)-1) {
        /* C�digo */
       strncpy(aux, art.codigo, maxcod);
@@ -696,11 +696,11 @@ int fill_form(FIELD *campo[35], unsigned i, PGconn *base)
   strncpy(codigo, item[i], maxcod-1);
   codigo[maxcod-1] = 0;
   limpiacad(codigo, TRUE);
-  comando = calloc(1, mxbuff);
+  comando = (char *)calloc(1, mxbuff);
 
   res = search_product(base, "articulos", "codigo", codigo, TRUE, &art);
   if (res == NULL) {
-    aux = calloc(1, mxbuff);
+    aux = (char *)calloc(1, mxbuff);
 
     set_field_buffer(campo[CAMPO_COD], 0, codigo);
     set_field_buffer(campo[CAMPO_COD2], 0, art.codigo2);
@@ -778,7 +778,7 @@ int busca_item(char *codigo, unsigned num_items)
 
   if (strlen(codigo) > maxcod)
     return(-1);
-  aux = calloc(1, mxbuff);
+  aux = (char *)calloc(1, mxbuff);
 
   for (i=0; i<num_items; i++) {
     strncpy(aux, item[i], maxcod-1);
@@ -802,44 +802,44 @@ int interpreta_campos(struct articulos *art, FIELD *campo[35])
   for (aux=0; aux<=maxnickprov; str_prov[aux++] = 0);
   for (aux=0; aux<=maxdeptolen; str_depto[aux++] = 0);
 
-  strncpy(art->codigo, campo[CAMPO_COD]->buf, maxcod-1);
+  strncpy(art->codigo, field_buffer(campo[CAMPO_COD],0), maxcod-1);
   art->codigo[maxcod-1] = 0;
   limpiacad(art->codigo, TRUE);
 
-  strncpy(art->codigo2, campo[CAMPO_COD2]->buf, maxcod-1);
+  strncpy(art->codigo2, field_buffer(campo[CAMPO_COD2],0), maxcod-1);
   art->codigo2[maxcod-1] = 0;
   limpiacad(art->codigo2, TRUE);
 
-  strncpy(art->desc, campo[CAMPO_DESCR]->buf, maxdes);
+  strncpy(art->desc, field_buffer(campo[CAMPO_DESCR],0), maxdes);
   art->desc[maxdes-1] = 0;
   limpiacad(art->desc, TRUE);
 
-  art->pu = atof(campo[CAMPO_PU]->buf);
-  art->pu2 = atof(campo[CAMPO_PU2]->buf);
-  art->pu3 = atof(campo[CAMPO_PU3]->buf);
-  art->pu4 = atof(campo[CAMPO_PU4]->buf);
-  art->pu5 = atof(campo[CAMPO_PU5]->buf);
+  art->pu = atof(field_buffer(campo[CAMPO_PU],0));
+  art->pu2 = atof(field_buffer(campo[CAMPO_PU2],0));
+  art->pu3 = atof(field_buffer(campo[CAMPO_PU3],0));
+  art->pu4 = atof(field_buffer(campo[CAMPO_PU4],0));
+  art->pu5 = atof(field_buffer(campo[CAMPO_PU5],0));
 
-  strncpy(art->divisa, campo[CAMPO_DIVISA]->buf, 3);
+  strncpy(art->divisa, field_buffer(campo[CAMPO_DIVISA],0), 3);
   //  art->desc[3] = 0;
 
-  art->exist = atof(campo[CAMPO_EXIS]->buf);
-  art->disc = atof(campo[CAMPO_DISC]->buf);
-  art->exist_min = atof(campo[CAMPO_EXMIN]->buf);
-  art->exist_max = atof(campo[CAMPO_EXMAX]->buf);
+  art->exist = atof(field_buffer(campo[CAMPO_EXIS],0));
+  art->disc = atof(field_buffer(campo[CAMPO_DISC],0));
+  art->exist_min = atof(field_buffer(campo[CAMPO_EXMIN],0));
+  art->exist_max = atof(field_buffer(campo[CAMPO_EXMAX],0));
 
-  strncpy(str_prov, campo[CAMPO_CODPROV]->buf, maxnickprov);
+  strncpy(str_prov, field_buffer(campo[CAMPO_CODPROV],0), maxnickprov);
   limpiacad(str_prov, TRUE);
   aux = busca_proveedor(con_s, str_prov);
   art->id_prov = aux<0 ? 0 : aux;
 
-  strncpy(str_depto, campo[CAMPO_DEPTO]->buf, maxdeptolen);
+  strncpy(str_depto, field_buffer(campo[CAMPO_DEPTO],0), maxdeptolen);
   limpiacad(str_depto, TRUE);
   aux = busca_depto(con, str_depto);
   art->id_depto = aux<0 ? 0 : aux;
 
-  art->p_costo = atof(campo[CAMPO_PCOSTO]->buf);
-  art->iva_porc = atof(campo[CAMPO_IVA]->buf);
+  art->p_costo = atof(field_buffer(campo[CAMPO_PCOSTO],0));
+  art->iva_porc = atof(field_buffer(campo[CAMPO_IVA],0));
   return(OK);
 }
 
@@ -850,7 +850,7 @@ void modifica_articulo(FIELD *campo[35], PGconn *base, unsigned num_items)
   char   codigo[mxbuff];
 
   for (item=0; item<mxbuff; codigo[item++] = 0);
-  strncpy(codigo, campo[CAMPO_COD]->buf, maxcod);
+  strncpy(codigo, field_buffer(campo[CAMPO_COD],0), maxcod);
   if (codigo[strlen(codigo)-1] == '\n')
     codigo[strlen(codigo)-1] = 0;
   limpiacad(codigo, TRUE);
@@ -872,7 +872,7 @@ void agrega_articulo(FIELD *campo[35], PGconn *base, unsigned *num_items)
   char   codigo[mxbuff];
 
   for (i=0; i<mxbuff; codigo[i++]=0);
-  strncpy(codigo, campo[CAMPO_COD]->buf, maxcod);
+  strncpy(codigo, field_buffer(campo[CAMPO_COD],0), maxcod);
   if (codigo[strlen(codigo)-1] == '\n')
     codigo[strlen(codigo)-1] = 0;
   limpiacad(codigo, TRUE);
@@ -883,7 +883,7 @@ void agrega_articulo(FIELD *campo[35], PGconn *base, unsigned *num_items)
   }
   if (!interpreta_campos(&art, campo))
     Agrega_en_Inventario(base, "articulos", art);
-  item[(*num_items)] = calloc(1, getmaxx(stdscr));
+  item[(*num_items)] = (char *)calloc(1, getmaxx(stdscr));
   for (i=0; i<getmaxx(stdscr); item[*num_items][i++]=' ');
   modifica_item(art, *num_items);
   (*num_items)++;
@@ -897,9 +897,9 @@ PGresult *borra_articulo(PGconn *base, FIELD *campo, unsigned *num_items)
   int      item=-1;
 
 
-  codigo = calloc(1,maxcod);
+  codigo = (char *)calloc(1,maxcod);
 
-  strncpy(codigo, campo->buf, maxcod-1);
+  strncpy(codigo, field_buffer(campo,0), maxcod-1);
   codigo[maxcod-1] = 0;
   limpiacad(codigo, TRUE);
 
@@ -958,7 +958,8 @@ int busca_articulo(FIELD *campo, unsigned num_items)
   char codigo[maxcod];
 
   for (item=0; item<maxcod; codigo[item++] = 0);
-   strncpy(codigo, campo->buf, maxcod-1);
+   //strncpy(codigo, campo->buf, maxcod-1);
+   strncpy(codigo, field_buffer(campo,0), maxcod-1);
    codigo[maxcod-1] = 0;
    limpiacad(codigo, TRUE);
    item = busca_item(codigo, num_items);
@@ -992,13 +993,13 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
    return(ERROR_SQL);
   }
 
-  auxdepto = calloc(1, maxdeptolen+1);
+  auxdepto = (char *)calloc(1, maxdeptolen+1);
   if (auxdepto == NULL)
     return(ERROR_MEMORIA);
   num_deptos = PQntuples(res);
   for (i=0; i<num_deptos && i<maxdepto; i++) {
     strncpy(auxdepto, PQgetvalue(res, i, 0), maxdeptolen);
-    depto[i] = calloc(1, strlen(auxdepto)+1);
+    depto[i] = (char *)calloc(1, strlen(auxdepto)+1);
     if (depto[i] == NULL) {
       free(auxdepto);
       return(ERROR_MEMORIA);
@@ -1018,11 +1019,11 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
    PQclear(res);
   }
 
-  auxprov = calloc(1, maxnickprov+1);
+  auxprov = (char *)calloc(1, maxnickprov+1);
   num_provs = PQntuples(res);
   for (i=0; i<num_provs; i++) {
     strncpy(auxprov, PQgetvalue(res, i, 0), maxnickprov);
-    prov[i] = calloc(1, strlen(auxprov)+1);
+    prov[i] = (char *)calloc(1, strlen(auxprov)+1);
     if (prov[i] == NULL) {
       free(auxprov);
       return(ERROR_MEMORIA);
@@ -1295,7 +1296,7 @@ int imprime_lista(PGconn *con, char *campo_orden)
   }
   PQclear(res);
 
-  comando = calloc(1, mxbuff);
+  comando = (char *)calloc(1, mxbuff);
   if (comando == NULL)
     return(ERROR_MEMORIA);
 
@@ -1346,7 +1347,7 @@ int imprime_lista(PGconn *con, char *campo_orden)
 
 
 int main() {
-  int    i;
+  int    i,iBuff;
   unsigned  num_items;
   WINDOW *v_forma;
 /*         *v_mensaje; */
@@ -1378,24 +1379,21 @@ int main() {
   con = Abre_Base(db.hostname, db.hostport, NULL, NULL, db.name, db.user, db.passwd); 
 
   if (PQstatus(con) == CONNECTION_BAD) {
-    printw("FATAL: Fall� la conexi�n a la base de datos %s\n", nminvent);
+    printw("FATAL: Falló la conexión a la base de datos %s\n", nminvent);
     printw("Presione <Intro> para terminar...");
     getch();
     endwin();
     exit(ERROR_SQL);
   }
 
-/*  v_mensaje = newwin(LINES-2, COLS-1, LINES-5, 0);
-  scrollok(v_mensaje, FALSE);
-  mvwprintw(v_mensaje,0,0, "<Ctrl-A>Agrega  <Ctrl-B>Busca  ");
-  wprintw(v_mensaje, "<Ctrl-D>moDifica  <Ctrl-Q>Termina");
-  wrefresh(v_mensaje); */
   mvprintw(getmaxy(stdscr)-2, 0, "Ctrl: A-Agrega B-Busca ");
   printw("D-moDifica Q-termina R-impRime U-qUita <Alt-Enter>Muestra");
 
-  num_items = (unsigned) inicializa_lista(con, "codigo");
+  //num_items = (unsigned) inicializa_lista(con, "codigo");
+  iBuff = inicializa_lista(con, "codigo");
+  
 
-  if (num_items<0) {
+  if (iBuff<0) {
     mvprintw(getmaxy(stdscr)/2, 0, "Error al incializar la lista de art�culos");
     mvprintw(getmaxy(stdscr)-2, 0, "Pulse una tecla para salir...");
     clrtoeol();
@@ -1405,6 +1403,9 @@ int main() {
     fprintf(stderr, "Error al incializar la lista de art�culos\n");
     exit(ERROR_SQL);
   }
+  else
+    num_items = (unsigned) iBuff;
+
   ajusta_ventana_forma();
   forma_articulo(v_forma, &num_items, con);
 
@@ -1414,7 +1415,7 @@ int main() {
   endwin();
   PQfinish(con);
   PQfinish(con_s);
-  for (i=0; i<num_items; i++)
+  for (i=0; i<(int)num_items; i++)
     free(item[i]);
   free(nmdisp);
   free(nminvent);
@@ -1426,11 +1427,11 @@ int main() {
 - Hacer que despliegue un mensaje de error al no poder abrir un
   archivo
 - Hacer que haga un refresh del renglon al actualizar un articulo, en caso de que
-  sea representado en la pantalla al momento de la modificaci�n
+  sea representado en la pantalla al momento de la modificación
 */
 
 /* BUGS:
-- Al solicitar elementos de campos enumerados que eastn fuera de los limites, no muestra
+- Al solicitar elementos de campos enumerados que estan fuera de los limites, no muestra
   nada ni muestra de nuevo las opciones (con las flechas)
 - Al quitar el ultimo articulo de la lista, y al volverlo a agregar, no despliega en la lista
   al penultimo elemento (se lo come)

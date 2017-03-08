@@ -74,6 +74,7 @@ int mxrenarts_long;  /* longitud máxima del renglon de articulos al imprimir */
 int read_config();
 int CalculaIVA();
 int read_general_config();
+int imprime(char *nmimpre, struct articulos art[maxart], int numart);
 
 /***************************************************************************/
 
@@ -81,13 +82,13 @@ int init_config()
 {
 
 
-  home_directory = calloc(1, 255);
+  home_directory = (char *)calloc(1, 255);
   strcpy(home_directory, getenv("HOME"));
 
-  log_name = calloc(1, 255);
+  log_name = (char *)calloc(1, 255);
   strcpy(log_name, getenv("LOGNAME"));
 
-  cmd_lp = calloc(1, strlen("lpr -P ")+1);
+  cmd_lp = (char *)calloc(1, strlen("lpr -P ")+1);
   strcpy(cmd_lp, "lpr -P ");
 
   db.name= NULL;
@@ -98,11 +99,11 @@ int init_config()
   db.hostport = NULL;
   db.hostname = NULL;
 
-  db.hostname = calloc(1, strlen("255.255.255.255"));
-  db.name = calloc(1, strlen("elpuntodeventa.com"));
-  db.user = calloc(1, strlen(log_name)+1);
+  db.hostname = (char *)calloc(1, strlen("255.255.255.255"));
+  db.name = (char *)calloc(1, strlen("elpuntodeventa.com"));
+  db.user = (char *)calloc(1, strlen(log_name)+1);
   strcpy(db.user, log_name);
-  db.sup_user = calloc(1, strlen("scaja")+1);
+  db.sup_user = (char *)calloc(1, strlen("scaja")+1);
 
   TAX_PERC_DEF = 10;
   strcpy(s_divisa, "MXP");
@@ -129,7 +130,7 @@ int read_general_config()
   char *aux = NULL;
 
   
-  nmconfig = calloc(1, 255);
+  nmconfig = (char *)calloc(1, 255);
   strncpy(nmconfig, "/etc/osopos/general.config", 255);
 
   config = fopen(nmconfig,"r");
@@ -151,7 +152,7 @@ int read_general_config()
 
       if (!strcmp(b,"db.host")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.hostname, strlen(buf)+1);
+        aux = (char *)realloc(db.hostname, strlen(buf)+1);
         if (aux != NULL) {
           strcpy(db.hostname,buf);
           aux = NULL;
@@ -162,7 +163,7 @@ int read_general_config()
       }
       else if (!strcmp(b,"db.port")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.hostport, strlen(buf)+1);
+        aux = (char *)realloc(db.hostport, strlen(buf)+1);
         if (aux != NULL) {
           strcpy(db.hostport,buf);
           aux = NULL;
@@ -173,7 +174,7 @@ int read_general_config()
       }
       else if (!strcmp(b,"db.nombre")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.name, strlen(buf)+1);
+        aux = (char *)realloc(db.name, strlen(buf)+1);
         if (aux != NULL) {
           strcpy(db.name,buf);
           aux = NULL;
@@ -184,7 +185,7 @@ int read_general_config()
       }
       else if (!strcmp(b,"db.sup_usuario")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.sup_user, strlen(buf)+1);
+        aux = (char *)realloc(db.sup_user, strlen(buf)+1);
         if (aux != NULL) {
           strcpy(db.sup_user,buf);
           aux = NULL;
@@ -195,7 +196,7 @@ int read_general_config()
       }
       else if (!strcmp(b,"db.sup_passwd")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        db.sup_passwd = calloc(1, strlen(buf)+1);
+        db.sup_passwd = (char *)calloc(1, strlen(buf)+1);
         if (db.sup_passwd  != NULL) {
           strcpy(db.sup_passwd,buf);
           aux = NULL;
@@ -245,8 +246,8 @@ int read_config() {
   static int i;
 
 
-  home_directory = calloc(1, 255);
-  nmconfig = calloc(1, 255);
+  home_directory = (char *)calloc(1, 255);
+  nmconfig = (char *)calloc(1, 255);
   config = popen("printenv HOME", "r");
   fgets(home_directory, 255, config);
   home_directory[strlen(home_directory)-1] = 0;
@@ -256,9 +257,9 @@ int read_config() {
   strcat(nmconfig, "/.osopos/imprrem.config");
 
   strcpy(nmimpre,"/tmp/osopos_nota");
-  prt_type = calloc(1, strlen("EPSON"));
+  prt_type = (char *)calloc(1, strlen("EPSON"));
   strcpy(prt_type,"EPSON");
-  lp_printer = calloc(1, strlen("facturas")+1);
+  lp_printer = (char *)calloc(1, strlen("facturas")+1);
   strcpy(lp_printer, "facturas");
   maxitem = 20;
 
@@ -294,7 +295,7 @@ int read_config() {
       }
       else if (!strcmp(b,"impresora.lpr")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(lp_printer, strlen(buf)+1);
+        aux = (char *)realloc(lp_printer, strlen(buf)+1);
         if (aux != NULL)
           strcpy(lp_printer,buf);
         else
@@ -303,7 +304,7 @@ int read_config() {
       }
       else if (!strcmp(b,"impresora.tipo")) {
         strcpy(buf, strtok(NULL,"="));
-        aux = realloc(prt_type, strlen(buf)+1);
+        aux = (char *)realloc(prt_type, strlen(buf)+1);
         if (aux != NULL) {
           strcpy(prt_type,buf);
           for (i=0; i<strlen(prt_type); i++)
@@ -315,7 +316,7 @@ int read_config() {
       }
       else if (!strcmp(b,"db.usuario")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = realloc(db.user, strlen(buf)+1);
+        aux = (char *)realloc(db.user, strlen(buf)+1);
         if (aux != NULL) {
           strcpy(db.user,buf);
           aux = NULL;

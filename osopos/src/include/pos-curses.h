@@ -258,7 +258,7 @@ char *obten_login()
 {
   char *u;
 
-  u = calloc(1,mxbuff);
+  u = (char *)calloc(1,mxbuff);
 
   mvprintw(getmaxy(stdscr)-3,0, "Usuario: ");
   clrtoeol();
@@ -272,7 +272,7 @@ char *obten_passwd(char *login)
 {
   char *p;
 
-  p = calloc(1,mxbuff);
+  p = (char *)calloc(1,mxbuff);
 
   mvprintw(getmaxy(stdscr)-3,0, "Contraseña: ");
   clrtoeol();
@@ -296,7 +296,7 @@ void mensaje_v(char *texto, int txt_colores, int tecla)
   int t=0;
 
   pan = mkpanel(COLOR_BLACK, vy, vx, (getmaxy(stdscr)-vy)/2, (getmaxx(stdscr)-vx)/2);
-  set_panel_userptr(pan, "pan");
+//  set_panel_userptr(pan, "pan");  <--Invalid. The second argument has to be a pointer to another panel
 
   v_mens = panel_window(pan);
 
