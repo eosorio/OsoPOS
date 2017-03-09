@@ -9,6 +9,8 @@
 #define maxbuf 254
 #endif
 
+unsigned Espacios(FILE* arch, unsigned nespacios);
+
 void imprime_razon_social(FILE *disp, char *miniprinter_type, char *s1, char *s2)
 {
   if (strstr(miniprinter_type, "EPSON")) {

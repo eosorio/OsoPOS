@@ -1,5 +1,6 @@
 Alta prioridad
 ---------------
+* global config: if a variable has an empty value it produces a segfault
 * En remision.c se provoca una violación de segmento cuando se
   dan demasiados <Backspace> (más de los que se requieren para borrar
   un código) cuando no hay renglones de artículos. Probablemente sea

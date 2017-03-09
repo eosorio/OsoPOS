@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "print-func.h"
+
 #ifndef ESC
 #define ESC 27
 #endif
@@ -8,6 +10,8 @@
 #ifndef maxbuf
 #define maxbuf 254
 #endif
+
+unsigned Espacios(FILE* arch, unsigned nespacios);
 
 void imprime_razon_social(FILE *disp, char *miniprinter_type, char *s1, char *s2)
 {

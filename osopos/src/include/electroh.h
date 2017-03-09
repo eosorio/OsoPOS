@@ -1,3 +1,5 @@
+#include "print-func.h"
+
 #ifdef _MOD_FACTUR
 #include "factur.h"
 #endif
@@ -18,6 +20,7 @@
 #define maxart 40
 #endif
 
+unsigned Espacios(FILE* arch, unsigned nespacios);
 
 void Crea_Factura( struct datoscliente cliente,
 		    struct   fech fecha,

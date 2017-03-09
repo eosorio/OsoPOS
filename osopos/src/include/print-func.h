@@ -19,9 +19,6 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 #include<stdio.h>
 
-unsigned Espacios(FILE* arch, unsigned nespacios);
-/* Imprime espacios en al archivo ar */
-
 void avance_vert(FILE *disp, unsigned avance, unsigned mode);
 /* Avanza n/216" en modo Epson */
 
@@ -36,7 +33,7 @@ void feed_paper(FILE *disp, short n, unsigned mode);
 
 
 /*********************************************************************/
-
+/* Imprime espacios en al archivo ar */
 unsigned Espacios (FILE* ar, unsigned n) {
 
   unsigned i;

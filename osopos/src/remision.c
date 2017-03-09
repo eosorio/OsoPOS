@@ -145,6 +145,9 @@ int read_db_config(PGconn *con);
 int strToUpper(char *strOrigin);
 int verif_passwd(PGconn *con, gchar *login, gchar *passwd);
 
+unsigned Espacios(FILE* arch, unsigned nespacios);
+
+
 volatile int STOP=FALSE; 
 
 FILE *impresora;
@@ -221,6 +224,16 @@ int init_config()
 {
   int strSize;
 
+  db.user = NULL;
+  db.passwd = NULL;
+  db.sup_user = NULL;
+  db.sup_passwd = NULL;
+  db.hostport = NULL;
+
+  db.hostport = g_strdup("5432");
+  db.user = g_ascii_strdown(g_strdup_printf("%s", log_name), -1);
+  db.sup_user = g_strdup_printf("scaja");
+
   strSize = strlen(getenv("HOME"));
   home_directory = calloc(1, strSize);
   strcpy(home_directory, getenv("HOME"));
@@ -228,6 +241,16 @@ int init_config()
   strSize = strlen(getenv("USER"));
   log_name = calloc(1, strSize);
   strcpy(log_name, getenv("USER"));
+
+  if (getenv("OSOPOS_DBNAME") == NULL)
+    db.name = g_strdup("elpuntodeventa.com");
+  else
+    db.name = g_strdup(getenv("OSOPOS_DBNAME"));
+
+  if (getenv("OSOPOS_DBHOST") == NULL)
+    db.hostname = g_strdup("localhost");
+  else
+    db.hostname = g_strdup(getenv("OSOPOS_DBHOST"));
 
   nm_journal = calloc(1, mxbuff);
   nm_orig_journal = calloc(1, strlen(home_directory) + strlen("/.last_items.") + 10);
@@ -277,20 +300,6 @@ int init_config()
 
   nm_factur = calloc(1, strlen("/usr/local/bin/factur"));
   strcpy(nm_factur, "/usr/bin/factur");
-
-  db.name= NULL;
-  db.user = NULL;
-  db.passwd = NULL;
-  db.sup_user = NULL;
-  db.sup_passwd = NULL;
-  db.hostport = NULL;
-  db.hostname = NULL;
-
-  db.hostname = g_strdup("255.255.255.255");
-  db.hostport = g_strdup("5432");
-  db.name = g_strdup("elpuntodeventa.com");
-  db.user = g_ascii_strdown(g_strdup_printf("%s", log_name), -1);
-  db.sup_user = g_strdup_printf("scaja");
 
   maxitemr = 6;
 
@@ -1738,14 +1747,14 @@ int  check_for_journal(char *dirname, char *program_name) {
   char buf[mxbuff];
   char *buff2;
   int i=0, orphan=0;
+  const char* pidofCmd = "/sbin/pidof";
 
   buff2 = calloc(1, mxbuff);
   dir = opendir(dirname);
   if (dir == NULL)
     return(FILE_1_ERROR);
 
-  /* IGM We need to change de hardcode in the near future */
-  sprintf(buf, "/sbin/pidof %s", program_name);
+  sprintf(buf, "%s %s", pidofCmd, program_name);
   p_cmd = popen(buf, "r");
 
   if (!feof(p_cmd))

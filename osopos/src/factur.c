@@ -33,7 +33,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <sys/types.h>
 
 #include "include/factur-curses.h"
-#include "include/print-func.h"
+//#include "include/print-func.h"
 
 //#include "include/linucs.h"
 #include "include/electroh.h"

@@ -2,6 +2,8 @@
 #include "factur.h"
 #endif
 
+#include "print-func.h"
+
 #ifndef maxdes
 #define maxdes 60
 #endif
@@ -21,6 +23,8 @@
 #ifndef maxrenf
 #define maxrenf 22
 #endif
+
+unsigned Espacios(FILE* arch, unsigned nespacios);
 
 void Crea_Factura( struct datoscliente cliente,
 		    struct   fech fecha,
