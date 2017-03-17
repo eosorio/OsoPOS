@@ -94,14 +94,14 @@ int quita_renglon(unsigned renglon, unsigned num_items);
 int form_virtualize(WINDOW *w);
 //FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta);
 
-int inicializa_lista(PGconn *base, char *campo_orden);
+int inicializa_lista(PGconn *base, char *campo_orden, int alm);
 
 /* Muestra el detalle del art�culo */
 int fill_form(FIELD *campo[35], unsigned i, PGconn *base);
 
 /***************************************************************************/
 
-int init_config()
+ int init_config()
 {
   FILE *env_process;
   char *log_name;
@@ -127,11 +127,11 @@ int init_config()
   log_name[strlen(log_name)-1] = 0;
   pclose(env_process);
 
-  
+  tipo_imp = (char *)calloc(1, strlen("EPSON"));
   sprintf(tipo_imp,"EPSON");
 
-  strncpy(lp_printer, "facturas", maxbuf);
-
+  lp_printer = (char *)calloc(1, strlen("facturas"));
+  sprintf(lp_printer, "facturas");
 
   db.name= NULL;
   db.user = NULL;
@@ -184,7 +184,8 @@ int read_general_config()
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = (char *)realloc(db.hostname, strlen(buf)+1);
         if (aux != NULL) {
-          strcpy(db.hostname,buf);
+          db.hostname =  g_strdup_printf("%s", buf);
+          //strcpy(db.hostname,buf);
           aux = NULL;
         }
         else
@@ -195,7 +196,7 @@ int read_general_config()
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = (char *)realloc(db.hostport, strlen(buf)+1);
         if (aux != NULL) {
-          strcpy(db.hostport,buf);
+          db.hostport =  g_strdup_printf("%s", buf);
           aux = NULL;
         }
         else
@@ -206,7 +207,8 @@ int read_general_config()
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = (char *)realloc(db.name, strlen(buf)+1);
         if (aux != NULL) {
-          strcpy(db.name,buf);
+          //strcpy(db.name,buf);
+          db.name =  g_strdup_printf("%s", buf);
           aux = NULL;
         }
         else
@@ -217,7 +219,8 @@ int read_general_config()
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = (char *)realloc(db.sup_user, strlen(buf)+1);
         if (aux != NULL) {
-          strcpy(db.sup_user,buf);
+          //strcpy(db.sup_user,buf);
+          db.sup_user =  g_strdup_printf("%s", buf);
           aux = NULL;
         }
         else
@@ -228,8 +231,9 @@ int read_general_config()
         strncpy(buf, strtok(NULL,"="), mxbuff);
         db.sup_passwd = (char *)calloc(1, strlen(buf)+1);
         if (db.sup_passwd  != NULL) {
-          strcpy(db.sup_passwd,buf);
-          aux = NULL;
+          //strcpy(db.sup_passwd,buf);
+          db.sup_passwd =  g_strdup_printf("%s", buf);
+         aux = NULL;
         }
         else
           fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
@@ -355,15 +359,15 @@ int read_config() {
 }
 
 
-int inicializa_lista(PGconn *base, char *campo_orden)
+int inicializa_lista(PGconn *base, char *campo_orden, int alm)
 {
   int       i, j;
   PGresult  *res;
-  char *comando;
+  gchar *comando;
   char str_aux[255];
 
   v_arts =  newwin(getmaxy(stdscr)-12,getmaxx(stdscr), 9,0);
-/* Los par�metros anteriores causan un SIGSEGV y los posteriores no */
+/* Los parámetros anteriores causan un SIGSEGV y los posteriores no */
 /*  v_arts = newwin (LINES-4, COLS-1, 4,0); */
   scrollok(v_arts, TRUE);
 
@@ -374,10 +378,13 @@ int inicializa_lista(PGconn *base, char *campo_orden)
   }
   PQclear(res);
 
-  comando = (char *)calloc(1,mxbuff);
-  snprintf(comando, mxbuff,
-      "DECLARE cursor_arts CURSOR FOR SELECT codigo,descripcion,pu,cant FROM articulos ORDER BY \"%s\"",
-	campo_orden);
+  comando =  g_strdup_printf("DECLARE cursor_arts CURSOR FOR SELECT alm.*, art.descripcion, art.prov_clave, art.id_prov1, art.id_prov2, art.id_depto, ");
+  comando =  g_strdup_printf( "%s art.iva_porc, art.p_costo, art.serie, art.tangible, alm.alquiler, ", comando);
+  comando =  g_strdup_printf( "%s art.granel FROM almacen_1 alm, articulos art ", comando);
+  comando =  g_strdup_printf( "%s WHERE alm.codigo=art.codigo AND alm.id_alm=%d ORDER BY \"%s\"", comando, alm, campo_orden);
+  //snprintf(comando, mxbuff,
+      //"DECLARE cursor_arts CURSOR FOR SELECT codigo,descripcion,pu,cant FROM articulos ORDER BY \"%s\"",
+	//campo_orden);
   res = PQexec(base, comando);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     fprintf(stderr,"Fall� comando DECLARE CURSOR al buscar art�culos\n");
@@ -1390,11 +1397,11 @@ int main() {
   printw("D-moDifica Q-termina R-impRime U-qUita <Alt-Enter>Muestra");
 
   //num_items = (unsigned) inicializa_lista(con, "codigo");
-  iBuff = inicializa_lista(con, "codigo");
+  iBuff = inicializa_lista(con, "codigo", 1);
   
 
   if (iBuff<0) {
-    mvprintw(getmaxy(stdscr)/2, 0, "Error al incializar la lista de art�culos");
+    mvprintw(getmaxy(stdscr)/2, 0, "Error al incializar la lista de artículos");
     mvprintw(getmaxy(stdscr)-2, 0, "Pulse una tecla para salir...");
     clrtoeol();
     getch();

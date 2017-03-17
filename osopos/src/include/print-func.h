@@ -19,18 +19,6 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 #include<stdio.h>
 
-void avance_vert(FILE *disp, unsigned avance, unsigned mode);
-/* Avanza n/216" en modo Epson */
-
-void select_pitch(FILE *disp, short unsigned pitch, unsigned mode);
-/* Escoge tamaño de letra */
-
-void select_charset(FILE *disp, short unsigned charset, unsigned mode);
-/* Escoge tipo de caracteres internacionales */
-
-void feed_paper(FILE *disp, short n, unsigned mode);
-/* Avanza n líneas de papel, donde n[0..127] */
-
 
 /*********************************************************************/
 /* Imprime espacios en al archivo ar */
@@ -55,6 +43,7 @@ void espacio(char *linea, unsigned num_espacios)
 
 /*********************************************************************/
 
+/* Avanza n/216" en modo Epson */
 void avance_vert(FILE *disp, unsigned avance, unsigned mode)
 {
   if (mode==0 || mode==1)
@@ -63,6 +52,7 @@ void avance_vert(FILE *disp, unsigned avance, unsigned mode)
 
 /*********************************************************************/
 
+/* Escoge tamaño de letra */
 void select_pitch(FILE *disp, short unsigned pitch, unsigned mode)
 {
 
@@ -95,6 +85,7 @@ void select_pitch(FILE *disp, short unsigned pitch, unsigned mode)
 
 /*********************************************************************/
 
+/* Escoge tipo de caracteres internacionales */
 void select_charset(FILE *disp, short unsigned chset, unsigned mode)
 {
   if (mode == 0) {
@@ -104,6 +95,7 @@ void select_charset(FILE *disp, short unsigned chset, unsigned mode)
 
 /*********************************************************************/
 
+/* Avanza n líneas de papel, donde n[0..127] */
 void feed_paper(FILE *disp, short lines, unsigned mode)
 {
   int i;
