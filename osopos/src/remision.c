@@ -97,6 +97,15 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include "include/minegocio-remis.h"
 #include "include/common.h"
 
+PGconn *Abre_Base( char *host_pg, 
+                   char *pg_puerto,
+                   char *pg_opciones, 
+                   char *pg_tty,      
+                   char *bd_nombre, 
+                   char *login,
+                   char *passwd   );
+
+
 int forma_de_pago(double *, double *);
 void Termina(PGconn *con, PGconn *con_s, int error);
 //int LeeConfig(char*, char*);
@@ -163,7 +172,7 @@ pid_t pid;
 short es_remision=1;
 unsigned almacen;
 struct db_data db;
-char   *item[maxitem_busqueda]; /* Líneas de caracteres en ventana de búsqueda */
+char   *sItem[maxitem_busqueda]; /* Líneas de caracteres en ventana de búsqueda */
 
   /* Variables de configuración */
 char *home_directory;
@@ -1953,7 +1962,7 @@ int busqueda_articulo(char *codigo)
       aux[k] = toupper(aux[k]);
     limpiacad(aux, TRUE);
     if (strstr(aux, descr) != NULL) {
-      item[j] = calloc(1, getmaxx(v_busq));
+      sItem[j] = calloc(1, getmaxx(v_busq));
       cod[j] = calloc(1, maxcod+1);
       strcpy(cod[j], barra[i].codigo);
 
@@ -1966,7 +1975,7 @@ int busqueda_articulo(char *codigo)
           b = g_strdup_printf("%s ", b);
       }
 
-      sprintf(item[j], "%-15s %s %9.2f %.2f", cod[j], b, barra[i].pu, barra[i].exist);
+      sprintf(sItem[j], "%-15s %s %9.2f %.2f", cod[j], b, barra[i].pu, barra[i].exist);
       //      mvwprintw(v_busq, v_busq->j, 1, "%s", item[j]);
       j++;
     }
@@ -1989,15 +1998,15 @@ int busqueda_articulo(char *codigo)
             continue;
           }
           wattrset(v_busq, COLOR_PAIR(normal));
-          mvwprintw(v_busq, v_busq->_cury, x, "%s", item[i--]);
+          mvwprintw(v_busq, v_busq->_cury, x, "%s", sItem[i--]);
           if (v_busq->_cury-y == 0) {
             wscrl(v_busq, -1);
             wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-            mvwprintw(v_busq, y, x, "%s", item[i]);
+            mvwprintw(v_busq, y, x, "%s", sItem[i]);
           }
           else {
             wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-            mvwprintw(v_busq, v_busq->_cury-1, x, "%s", item[i]);
+            mvwprintw(v_busq, v_busq->_cury-1, x, "%s", sItem[i]);
           }
           wrefresh(v_busq);
     
@@ -2008,16 +2017,16 @@ int busqueda_articulo(char *codigo)
             continue;
           }
           wattrset(v_busq, COLOR_PAIR(normal));
-          mvwprintw(v_busq, v_busq->_cury, x, "%s", item[i++]);
+          mvwprintw(v_busq, v_busq->_cury, x, "%s", sItem[i++]);
           if (v_busq->_cury == v_busq->_maxy) {
             wscrl(v_busq, +1);
             wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-            mvwprintw(v_busq, v_busq->_maxy, x, "%s", item[i]);
+            mvwprintw(v_busq, v_busq->_maxy, x, "%s", sItem[i]);
           }
           else {
             wattrset(v_busq, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-            mvwprintw(v_busq, v_busq->_cury+1, x, "%s", item[i]);
-        }        
+            mvwprintw(v_busq, v_busq->_cury+1, x, "%s", sItem[i]);
+        }
           wrefresh(v_busq);
         break;
         case ENTER:
@@ -2027,7 +2036,7 @@ int busqueda_articulo(char *codigo)
 
     strcpy(codigo, cod[i]);
     for (j=0; j<num_items; j++) {
-      free(item[j]);
+      free(sItem[j]);
       free(cod[j]);
     }
   }
@@ -2056,10 +2065,10 @@ void muestra_renglon(WINDOW *v_arts, int y, int x, short borra_ven, unsigned ren
   if (borra_ven)
     wclear(v_arts);
   for (i=0; i<num_items-1-renglon && i<v_arts->_maxy; i++)
-    mvwprintw(v_arts, i+1+y, x, "%s", item[renglon+i+1]);
+    mvwprintw(v_arts, i+1+y, x, "%s", sItem[renglon+i+1]);
 
   wattrset(v_arts, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-  mvwprintw(v_arts, y, x, "%s", item[renglon]);
+  mvwprintw(v_arts, y, x, "%s", sItem[renglon]);
   refresh();
   wrefresh(v_arts);
 }
@@ -2392,10 +2401,10 @@ int selecciona_caja_virtual(PGconn *con, int num_cajas)
   wrefresh(v_selecc);
  
   for (j=0; j<num_cajas; j++) {
-    item[j] = calloc(1, getmaxx(v_selecc));
+    sItem[j] = calloc(1, getmaxx(v_selecc));
     /* Aqui debe ir la consulta al catálogo de nombres de cajas virtuales */
-    sprintf(item[j], "Caja %d", j+1);
-    mvwprintw(v_selecc, v_selecc->_cury+1, 1, "%s", item[j]);
+    sprintf(sItem[j], "Caja %d", j+1);
+    mvwprintw(v_selecc, v_selecc->_cury+1, 1, "%s", sItem[j]);
   }
 
   box(v_selecc, 0, 0);
@@ -2415,15 +2424,15 @@ int selecciona_caja_virtual(PGconn *con, int num_cajas)
             continue;
           }
           wattrset(v_selecc, COLOR_PAIR(normal));
-          mvwprintw(v_selecc, v_selecc->_cury, x, "%s", item[i--]);
+          mvwprintw(v_selecc, v_selecc->_cury, x, "%s", sItem[i--]);
           if (v_selecc->_cury-y == 0) {
             wscrl(v_selecc, -1);
             wattrset(v_selecc, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-            mvwprintw(v_selecc, y, x, "%s", item[i]);
+            mvwprintw(v_selecc, y, x, "%s", sItem[i]);
           }
           else {
             wattrset(v_selecc, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-            mvwprintw(v_selecc, v_selecc->_cury-1, x, "%s", item[i]);
+            mvwprintw(v_selecc, v_selecc->_cury-1, x, "%s", sItem[i]);
           }
           wrefresh(v_selecc);
     
@@ -2434,15 +2443,15 @@ int selecciona_caja_virtual(PGconn *con, int num_cajas)
             continue;
           }
           wattrset(v_selecc, COLOR_PAIR(normal));
-          mvwprintw(v_selecc, v_selecc->_cury, x, "%s", item[i++]);
+          mvwprintw(v_selecc, v_selecc->_cury, x, "%s", sItem[i++]);
           if (v_selecc->_cury == v_selecc->_maxy) {
             wscrl(v_selecc, +1);
             wattrset(v_selecc, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-            mvwprintw(v_selecc, v_selecc->_maxy, x, "%s", item[i]);
+            mvwprintw(v_selecc, v_selecc->_maxy, x, "%s", sItem[i]);
           }
           else {
             wattrset(v_selecc, COLOR_PAIR(amarillo_sobre_azul) | A_BOLD);
-            mvwprintw(v_selecc, v_selecc->_cury+1, x, "%s", item[i]);
+            mvwprintw(v_selecc, v_selecc->_cury+1, x, "%s", sItem[i]);
         }        
           wrefresh(v_selecc);
         break;
@@ -2453,7 +2462,7 @@ int selecciona_caja_virtual(PGconn *con, int num_cajas)
 
 
     for (j=0; j<num_cajas; j++) {
-      free(item[j]);
+      free(sItem[j]);
     }
   }
   else {

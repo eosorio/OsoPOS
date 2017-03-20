@@ -1,6 +1,6 @@
 /*    -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
-OsoPOS - Programa de inventario 1999,2003 E. Israel Osorio 
+OsoPOS - Programa de inventario 1999,2003,2017 E. Israel Osorio 
    soporte@elpuntodeventa.com
 
      Este programa es un software libre; puede usted redistribuirlo y/o
@@ -83,6 +83,15 @@ char   *item[maxitemlista];
 struct articulos art;
 PGconn *con, *con_s;
 
+PGconn *Abre_Base( char *host_pg, 
+                   char *pg_puerto,
+                   char *pg_opciones, 
+                   char *pg_tty,      
+                   char *bd_nombre, 
+                   char *login,
+                   char *passwd   );
+
+
 int    iva_incluido;
 
 int read_config();
@@ -98,6 +107,8 @@ int inicializa_lista(PGconn *base, char *campo_orden, int alm);
 
 /* Muestra el detalle del art�culo */
 int fill_form(FIELD *campo[35], unsigned i, PGconn *base);
+
+int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base);
 
 /***************************************************************************/
 
@@ -180,64 +191,25 @@ int read_general_config()
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
-      if (!strcmp(b,"db.host")) {
+      if (!strcmp(b,"db.host") && db.hostname == NULL) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = (char *)realloc(db.hostname, strlen(buf)+1);
-        if (aux != NULL) {
-          db.hostname =  g_strdup_printf("%s", buf);
-          //strcpy(db.hostname,buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.hostname =  g_strdup_printf("%s", buf);
       }
-      else if (!strcmp(b,"db.port")) {
+      else if (!strcmp(b,"db.port") && db.hostport == NULL) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = (char *)realloc(db.hostport, strlen(buf)+1);
-        if (aux != NULL) {
-          db.hostport =  g_strdup_printf("%s", buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.hostport =  g_strdup_printf("%s", buf);
       }
-      else if (!strcmp(b,"db.nombre")) {
+      else if (!strcmp(b,"db.nombre") && db.name == NULL) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = (char *)realloc(db.name, strlen(buf)+1);
-        if (aux != NULL) {
-          //strcpy(db.name,buf);
-          db.name =  g_strdup_printf("%s", buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.name =  g_strdup_printf("%s", buf);
       }
-      else if (!strcmp(b,"db.sup_usuario")) {
+      else if (!strcmp(b,"db.sup_usuario") && db.sup_user == NULL) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        aux = (char *)realloc(db.sup_user, strlen(buf)+1);
-        if (aux != NULL) {
-          //strcpy(db.sup_user,buf);
-          db.sup_user =  g_strdup_printf("%s", buf);
-          aux = NULL;
-        }
-        else
-          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.sup_user =  g_strdup_printf("%s", buf);
       }
-      else if (!strcmp(b,"db.sup_passwd")) {
+      else if (!strcmp(b,"db.sup_passwd") && db.sup_passwd == NULL) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
-        db.sup_passwd = (char *)calloc(1, strlen(buf)+1);
-        if (db.sup_passwd  != NULL) {
-          //strcpy(db.sup_passwd,buf);
-          db.sup_passwd =  g_strdup_printf("%s", buf);
-         aux = NULL;
-        }
-        else
-          fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
-                  b);
+        db.sup_passwd =  g_strdup_printf("%s", buf);
       }
       else if (!strcmp(b,"porcentaje_iva")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
@@ -327,7 +299,7 @@ int read_config() {
           fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
-      else if (!strcmp(b,"db.host")) {
+      else if (!strcmp(b,"db.host") && db.hostname == NULL) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = (char *)realloc(db.hostname, strlen(buf)+1);
         if (aux != NULL)
@@ -336,7 +308,7 @@ int read_config() {
           fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
-      else if (!strcmp(b,"db.port")) {
+      else if (!strcmp(b,"db.port") && db.hostport == NULL) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = (char *)realloc(db.hostport, strlen(buf)+1);
         if (aux != NULL)
@@ -345,6 +317,15 @@ int read_config() {
           fprintf(stderr, "invent. Error de memoria en argumento de configuracion %s\n",
                   b);
       }
+      else if (!strcmp(b,"db.usuario") && db.user == NULL) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        db.user =  g_strdup_printf("%s", buf);
+      }
+      else if (!strcmp(b,"db.passwd") && db.passwd == NULL) {
+        strncpy(buf, strtok(NULL,"="), mxbuff);
+        db.passwd =  g_strdup_printf("%s", buf);
+      }
+
       fgets(buff,sizeof(buff),config);
     }
     fclose(config);
@@ -389,18 +370,20 @@ int inicializa_lista(PGconn *base, char *campo_orden, int alm)
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     fprintf(stderr,"Fall� comando DECLARE CURSOR al buscar art�culos\n");
     fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
-    free(comando);
+    g_free(comando);
     return(ERROR_SQL);
   }
+  g_free(comando);
   PQclear(res);
 
-  strcpy(comando, "FETCH ALL in cursor_arts");
+  comando = g_strdup("FETCH ALL in cursor_arts");
   res = PQexec(base, comando);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
     fprintf(stderr,"comando FETCH ALL no regres� registros apropiadamente\n");
-    free(comando);
+    g_free(comando);
     return(ERROR_SQL);
   }
+  g_free(comando);
 
   /*nCampos = PQnfields(res); */
 
@@ -416,41 +399,49 @@ int inicializa_lista(PGconn *base, char *campo_orden, int alm)
 
     if (maxdes+maxcod+maxpreciolong+maxexistlong+3 > getmaxx(stdscr)-1) {
        /* C�digo */
-      strncpy(comando, PQgetvalue(res,i,0), maxcod);
+      comando = g_strdup_printf("%s", PQgetvalue(res,i,0));
       if (strlen(comando)>16)
         comando[16] = 0;
       memcpy(&item[i][0], comando, strlen(comando));
+      g_free(comando);
 
        /* Descripci�n */
-      strncpy(comando, PQgetvalue(res,i,1), maxdes);
+      comando = g_strdup_printf("%s", PQgetvalue(res,i,1));
       if (strlen(comando)>31)
         comando[31] = 0;
       memcpy(&item[i][16], comando, strlen(comando));
+      g_free(comando);
 
       /* Precio */
-      sprintf(comando, "%10.2f", atof(PQgetvalue(res,i,2)) );
+      comando = g_strdup_printf("%10.2f", atof(PQgetvalue(res,i,2)) );
       memcpy(&item[i][16+31], comando, strlen(comando));
+      g_free(comando);
 
       /* Existencia */
-      sprintf(comando, "%4.2f", atof(PQgetvalue(res,i,3)) );
+      comando = g_strdup_printf("%4.2f", atof(PQgetvalue(res,i,3)) );
       memcpy(&item[i][16+31+maxpreciolong+1], comando, strlen(comando));
+      g_free(comando);
     }
     else {
-      strncpy(comando, PQgetvalue(res,i,0), maxcod);
+      comando = g_strdup_printf("%s", PQgetvalue(res,i,0), maxcod);
       if (strlen(comando)>maxcod)
         comando[maxcod-1] = 0;
       memcpy(&item[i][0], comando, strlen(comando));
+      g_free(comando);
 
-      strncpy(comando, PQgetvalue(res,i,1), maxdes);
+      comando = g_strdup_printf("%s", PQgetvalue(res,i,1), maxdes);
       if (strlen(comando)>maxdes)
         comando[maxdes-1] = 0;
       memcpy(&item[i][maxcod+1], comando, strlen(comando));
+      g_free(comando);
 
-      sprintf(comando, "%10.2f", atof(PQgetvalue(res,i,2)) );
+      comando = g_strdup_printf("%10.2f", atof(PQgetvalue(res,i,2)) );
       memcpy(&item[i][maxcod+maxdes+2], comando, strlen(comando));
+      g_free(comando);
 
-      sprintf(comando, "%4.2f", atof(PQgetvalue(res,i,3)) );
+      comando = g_strdup_printf("%4.2f", atof(PQgetvalue(res,i,3)) );
       memcpy(&item[i][maxpreciolong+maxdes+maxcod+3], comando, strlen(comando));
+      g_free(comando);
     }
     item[i][getmaxx(stdscr)-1] = 0;
   }
@@ -695,7 +686,7 @@ int fill_form(FIELD *campo[35], unsigned i, PGconn *base)
   PGresult           *res;
   char               codigo[maxcod];
   char               *aux;
-  char               *comando;
+  gchar               *query;
   struct articulos   art;
   int                j;
 
@@ -703,7 +694,6 @@ int fill_form(FIELD *campo[35], unsigned i, PGconn *base)
   strncpy(codigo, item[i], maxcod-1);
   codigo[maxcod-1] = 0;
   limpiacad(codigo, TRUE);
-  comando = (char *)calloc(1, mxbuff);
 
   res = search_product(base, "articulos", "codigo", codigo, TRUE, &art);
   if (res == NULL) {
@@ -738,14 +728,14 @@ int fill_form(FIELD *campo[35], unsigned i, PGconn *base)
     sprintf(aux, "%f", art.exist_max);
     set_field_buffer(campo[CAMPO_EXMAX], 0, aux);
 
-    sprintf(comando, "SELECT nick FROM proveedores WHERE id=%d",
+    query = g_strdup_printf("SELECT nick FROM proveedores WHERE id=%d",
             art.id_prov);
-    res = PQexec(base, comando);
+    res = PQexec(base, query);
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-      fprintf(stderr,"Fall� comando %s\n", comando);
+      fprintf(stderr,"Fall� comando %s\n", query);
       sleep(5);
       free(aux);
-      free(comando);
+      g_free(query);
       return(ERROR_SQL);
     }
     strncpy(aux, PQgetvalue(res, 0, 0), maxcod);
@@ -754,14 +744,14 @@ int fill_form(FIELD *campo[35], unsigned i, PGconn *base)
     sprintf(aux, "%.2f", art.p_costo);
     set_field_buffer(campo[CAMPO_PCOSTO], 0, aux);
 
-    sprintf(comando, "SELECT nombre FROM departamento WHERE id=%d",
+    query = g_strdup_printf("SELECT nombre FROM departamento WHERE id=%d",
             art.id_depto);
-    res = PQexec(base, comando);
+    res = PQexec(base, query);
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-      fprintf(stderr,"Fall� comando %s\n", comando);
+      fprintf(stderr,"Fall� comando %s\n", query);
       sleep(5);
       free(aux);
-      free(comando);
+      g_free(query);
       return(ERROR_SQL);
     }
     strncpy(aux, PQgetvalue(res, 0, 0), maxdeptolen);
@@ -771,7 +761,7 @@ int fill_form(FIELD *campo[35], unsigned i, PGconn *base)
     set_field_buffer(campo[CAMPO_IVA], 0, aux);
 
     free(aux);
-    free(comando);
+    g_free(query);
     return(OK);
   }
   else
@@ -975,9 +965,14 @@ int busca_articulo(FIELD *campo, unsigned num_items)
 
 int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
 {
+  struct formLabel {
+    gchar *sLabel;
+    int size;
+  };
+
   FORM  *forma;
   FIELD *campo[35];
-  char  *etiqueta;
+  struct formLabel etiqueta;
   char  *depto[maxdepto];
   char  **deptos = depto;
   char  *auxdepto;
@@ -989,16 +984,18 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   int   finished = 0, c, i, j;
   int   tam_ren, tam_col, pos_ren, pos_col;
   PGresult *res;
-  char  *comando;
+  gchar  *query;
 
-  comando = "SELECT nombre from departamento ORDER BY id ASC";
-  res = PQexec(base, comando);
+  query = g_strdup_printf("SELECT nombre from departamento ORDER BY id ASC");
+  res = PQexec(base, "SELECT nombre from departamento ORDER BY id ASC");
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-   fprintf(stderr,"Fall� comando SELECT al buscar departamento en inventario\n");
-   sleep(5);
-   PQclear(res);
-   return(ERROR_SQL);
+    fprintf(stderr,"Fall� comando SELECT al buscar departamento en inventario\n");
+    sleep(5);
+    PQclear(res);
+    g_free(query);
+    return(ERROR_SQL);
   }
+  g_free(query);
 
   auxdepto = (char *)calloc(1, maxdeptolen+1);
   if (auxdepto == NULL)
@@ -1017,14 +1014,16 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   PQclear(res);
   depto[i] = NULL;
 
-  comando = "SELECT nick from proveedores ORDER BY id ASC";
-  res = PQexec(base, comando);
+  query = g_strdup("SELECT nick from proveedores ORDER BY id ASC");
+  res = PQexec(base, query);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-   fprintf(stderr,"Fall� comando %s\n", comando);
-   sleep(5);
-   return(ERROR_SQL);
-   PQclear(res);
+    fprintf(stderr,"Fall� comando %s\n", query);
+    sleep(5);
+    PQclear(res);
+    g_free(query);
+    return(ERROR_SQL);
   }
+  g_free(query);
 
   auxprov = (char *)calloc(1, maxnickprov+1);
   num_provs = PQntuples(res);
@@ -1043,7 +1042,8 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
 
   pos_ren = 0;
   pos_col = 0;
-  etiqueta = "Introduzca los articulos";
+  etiqueta.sLabel = g_strdup_printf("Introduzca los articulos");
+  etiqueta.size = strlen(etiqueta.sLabel);
 
   /* describe la forma */
   campo [CAMPO_COD-1] = CreaEtiqueta(1, 0, "Codigo");
@@ -1054,7 +1054,7 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   campo [CAMPO_PU] = CreaCampo(2, maxcod+maxdes+2, 1, maxpreciolong, amarillo_sobre_azul);
   campo [6] = CreaEtiqueta(1, maxcod+maxdes+maxpreciolong+3, "Dscto");
   campo [CAMPO_DISC] = CreaCampo(2, maxcod+maxdes+maxpreciolong+3, 1, maxdisclong, amarillo_sobre_azul);
-  campo [8] = CreaEtiqueta(0, 6, etiqueta);
+  campo [8] = CreaEtiqueta(0, 6, etiqueta.sLabel);
   campo [9] = CreaEtiqueta(3, 0, "Exis");
   campo[CAMPO_EXIS] = CreaCampo(4, 0, 1, maxexistlong, amarillo_sobre_azul);
   campo[11] = CreaEtiqueta(3, maxexistlong+1, "Ex min");
@@ -1103,7 +1103,7 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
   forma = new_form(campo);
 
   scale_form(forma, &tam_ren, &tam_col);
-  campo[8]->fcol = (unsigned) ((tam_col - strlen(etiqueta)) / 2);
+  campo[8]->fcol = (unsigned) ((tam_col - etiqueta.size) / 2);
 
   /* Muestra la lista inicial */
   for (i=1; i<=(v_arts->_maxy) && i<*num_items; i++) {
@@ -1265,6 +1265,7 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
     }
   }
 
+  g_free(etiqueta.sLabel);
   for (i=0; i < num_deptos;  i++)
     free(depto[i]);
   for (i=0; i < num_provs;  i++)
@@ -1288,7 +1289,7 @@ int forma_articulo(WINDOW *v_forma, unsigned *num_items, PGconn *base)
 int imprime_lista(PGconn *con, char *campo_orden)
 {
 
-  char *comando;
+  gchar *query;
   char *datos[numdat];
   int  i,j;
   int   nCampos;
@@ -1303,30 +1304,28 @@ int imprime_lista(PGconn *con, char *campo_orden)
   }
   PQclear(res);
 
-  comando = (char *)calloc(1, mxbuff);
-  if (comando == NULL)
-    return(ERROR_MEMORIA);
-
-  sprintf(comando, "DECLARE cursor_arts CURSOR FOR SELECT * FROM articulos ORDER BY \"%s\"",
+  query = g_strdup_printf("DECLARE cursor_arts CURSOR FOR SELECT * FROM articulos ORDER BY \"%s\"",
 	  campo_orden);
-  res = PQexec(con, comando);
+  res = PQexec(con, query);
   if (PQresultStatus(res) != PGRES_COMMAND_OK) {
     fprintf(stderr, "comando DECLARE CURSOR fall�\n");
     fprintf(stderr, "Error: %s\n",PQerrorMessage(con));
     PQclear(res);
-    free(comando);
+    g_free(query);
     return(ERROR_SQL);
   }
+  g_free(query);
   PQclear(res);
 
-  sprintf(comando, "FETCH ALL in cursor_arts");
-  res = PQexec(con, comando);
+  query = g_strdup("FETCH ALL in cursor_arts");
+  res = PQexec(con, query);
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
     fprintf(stderr, "comando FETCH ALL no regres� registros apropiadamente\n");
     PQclear(res);
-    free(comando);
+    g_free(query);
     return(ERROR_SQL);
   }
+  g_free(query);
 
   nCampos = PQnfields(res);
 
@@ -1341,7 +1340,7 @@ int imprime_lista(PGconn *con, char *campo_orden)
 
   PQclear(res);
   fclose(disp);
-  free(comando);
+  g_free(query);
 
   res = PQexec(con, "CLOSE cursor_arts");
   PQclear(res);
@@ -1414,7 +1413,8 @@ int main() {
     num_items = (unsigned) iBuff;
 
   ajusta_ventana_forma();
-  forma_articulo(v_forma, &num_items, con);
+  if (forma_articulo(v_forma, &num_items, con) != OK)
+    fprintf(stderr, "Error al llenar forma");
 
   delwin(v_arts);
   clear();

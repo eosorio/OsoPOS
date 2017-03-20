@@ -33,7 +33,10 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <ctype.h>
 #endif
 
+#ifndef _POSVAR
 #include "pos-var.h"
+#define _POSVAR
+#endif
 
 float iva_porcentaje=0.1; /* <-------  ******* PORCENTAJE DE IVA ******** */
 double iva,subtotal,total;
@@ -83,15 +86,6 @@ long int registra_renta(PGconn *base, PGconn *base_sup,
 PGresult *Agrega_en_Inventario(PGconn *base, char *tabla, struct articulos art);
 
 PGresult *Modifica_en_Inventario(PGconn *base, char *tabla, struct articulos art);
-
-PGconn *Abre_Base( char *host_pg,     /* nombre de host en servidor back end */
-                   char *pg_puerto,   /* puerto del host en servidor back end */
-                   char *pg_opciones, /* opciones para iniciar el servidor */
-                   char *pg_tty,      /* tty para debugear el servidor back end */
-                   char *bd_nombre,   /* nombre de las base de postgresql */
-                   char *login,
-                   char *passwd   );
-
 
 PGresult *search_product(PGconn *base, 
 			      char *tabla,
@@ -853,20 +847,19 @@ PGresult *search_product(PGconn *base,
 
 /*************************************************************/
 
-PGconn *Abre_Base( char *host_pg,
-                   char *puerto_pg,
-                   char *opciones_pg,
-                   char *tty_pg,
-                   char *nombre_bd,
+PGconn *Abre_Base( char *pg_host,     /* nombre de host en servidor back end */
+                   char *pg_port,   /* puerto del host en servidor back end */
+                   char *pg_options, /* opciones para iniciar el servidor */
+                   char *pg_tty,      /* tty para debugear el servidor back end */
+                   char *bd_nombre,   /* nombre de las base de postgresql */
                    char *login,
-                   char *passwd )
-{
+                   char *passwd   ) {
   PGconn *con;
   gchar *msg;
 
-  con = PQsetdbLogin(host_pg, puerto_pg, opciones_pg, tty_pg, nombre_bd, login, passwd);
+  con = PQsetdbLogin(pg_host, pg_port, pg_options, pg_tty, bd_nombre, login, passwd);
   if (PQstatus(con) == CONNECTION_BAD) {
-    msg = g_strdup_printf("Falló la conexión a la base '%s' .\n\r", nombre_bd);
+    msg = g_strdup_printf("Falló la conexión a la base '%s' .\n\r", bd_nombre);
     fprintf(stderr, msg);
     msg = g_strdup_printf("Error: %s\n\r",PQerrorMessage(con));
     fprintf(stderr,msg);
