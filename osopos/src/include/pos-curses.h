@@ -300,7 +300,7 @@ void mensaje_v(char *texto, int txt_colores, int tecla)
 
   v_mens = panel_window(pan);
 
-  wattr_get(v_mens, &v_attr, &v_colores, void);
+  wattr_get(v_mens, &v_attr, &v_colores, NULL);
   wattrset(v_mens, COLOR_PAIR(txt_colores));
   mvwprintw(v_mens, 2,1, texto);
   wattrset(v_mens, v_attr);
