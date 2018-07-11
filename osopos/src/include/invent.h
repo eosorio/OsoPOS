@@ -3,7 +3,6 @@
 #endif
 
 unsigned Espacios(FILE* arch, unsigned nespacios);
-void imprime_renglon(FILE *disp, char *datos[numdat]);
 
 void imprime_renglon(FILE *disp, char *datos[numdat])
 {

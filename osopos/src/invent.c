@@ -99,6 +99,7 @@ int imprime_lista(PGconn *con, char *campo_orden);
 
 void muestra_renglon(unsigned renglon, unsigned num_items);
 int quita_renglon(unsigned renglon, unsigned num_items);
+void imprime_renglon(FILE *disp, char *datos[numdat]);
 
 int form_virtualize(WINDOW *w);
 //FIELD *CreaEtiqueta(int pren, int pcol, NCURSES_CONST char *etiqueta);
