@@ -10,6 +10,7 @@
 #endif
 
 unsigned Espacios(FILE* arch, unsigned nespacios);
+void avance_vert(FILE *disp, unsigned avance, unsigned mode);
 
 void imprime_razon_social(FILE *disp, char *miniprinter_type, char *s1, char *s2)
 {

@@ -1,3 +1,63 @@
+#ifndef _POSVAR
+#include "pos-var.h"
+#define _POSVAR
+#endif
+
+typedef struct {
+  int size;
+  int availSlots;
+  struct articulos *items;
+} itemVector;
+
+void itemsInit(itemVector *item) {
+  // initialize size and capacity
+  item->size = 0;
+  item->availSlots = maxart;
+
+  // allocate memory 
+  item->items = malloc(sizeof(struct articulos) * item->availSlots);
+}
+
+
+void itemsAppend(itemVector *item, struct articulos art) {
+  // make sure there's room to expand into
+  itemsExpandIfFull(item);
+
+  // append the value and increment item->size
+  //item->items[item->size++] = art;
+  memcpy(&item->items[item->size++], &art, sizeof(struct articulos));
+}
+
+struct articulos itemsGet(itemVector *item, int index) {
+  if (index >= item->size || index < 0) {
+    printf("Index %d out of bounds for vector of size %d\n", index, item->size);
+    exit(1);
+  }
+  return item->items[index];
+}
+
+void itemsSet(itemVector *item, int index, struct articulos art) {
+  // zero fill the vector up to the desired index
+  //while (index >= item->size) {
+    //itemsAppend(item, 0);
+  //}
+
+  // set the value at the desired index
+  item->items[index] = art;
+}
+
+void itemsExpandIfFull(itemVector *item) {
+  if (item->size >= item->availSlots) {
+    // add item->capacity and resize the allocated memory accordingly
+    item->availSlots += maxart;
+    item->items = realloc(item->items, sizeof(struct articulos) * item->availSlots);
+  }
+}
+
+void itemsFree(itemVector *item) {
+  free(item->items);
+}
+
 double item_capture(PGconn *con, int *numart, double *util, 
                     double tax[maxtax],
                     struct tm fecha, char *program_name)

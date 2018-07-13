@@ -171,13 +171,13 @@ double TAX_PERC_DEF; /* Porcentaje de IVA por omisi�n */
 #define FF 12
 
 struct db_data {
-  gchar *name;      /* Nombre de la base de datos */
-  gchar *user;      /* Nombre del usuario que se conecta a la base de datos */
-  gchar *passwd;    /* Contrase�a del usuario */
-  gchar *sup_user;  /* Nombre del usuario supervisor */
-  gchar *sup_passwd;/* Contrase�a del supervisor */
-  gchar *hostname;  /* Nombre host con base de datos */
-  gchar *hostport;  /* Puerto en el que acepta conexiones */
+  gchar *name;       /* Nombre de la base de datos */
+  gchar *user;       /* Nombre del usuario que se conecta a la base de datos */
+  gchar *passwd;     /* Contraseña del usuario */
+  gchar *sup_user;   /* Nombre del usuario supervisor */
+  gchar *sup_passwd; /* Contraseña del supervisor */
+  gchar *hostname;   /* Nombre host con base de datos */
+  gchar *hostport;   /* Puerto en el que acepta conexiones */
 };
 
 struct datoscliente {
