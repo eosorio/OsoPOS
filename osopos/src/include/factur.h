@@ -1,19 +1,19 @@
 /*  -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
-factur.h vers. 0.10, biblioteca para el uso del módulo de facturación de OsoPOS
-        Copyright (C) 1999,2000 Eduardo Israel Osorio Hernández
+factur.h vers. 0.10, biblioteca para el uso del mï¿½dulo de facturaciï¿½n de OsoPOS
+        Copyright (C) 1999,2000 Eduardo Israel Osorio Hernï¿½ndez
 
         Este programa es un software libre; puede usted redistribuirlo y/o
-modificarlo de acuerdo con los términos de la Licencia Pública General GNU
-publicada por la Free Software Foundation: ya sea en la versión 2 de la
-Licencia, o (a su elección) en una versión posterior. 
+modificarlo de acuerdo con los tï¿½rminos de la Licencia Pï¿½blica General GNU
+publicada por la Free Software Foundation: ya sea en la versiï¿½n 2 de la
+Licencia, o (a su elecciï¿½n) en una versiï¿½n posterior. 
 
-        Este programa es distribuido con la esperanza de que sea útil, pero
-SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
-DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
+        Este programa es distribuido con la esperanza de que sea ï¿½til, pero
+SIN GARANTIA ALGUNA; incluso sin la garantï¿½a implï¿½cita de COMERCIABILIDAD o
+DE ADECUACION A UN PROPOSITO PARTICULAR. Vï¿½ase la Licencia Pï¿½blica General
 GNU para mayores detalles. 
 
-        Debería usted haber recibido una copia de la Licencia Pública General
-GNU junto con este programa; de no ser así, escriba a Free Software
+        Deberï¿½a usted haber recibido una copia de la Licencia Pï¿½blica General
+GNU junto con este programa; de no ser asï¿½, escriba a Free Software
 Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA. 
 
 */
@@ -37,20 +37,20 @@ char  *lprimp,
   *tipoimp,
   *nmfact,
   *nmfact,
-  *disp_lector_serie;  /* Ruta al scanner de c. de barras serial */
-char   s_divisa[3];       /* Designación de la divisa que se usa para cobrar en la base de datos */
-double TAX_PERC_DEF; /* Porcentaje de IVA por omisión */
+  *disp_lector_serie;              /* Ruta al scanner de c. de barras serial */
+char   s_divisa[MX_LON_DIVISA+1];  /* DesignaciÃ³n de la divisa que se usa para cobrar en la base de datos */
+double TAX_PERC_DEF;               /* Porcentaje de IVA por omisiÃ³n */
 char *home_directory;
 char *log_name;
 
-int lector_serial; /* Cierto si se usa un scanner serial */
-int serial_crlf=1; /* 1 si el scanner envia CRLF, 0 si solamente LF */
-tcflag_t serial_bps=B38400; /* bps por omisión */
-int wait_flag=TRUE;                    /* TRUE while no signal received */
-char s_buf[255];    /* Buffer de puerto serie */
+int lector_serial;             /* Cierto si se usa un scanner serial */
+int serial_crlf=1;             /* 1 si el scanner envia CRLF, 0 si solamente LF */
+tcflag_t serial_bps=B38400;    /* bps por omisiÃ³n */
+int wait_flag=TRUE;            /* TRUE while no signal received */
+char s_buf[255];               /* Buffer de puerto serie */
 struct termios oldtio,newtio;  /* Parametros anteriores y nuevos de terminal serie */
-struct sigaction saio;              /* definition of signal action */
-int fd;            /* Descriptor de archivo de puerto serie */
+struct sigaction saio;         /* definition of signal action */
+int fd;                        /* Descriptor de archivo de puerto serie */
 
 unsigned maxrenf;
 unsigned numarticulos;
@@ -99,20 +99,20 @@ int init_config()
   tipoimp = calloc(1, strlen("EPSON")+20);
   strcpy(tipoimp, "EPSON");
  
-  db.name= NULL;
-  db.user = NULL;
-  db.passwd = NULL;
-  db.sup_user = NULL;
+  db.name       = NULL;
+  db.user       = NULL;
+  db.passwd     = NULL;
+  db.sup_user   = NULL;
   db.sup_passwd = NULL;
-  db.hostport = NULL;
-  db.hostname = NULL;
+  db.hostport   = NULL;
+  db.hostname   = NULL;
 
-  db.hostname = calloc(1, strlen("255.255.255.255"));
-  db.name = calloc(1, strlen("elpuntodeventa.com"));
-  db.user = calloc(1, strlen(log_name)+1);
+  db.hostname   = calloc(1, strlen("255.255.255.255"));
+  db.name       = calloc(1, strlen("elpuntodeventa.com"));
+  db.user       = calloc(1, strlen(log_name)+1);
   strcpy(db.user, log_name);
-  db.sup_user = calloc(1, strlen("scaja")+1);
-  db.hostport = calloc(1, strlen("54320"));
+  db.sup_user   = calloc(1, strlen("scaja")+1);
+  db.hostport   = calloc(1, strlen("54320"));
 
   maxitemr = 6;
 
@@ -146,19 +146,19 @@ int read_config() {
   strcat(nmconfig, "/.osopos/factur.config");
 
   config = fopen(nmconfig,"r");
-  if (config != NULL) {         /* Si existe archivo de configuración */
+  if (config != NULL) {         /* Si existe archivo de configuraciï¿½n */
     b = buff;
     fgets(buff,mxbuff,config);
     while (!feof(config)) {
       buff [ strlen(buff) - 1 ] = 0;
-      if (!strlen(buff) || buff[0] == '#') { /* Linea vacía o coment. */
+      if (!strlen(buff) || buff[0] == '#') { /* Linea vacï¿½a o coment. */
         if (!feof(config))
           fgets(buff,mxbuff,config);
         continue;
       }
       strncpy(buf, strtok(buff,"="), mxbuff);
 
-        /* Busca parámetros de impresora y archivo de última venta */
+        /* Busca parï¿½metros de impresora y archivo de ï¿½ltima venta */
       if (!strcmp(b, "factura")) {
         strncpy(buf, strtok(NULL,"="), mxbuff);
         aux = realloc(nmfact, strlen(buf)+1);
@@ -223,7 +223,7 @@ int read_global_config()
   strncpy(nmconfig, "/etc/osopos/factur.config", 255);
 
   config = fopen(nmconfig,"r");
-  if (config) {         /* Si existe archivo de configuración */
+  if (config) {         /* Si existe archivo de configuraciï¿½n */
     b = buff;
     fgets(buff,mxbuff,config);
     while (!feof(config)) {
@@ -234,7 +234,7 @@ int read_global_config()
         continue;
       }
       strncpy(buf, strtok(buff,"="), mxbuff);
-        /* La función strtok modifica el contenido de la cadena buff    */
+        /* La funciï¿½n strtok modifica el contenido de la cadena buff    */
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
@@ -314,7 +314,7 @@ int read_global_config()
           aux = NULL;
         }
         else
-          fprintf(stderr, "factur. Error de memoria en argumento de configuración %s\n",
+          fprintf(stderr, "factur. Error de memoria en argumento de configuraciï¿½n %s\n",
                   b);
       }
       else if (!strcmp(b,"db.sup_passwd")) {

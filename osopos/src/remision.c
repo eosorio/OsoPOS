@@ -196,11 +196,11 @@ char *nm_disp_ticket,           /* Nombre de impresora de ticket */
 
 gchar  *lp_disp_ticket;      /* Definición de miniprinter en /etc/printcap */
 
-char   s_divisa[MX_LON_DIVISA];       /* Designación de la divisa que se usa para cobrar en la base de datos */
-short unsigned search_2nd;  /* ¿Buscar código alternativo al mismo tiempo que el primario ? */ 
-int id_teller = 0;              /* Número de cajero */
-int id_vendedor = 0;            /* Número de agente de ventas */
-short unsigned manual_discount; /* Aplicar el descuento manual de precio en la misma línea */
+char   s_divisa[MX_LON_DIVISA+1];  /* Designación de la divisa que se usa para cobrar en la base de datos */
+short unsigned search_2nd;         /* ¿Buscar código alternativo al mismo tiempo que el primario ? */ 
+int id_teller = 0;                 /* Número de cajero */
+int id_vendedor = 0;               /* Número de agente de ventas */
+short unsigned manual_discount;    /* Aplicar el descuento manual de precio en la misma línea */
 int iva_incluido;
 int listar_neto;
 short unsigned autocutter = 0;
