@@ -1,23 +1,23 @@
 /*   -*- mode: c; indent-tabs-mode: nil; c-basic-offset: 2 -*-
 
-   OsoPOS Sistema auxiliar en punto de venta para pequeños negocios
+   OsoPOS Sistema auxiliar en punto de venta para pequeï¿½os negocios
    Programa ImprRem 0.17 (C) 1999-2003 E. Israel Osorio H.
    desarrollo@elpuntodeventa.com
-   Lea el archivo README, COPYING y LEAME que contienen información
+   Lea el archivo README, COPYING y LEAME que contienen informaciï¿½n
    sobre la licencia de uso de este programa
 
      Este programa es un software libre; puede usted redistribuirlo y/o
-modificarlo de acuerdo con los términos de la Licencia Pública General GNU
-publicada por la Free Software Foundation: ya sea en la versión 2 de la
-Licencia, o (a su elección) en una versión posterior.
+modificarlo de acuerdo con los tï¿½rminos de la Licencia Pï¿½blica General GNU
+publicada por la Free Software Foundation: ya sea en la versiï¿½n 2 de la
+Licencia, o (a su elecciï¿½n) en una versiï¿½n posterior.
 
-     Este programa es distribuido con la esperanza de que sea útil, pero
-SIN GARANTIA ALGUNA; incluso sin la garantía implícita de COMERCIABILIDAD o
-DE ADECUACION A UN PROPOSITO PARTICULAR. Véase la Licencia Pública General
+     Este programa es distribuido con la esperanza de que sea ï¿½til, pero
+SIN GARANTIA ALGUNA; incluso sin la garantï¿½a implï¿½cita de COMERCIABILIDAD o
+DE ADECUACION A UN PROPOSITO PARTICULAR. Vï¿½ase la Licencia Pï¿½blica General
 GNU para mayores detalles.
 
-     Debería usted haber recibido una copia de la Licencia Pública General
-GNU junto con este programa; de no ser así, escriba a Free Software
+     Deberï¿½a usted haber recibido una copia de la Licencia Pï¿½blica General
+GNU junto con este programa; de no ser asï¿½, escriba a Free Software
 Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 
 */
@@ -45,7 +45,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #define FALSE 0
 #endif
 
-/* máximo de items que contiene el renglon de articulos */
+/* mï¿½ximo de items que contiene el renglon de articulos */
 #define mxrenartsitem 10
 
 #include "include/minegocio-remis.h"
@@ -54,7 +54,7 @@ struct articulos art[maxart];
 char nmimpre[mxbuff];
 char *lp_printer, *prt_type; /* Tipo de impresora */
 char *log_name;
-char *cmd_lp; /* Comando de impresión */
+char *cmd_lp; /* Comando de impresiÃ³n */
 int numarts, dgaran=-1;
 short unsigned maxitem;
 int iva_incluido;
@@ -68,8 +68,8 @@ short article_pitch = 17;
 char *home_directory;
 struct db_data db;
 struct divisas divisa[mxmemdivisa];
-char   s_divisa[MX_LON_DIVISA];       /* Designación de la divisa que se usa para cobrar en la base de datos */
-int mxrenarts_long;  /* longitud máxima del renglon de articulos al imprimir */
+char   s_divisa[MX_LON_DIVISA+1];    /* DesignaciÃ³n de la divisa que se usa para cobrar en la base de datos */
+int mxrenarts_long;                  /* longitud mÃ¡xima del renglon de articulos al imprimir */
 
 int read_config();
 int CalculaIVA();
@@ -134,7 +134,7 @@ int read_general_config()
   strncpy(nmconfig, "/etc/osopos/general.config", 255);
 
   config = fopen(nmconfig,"r");
-  if (config) {         /* Si existe archivo de configuración */
+  if (config) {         /* Si existe archivo de configuraciï¿½n */
     b = buff;
     fgets(buff,mxbuff,config);
     while (!feof(config)) {
@@ -145,7 +145,7 @@ int read_general_config()
         continue;
       }
       strncpy(buf, strtok(buff,"="), mxbuff);
-        /* La función strtok modifica el contenido de la cadena buff    */
+        /* La funciï¿½n strtok modifica el contenido de la cadena buff    */
         /* remplazando con NULL el argumento divisor (en este caso "=") */
         /* por lo que b queda apuntando al primer token                 */
 
@@ -272,23 +272,23 @@ int read_config() {
   price_pos[2] = 0;
 
   config = fopen(nmconfig,"r");
-  if (config) {		/* Si existe archivo de configuración */
+  if (config) {		/* Si existe archivo de configuraciï¿½n */
     b = buff;
     fgets(buff,sizeof(buff),config);
     while (!feof(config)) {
       buff [ strlen(buff) - 1 ] = 0;
 
-      if (!strlen(buff) || buff[0] == '#') { /* Linea vacía o coment. */
+      if (!strlen(buff) || buff[0] == '#') { /* Linea vacï¿½a o coment. */
         fgets(buff,sizeof(buff),config);
         continue;
       }
 
       strcpy(buf, strtok(buff,"="));
-	/* La función strtok modifica el contenido de la cadena buff	*/
+	/* La funciï¿½n strtok modifica el contenido de la cadena buff	*/
 	/* remplazando con NULL el argumento divisor (en este caso "=") */
 	/* por lo que b queda apuntando al primer token			*/
 
-	/* Busca parámetros de impresora */
+	/* Busca parï¿½metros de impresora */
       if (!strcmp(b,"impresora")) {
         strcpy(buf, strtok(NULL,"="));
         strcpy(nmimpre,buf);
@@ -373,7 +373,7 @@ int read_config() {
         strcpy(buf, strtok(NULL,"="));
         date_posh = (unsigned) atoi(buf);
       }
-      else if (!strcmp(b,"fecha.tamaño")) {
+      else if (!strcmp(b,"fecha.tamaï¿½o")) {
         strcpy(buf, strtok(NULL,"="));
         date_pitch = (unsigned) atoi(buf);
       }
@@ -397,7 +397,7 @@ int read_config() {
         strcpy(buf, strtok(NULL,"="));
         code_len = (unsigned) atoi(buf);
       }
-      else if (!strcmp(b,"articulos.tamaño")) {
+      else if (!strcmp(b,"articulos.tamaï¿½o")) {
         strcpy(buf, strtok(NULL,"="));
         article_pitch = (unsigned) atoi(buf);
       }
