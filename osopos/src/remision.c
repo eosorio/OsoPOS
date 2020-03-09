@@ -1869,10 +1869,11 @@ void init_serial(struct sigaction *saio, struct termios *oldtio, struct termios 
   if (fd <0) {perror(disp_lector_serie); exit(-1); }
 
   /* install the signal handler before making the device asynchronous */
-  saio->sa_handler = signal_handler_IO;
-  saio->sa_mask.__val[0] =  0;
-  saio->sa_flags = 0;
-  saio->sa_restorer = NULL;
+  // saio->sa_mask.__val[0] =  0;
+  sigemptyset(&saio.sa_mask);
+  saio->sa_handler   = signal_handler_IO;
+  saio->sa_flags     = 0;
+  saio->sa_restorer  = NULL;
   sigaction(SIGIO,saio,NULL);
   
   /* allow the process to receive SIGIO */
