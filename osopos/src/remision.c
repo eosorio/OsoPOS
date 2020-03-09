@@ -2499,7 +2499,7 @@ void read_pos_config(PGconn *con, unsigned num_caja)
      0:  No existen cajas virtuales se lee configuración general
      >0: Representa el número de caja virtual
   */
-  lp_disp_ticket = g_strdup_printf(lee_config_pos(con, num_caja, "COLA_TICKET"));
+  lp_disp_ticket = g_strdup_printf("%s", lee_config_pos(con, num_caja, "COLA_TICKET"));
   strcpy(tipo_disp_ticket, lee_config_pos(con, num_caja, "MINIIMPRESORA_TIPO"));
   strcpy(cmd_lp, lee_config_pos(con, num_caja, "IMPRESION_COMANDO"));
   almacen = atoi(lee_config_pos(con, num_caja, "ALMACEN"));

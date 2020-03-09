@@ -9,6 +9,16 @@ typedef struct {
   struct articulos *items;
 } itemVector;
 
+void itemsInit(itemVector *item);
+void itemsExpandIfFull(itemVector *item);
+void itemsAppend(itemVector *item, struct articulos art);
+struct articulos itemsGet(itemVector *item, int index);
+void itemsSet(itemVector *item, int index, struct articulos art);
+void itemsFree(itemVector *item);
+double item_capture(PGconn *con, int *numart, double *util, 
+                    double tax[maxtax],
+                    struct tm fecha, char *program_name);
+                    
 void itemsInit(itemVector *item) {
   // initialize size and capacity
   item->size = 0;
@@ -18,6 +28,13 @@ void itemsInit(itemVector *item) {
   item->items = malloc(sizeof(struct articulos) * item->availSlots);
 }
 
+void itemsExpandIfFull(itemVector *item) {
+  if (item->size >= item->availSlots) {
+    // add item->capacity and resize the allocated memory accordingly
+    item->availSlots += maxart;
+    item->items = realloc(item->items, sizeof(struct articulos) * item->availSlots);
+  }
+}
 
 void itemsAppend(itemVector *item, struct articulos art) {
   // make sure there's room to expand into
@@ -44,14 +61,6 @@ void itemsSet(itemVector *item, int index, struct articulos art) {
 
   // set the value at the desired index
   item->items[index] = art;
-}
-
-void itemsExpandIfFull(itemVector *item) {
-  if (item->size >= item->availSlots) {
-    // add item->capacity and resize the allocated memory accordingly
-    item->availSlots += maxart;
-    item->items = realloc(item->items, sizeof(struct articulos) * item->availSlots);
-  }
 }
 
 void itemsFree(itemVector *item) {
