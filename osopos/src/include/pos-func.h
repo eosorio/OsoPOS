@@ -859,9 +859,9 @@ PGconn *Abre_Base( char *pg_host,     /* nombre de host en servidor back end */
   con = PQsetdbLogin(pg_host, pg_port, pg_options, pg_tty, bd_nombre, login, passwd);
   if (PQstatus(con) == CONNECTION_BAD) {
     msg = g_strdup_printf("Falló la conexión a la base '%s' .\n\r", bd_nombre);
-    fprintf(stderr, msg);
+    fprintf(stderr, "%s", msg);
     msg = g_strdup_printf("Error: %s\n\r",PQerrorMessage(con));
-    fprintf(stderr,msg);
+    fprintf(stderr, "%s", msg);
     g_free(msg);
     return(NULL);
   }
@@ -891,7 +891,7 @@ char *buff;
   fgets(buff, mxbuff, arch);
 
   while (!feof(arch)) {
-    fprintf(disp, buff);
+    fprintf(disp, "%s", buff);
     fgets(buff, mxbuff, arch);
   }
   free(buff);
@@ -1023,7 +1023,7 @@ int checa_descuento(PGconn *base, int num_venta, int almacen) {
   res = PQexec(base, query);
   if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
     fprintf(stderr, "Error al consultar ventas\n");
-    fprintf(stderr,"Error: %s\n",PQerrorMessage(base));
+    fprintf(stderr, "Error: %s\n",PQerrorMessage(base));
 	PQclear(res);
     return(ERROR_SQL);
   }
@@ -1044,7 +1044,7 @@ int lee_garantia(PGconn *base, struct articulos art[maxart], int numarts) {
     res = PQexec(base, query);
     if (PQresultStatus(res) !=  PGRES_TUPLES_OK) {
       fprintf(stderr, "Error al consultar periodos de garantía\n");
-      fprintf(stderr,"Error: %s\n", PQerrorMessage(base));
+      fprintf(stderr, "Error: %s\n", PQerrorMessage(base));
       PQclear(res);
       return(ERROR_SQL);
     }

@@ -31,7 +31,7 @@ Foundation, Inc., 675 Mass Ave, Cambridge, MA02139, USA.
 #include <stdio.h>
 #include <termios.h>
 #include <fcntl.h>
-#include <sys/signal.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <glib.h>
 #include <locale.h>
