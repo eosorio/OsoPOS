@@ -50,10 +50,10 @@ int lee_articulos(PGconn *base_inventario, PGconn *con_s, short almacen)
   }
 
   if (PQntuples(res) >= mxmembarra)  {
-    fprintf(stderr, "ADVERTENCIA: Se ha excedido el máximo de artículos en memoria, no fueron\n");
+    fprintf(stderr, "ADVERTENCIA: Se ha excedido el mï¿½ximo de artï¿½culos en memoria, no fueron\n");
     fprintf(stderr, "             cargados todos los que existen en la base");
     sprintf(comando,
-            "Se ha excedido el máximo de artículos en memoria, se leyeron los primeros %d",
+            "Se ha excedido el mï¿½ximo de artï¿½culos en memoria, se leyeron los primeros %d",
             mxmembarra);
     mensaje(comando);
   }
@@ -68,7 +68,7 @@ int find_db_code(PGconn *con, char *cod, struct articulos *art, int wday, short 
   char query[1024];
   PGresult *res;
 
-  /* colocar aquí código para buscar si el artículo está rentado */
+  /* colocar aquï¿½ cï¿½digo para buscar si el artï¿½culo estï¿½ rentado */
   /* igm if (lease_mode && esta_rentado(con, cod)) {
     printw(msg, "El producto ya se encuentra rentado");
     return(ERR_ITEM);
@@ -106,7 +106,7 @@ int find_db_code(PGconn *con, char *cod, struct articulos *art, int wday, short 
 
   if (!PQntuples(res)) {
     PQclear(res);
-    // igm printw(msg, "El producto no está registrado.");
+    // igm printw(msg, "El producto no estï¿½ registrado.");
     return(ERR_ITEM);
   }
 
@@ -152,7 +152,7 @@ int lee_divisas(PGconn *base_invent)
 
   res = PQexec(base_invent, "SELECT * FROM divisas ");
   if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-    fprintf(stderr,"Falló comando al tratar de leer divisas para colocar en memoria\n");
+    fprintf(stderr,"Fallï¿½ comando al tratar de leer divisas para colocar en memoria\n");
     PQclear(res);
     return(ERROR_SQL);
   }
@@ -166,10 +166,10 @@ int lee_divisas(PGconn *base_invent)
   }
 
   if (PQntuples(res) >= mxmemdivisa)  {
-    fprintf(stderr, "ADVERTENCIA: Se ha excedido el máximo de divisas en memoria, no fueron\n");
+    fprintf(stderr, "ADVERTENCIA: Se ha excedido el mï¿½ximo de divisas en memoria, no fueron\n");
     fprintf(stderr, "             cargadas todas las que existen en la base");
     sprintf(comando,
-            "Se ha excedido el máximo de divisas en memoria, se leyeron las primeras %d",
+            "Se ha excedido el mï¿½ximo de divisas en memoria, se leyeron las primeras %d",
             mxmembarra);
     mensaje(comando);
   }
@@ -178,7 +178,7 @@ int lee_divisas(PGconn *base_invent)
 }
 
 /***************************************************************************/
-/* Actualiza las existencias de los artículos que se vendieron en una sola operación */
+/* Actualiza las existencias de los artï¿½culos que se vendieron en una sola operaciï¿½n */
 int actualiza_existencia(PGconn *base_inv, struct tm *fecha) {
   int      i,resurtir = 0;
   PGresult *res;
@@ -200,7 +200,7 @@ int actualiza_existencia(PGconn *base_inv, struct tm *fecha) {
     articulo[i].pu = pu;
     res = salida_almacen(base_inv, almacen, articulo[i], log_name, fecha);
     if (PQresultStatus(res) != PGRES_COMMAND_OK)
-      fprintf(stderr, "Error al actualizar artículo %s %s\n",
+      fprintf(stderr, "Error al actualizar artï¿½culo %s %s\n",
                        articulo[i].codigo, articulo[i].desc);
     PQclear(res);
   }
@@ -222,7 +222,7 @@ int actualiza_carrito(PGconn *base_inv, struct tm *fecha) {
     articulo[i].exist = -1;
     pu = articulo[i].pu;
     if (search_product(base_inv, tabla, "codigo", articulo[i].codigo, TRUE, &articulo[i]) != OK) {
-      sprintf(buf, "Artículo %s no existente en almacen", articulo[i].codigo);
+      sprintf(buf, "Artï¿½culo %s no existente en almacen", articulo[i].codigo);
       mensaje_v(buf, amarillo_sobre_azul, ESC);
       continue;
     }
@@ -230,9 +230,9 @@ int actualiza_carrito(PGconn *base_inv, struct tm *fecha) {
     res = Agrega_en_Carrito(base_inv, articulo[i], log_name);
 
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-      sprintf(buf, "Error al actualizar artículo %s %s en carrito\n",
+      sprintf(buf, "Error al actualizar artï¿½culo %s %s en carrito\n",
               articulo[i].codigo, articulo[i].desc);
-      fprintf(stderr, buf);
+      fprintf(stderr, "%s", buf);
       mensaje_v(buf, azul_sobre_blanco, ESC);
     }
     PQclear(res);
